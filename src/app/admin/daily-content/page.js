@@ -6,16 +6,21 @@ export default async function DailyContentPage() {
 
   return (
     <div>
-      <h1 className='text-3xl font-bold mb-6'>Manage Daily Content</h1>
-      <div className='grid grid-cols-1 md:grid-cols-2 gap-8'>
+      <h1 className='text-3xl font-bold text-slate-900 mb-6'>
+        Manage Daily Content
+      </h1>
+      <div className='grid grid-cols-1 lg:grid-cols-2 gap-8 items-start'>
         {/* Vocabulary Uploader */}
-        <DailyContentUploader uploadType='vocabulary' />
+        <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-lg'>
+          <DailyContentUploader uploadType='vocabulary' />
+        </div>
 
         {/* GK Uploader */}
-        <DailyContentUploader uploadType='gk' />
+        <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-lg'>
+          <DailyContentUploader uploadType='gk' />
+        </div>
       </div>
-
-      {/* A section to display recent uploads can be added here */}
     </div>
   );
+
 }

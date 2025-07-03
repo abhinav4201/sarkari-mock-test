@@ -48,37 +48,44 @@ export default async function AdminDashboardPage() {
       getTodaySubmissionsCount(),
     ]);
 
-  return (
-    <div>
-      <h1 className='text-3xl font-bold mb-6'>Admin Dashboard</h1>
-      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
-        <StatCard
-          title='Total Mock Tests'
-          value={testCount}
-          icon={<BarChart />}
-        />
-        <StatCard
-          title='Total Blog Posts'
-          value={postCount}
-          icon={<FileText />}
-        />
-        <StatCard
-          title='Total Contacts'
-          value={contactCount}
-          icon={<Users />}
-        />
-        <StatCard
-          title='Submissions Today'
-          value={todaySubmissions}
-          icon={<MessageSquare />}
-        />
+    return (
+      <div>
+        <h1 className='text-3xl font-bold text-slate-900 mb-6'>
+          Admin Dashboard
+        </h1>
+        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
+          <StatCard
+            title='Total Mock Tests'
+            value={testCount}
+            icon={<BarChart />}
+          />
+          <StatCard
+            title='Total Blog Posts'
+            value={postCount}
+            icon={<FileText />}
+          />
+          <StatCard
+            title='Total Contacts'
+            value={contactCount}
+            icon={<Users />}
+          />
+          <StatCard
+            title='Submissions Today'
+            value={todaySubmissions}
+            icon={<MessageSquare />}
+          />
+        </div>
+        <div className='mt-8 bg-white p-6 rounded-2xl shadow-lg'>
+          <h2 className='text-xl font-semibold text-slate-900'>
+            Quick Actions
+          </h2>
+          <p className='mt-2 text-slate-700'>
+            Use the sidebar navigation on the left to manage all website
+            content. Each section is now fully responsive for management on any
+            device.
+          </p>
+        </div>
       </div>
-      <div className='mt-8 bg-white p-6 rounded-lg shadow-md'>
-        <h2 className='text-xl font-semibold'>Quick Actions</h2>
-        <p className='mt-2 text-gray-600'>
-          Use the sidebar navigation on the left to manage content.
-        </p>
-      </div>
-    </div>
-  );
+    );
+
 }

@@ -39,12 +39,16 @@ export default function TestHistory() {
   }, [user]);
 
   if (loading) {
-    return <p>Loading your test history...</p>;
+    return (
+      <p className='mt-2 text-lg text-slate-700'>
+        Loading your test history...
+      </p>
+    );
   }
 
   if (history.length === 0) {
     return (
-      <p>
+      <p className='mt-2 text-lg text-slate-700'>
         You haven't completed any tests yet.{" "}
         <Link href='/mock-tests' className='font-bold underline'>
           Start one now!
@@ -56,6 +60,7 @@ export default function TestHistory() {
   return (
     <div className='space-y-4'>
       {loading ? (
+        // Skeleton Loader remains the same
         [...Array(3)].map((_, i) => (
           <div
             key={i}
@@ -69,11 +74,12 @@ export default function TestHistory() {
           </div>
         ))
       ) : history.length === 0 ? (
+        // "No tests" placeholder with high-contrast text
         <div className='text-center py-10 px-4 border-2 border-dashed rounded-xl border-slate-300'>
           <h3 className='text-lg font-semibold text-slate-900'>
             No Tests Taken Yet
           </h3>
-          <p className='mt-1 text-slate-700'>
+          <p className='mt-1 text-slate-800'>
             Your completed test results will appear here.
           </p>
           <Link
@@ -84,6 +90,7 @@ export default function TestHistory() {
           </Link>
         </div>
       ) : (
+        // History items with high-contrast text
         history.map((item) => (
           <div
             key={item.resultId}
@@ -93,7 +100,7 @@ export default function TestHistory() {
               <h3 className='font-bold text-lg text-slate-900'>
                 {item.testTitle}
               </h3>
-              <p className='text-sm text-slate-600 mt-1'>
+              <p className='text-sm text-slate-700 mt-1'>
                 Completed on: {new Date(item.completedAt).toLocaleDateString()}
               </p>
               <p className='text-slate-800 mt-2'>

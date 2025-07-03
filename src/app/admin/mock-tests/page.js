@@ -14,33 +14,48 @@ export default async function MockTestsAdminPage() {
   const tests = await getTests();
   return (
     <div>
-      <h1 className='text-3xl font-bold mb-6'>Mock Test Management</h1>
-      <div className='grid grid-cols-1 lg:grid-cols-3 gap-8'>
-        <div className='lg:col-span-1'>
-          <div className='bg-white p-6 rounded-lg shadow-md'>
-            <h2 className='text-xl font-semibold mb-4'>Create New Test</h2>
-            <MockTestManager />
-          </div>
+      <h1 className='text-3xl font-bold text-slate-900 mb-6'>
+        Mock Test Management
+      </h1>
+      <div className='grid grid-cols-1 lg:grid-cols-3 gap-8 items-start'>
+        {/* Form Section */}
+        <div className='lg:col-span-1 bg-white p-6 sm:p-8 rounded-2xl shadow-lg'>
+          <h2 className='text-xl font-semibold mb-6 text-slate-900'>
+            Create New Test
+          </h2>
+          <MockTestManager />
         </div>
-        <div className='lg:col-span-2'>
-          <div className='bg-white p-6 rounded-lg shadow-md'>
-            <h2 className='text-xl font-semibold mb-4'>Existing Tests</h2>
-            <div className='space-y-3'>
-              {tests.map((test) => (
+        {/* List Section */}
+        <div className='lg:col-span-2 bg-white p-6 sm:p-8 rounded-2xl shadow-lg'>
+          <h2 className='text-xl font-semibold mb-6 text-slate-900'>
+            Existing Tests
+          </h2>
+          <div className='space-y-4'>
+            {tests.length > 0 ? (
+              tests.map((test) => (
                 <div
                   key={test.id}
-                  className='p-3 border rounded flex justify-between items-center'
+                  className='p-4 border border-slate-200 rounded-lg flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-slate-50'
                 >
-                  <p className='font-semibold'>{test.title}</p>
+                  <div>
+                    <p className='font-bold text-slate-900'>{test.title}</p>
+                    <p className='text-sm text-slate-600'>
+                      {test.examName} - {test.questionCount || 0} Questions
+                    </p>
+                  </div>
                   <Link
                     href={`/admin/mock-tests/${test.id}`}
-                    className='text-sm bg-blue-500 text-white px-3 py-1 rounded'
+                    className='px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 text-center flex-shrink-0'
                   >
                     Manage Questions
                   </Link>
                 </div>
-              ))}
-            </div>
+              ))
+            ) : (
+              <p className='text-center text-slate-600 p-8'>
+                No tests created yet.
+              </p>
+            )}
           </div>
         </div>
       </div>

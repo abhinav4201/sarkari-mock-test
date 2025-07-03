@@ -120,58 +120,82 @@ export default function BlogEditor() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className='space-y-4'>
-      {/* Input fields for Title, Slug, YouTube URL remain the same... */}
+    <form onSubmit={handleSubmit} className='space-y-6'>
       <div>
-        <label className='block font-bold'>Post Title</label>
+        <label
+          htmlFor='blog-title'
+          className='block text-sm font-medium text-slate-800 mb-1'
+        >
+          Post Title
+        </label>
         <input
+          id='blog-title'
           type='text'
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className='w-full p-2 border rounded'
+          className='w-full p-3 border border-slate-300 rounded-lg text-slate-900'
           required
         />
       </div>
       <div>
-        <label className='block font-bold'>Post Slug (URL)</label>
+        <label
+          htmlFor='blog-slug'
+          className='block text-sm font-medium text-slate-800 mb-1'
+        >
+          Post Slug (URL)
+        </label>
         <div className='flex items-center space-x-2'>
           <input
+            id='blog-slug'
             type='text'
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
-            className='w-full p-2 border rounded'
+            className='w-full p-3 border border-slate-300 rounded-lg text-slate-900'
             required
           />
           <button
             type='button'
             onClick={handleSlugGeneration}
-            className='p-2 bg-blue-500 text-white rounded'
+            className='px-4 py-3 bg-indigo-100 text-indigo-700 font-semibold rounded-lg hover:bg-indigo-200'
           >
             Generate
           </button>
         </div>
       </div>
       <div>
-        <label className='block font-bold'>YouTube URL</label>
+        <label
+          htmlFor='youtube-url'
+          className='block text-sm font-medium text-slate-800 mb-1'
+        >
+          YouTube URL
+        </label>
         <input
+          id='youtube-url'
           type='url'
           value={youtubeUrl}
           onChange={(e) => setYoutubeUrl(e.target.value)}
-          className='w-full p-2 border rounded'
+          className='w-full p-3 border border-slate-300 rounded-lg text-slate-900'
         />
       </div>
       <div>
-        <label className='block font-bold'>Content</label>
-        <TiptapToolbar editor={editor} />
-        <EditorContent editor={editor} />
+        <label className='block text-sm font-medium text-slate-800 mb-1'>
+          Content
+        </label>
+        <div className='border border-slate-300 rounded-lg overflow-hidden'>
+          <TiptapToolbar editor={editor} />
+          <EditorContent editor={editor} />
+        </div>
       </div>
-      <button
-        type='submit'
-        className='px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700'
-      >
-        Create Post
-      </button>
-      {status && <p className='mt-2'>{status}</p>}
+      <div className='pt-2'>
+        <button
+          type='submit'
+          disabled={isLoading}
+          className='px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-green-400'
+        >
+          {isLoading ? "Submitting..." : "Create Post"}
+        </button>
+      </div>
     </form>
   );
+
 }

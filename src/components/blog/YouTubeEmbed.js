@@ -12,16 +12,17 @@ const YouTubeEmbed = ({ url }) => {
   const embedUrl = getEmbedUrl(url);
 
   return (
-    <div className='aspect-w-16 aspect-h-9 my-6'>
+    <div className='aspect-w-16 aspect-h-9 my-8 md:my-12'>
       <iframe
         src={embedUrl}
         title='YouTube video player'
         allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture'
         allowFullScreen
-        className='w-full h-full rounded-lg shadow-lg'
+        className='w-full h-full rounded-2xl shadow-2xl border-4 border-white'
       ></iframe>
     </div>
   );
+
 };
 
 export default YouTubeEmbed;
