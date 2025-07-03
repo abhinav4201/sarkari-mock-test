@@ -10,18 +10,15 @@ import { NextResponse } from "next/server";
 
 export async function POST(request) {
   try {
-    const { testId, questionSvgCode, options, correctAnswer } =
-      await request.json();
+    const { testId, questions } = await request.json();
 
-    // Validation (this part is fine)
-    if (!testId || !questionSvgCode || !options || !correctAnswer) {
+    if (!testId || !Array.isArray(questions) || questions.length === 0) {
       return NextResponse.json(
-        { message: "Missing required fields" },
+        { message: "Invalid data provided." },
         { status: 400 }
       );
     }
 
-    // Use a transaction to ensure data integrity
     await runTransaction(db, async (transaction) => {
       // --- THIS IS THE FIX ---
 
@@ -36,30 +33,32 @@ export async function POST(request) {
 
       // 3. WRITE SECOND: Now that all reads are done, we can perform our writes.
 
-      // Write #1: Create the new question document.
+      // Write #1: Add all the new question documents.
       const questionsCollection = collection(db, "mockTestQuestions");
-      transaction.set(doc(questionsCollection), {
-        testId,
-        questionSvgCode,
-        options,
-        correctAnswer,
-        createdAt: serverTimestamp(),
+      questions.forEach((q) => {
+        transaction.set(doc(questionsCollection), {
+          testId,
+          questionSvgCode: q.questionSvgCode,
+          options: q.options,
+          correctAnswer: q.correctAnswer,
+          createdAt: serverTimestamp(),
+        });
       });
 
-      // Write #2: Update the question count on the parent test document.
+      // Write #2: Atomically update the questionCount on the parent test document.
       const currentCount = testDoc.data().questionCount || 0;
-      const newCount = currentCount + 1;
+      const newCount = currentCount + questions.length;
       transaction.update(testRef, { questionCount: newCount });
     });
 
     return NextResponse.json(
-      { message: "Question added successfully" },
+      { message: "Bulk upload successful", uploadedCount: questions.length },
       { status: 201 }
     );
   } catch (error) {
-    console.error("Error adding question:", error);
+    console.error("Error during bulk upload:", error);
     return NextResponse.json(
-      { message: "Failed to add question", error: error.message },
+      { message: "Failed to bulk upload questions", error: error.message },
       { status: 500 }
     );
   }

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function QuestionUploader({ testId }) {
-  const [questionSvgCode, setQuestionSvgCode] = useState(""); // We store the SVG *code* here
+  const [questionSvgCode, setQuestionSvgCode] = useState("");
   const [options, setOptions] = useState(["", "", "", ""]);
   const [correctAnswer, setCorrectAnswer] = useState("");
   const [status, setStatus] = useState("");
@@ -16,16 +16,13 @@ export default function QuestionUploader({ testId }) {
     setOptions(newOptions);
   };
 
-  // This function reads the selected file and stores its text content
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = (evt) => {
-        // The result of the read operation
         setQuestionSvgCode(evt.target.result);
       };
-      // Read the file as a text string
       reader.readAsText(file);
     }
   };
@@ -39,7 +36,6 @@ export default function QuestionUploader({ testId }) {
     setStatus("Submitting...");
 
     try {
-      // The payload is already correct because we're sending the SVG code string
       const res = await fetch("/api/admin/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -51,7 +47,11 @@ export default function QuestionUploader({ testId }) {
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to add question");
+      if (!res.ok) {
+        const errorData = await res.json();
+        // Use the specific error message from the API if available
+        throw new Error(errorData.message || "Failed to add question");
+      }
 
       setStatus("Question added successfully!");
       e.target.reset();
@@ -65,18 +65,22 @@ export default function QuestionUploader({ testId }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className='space-y-4'>
+    <form onSubmit={handleSubmit} className='space-y-6'>
       <div>
-        <label className='block font-bold'>Question SVG</label>
-        {/* We use input type="file" for a better UX */}
+        <label
+          htmlFor='question-svg'
+          className='block text-sm font-medium text-slate-800 mb-1'
+        >
+          Question SVG
+        </label>
         <input
+          id='question-svg'
           type='file'
           accept='image/svg+xml'
-          onChange={handleFileChange} // The magic happens here
-          className='w-full p-2 border rounded file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100'
+          onChange={handleFileChange}
+          className='w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100'
           required
         />
-        {/* Optional: Show a preview or confirmation that the file is loaded */}
         {questionSvgCode && (
           <p className='text-xs text-green-600 mt-1'>
             SVG file loaded successfully.
@@ -84,9 +88,10 @@ export default function QuestionUploader({ testId }) {
         )}
       </div>
 
-      {/* The rest of the form is unchanged */}
       <div>
-        <label className='block font-bold'>Options</label>
+        <label className='block text-sm font-medium text-slate-800 mb-1'>
+          Options
+        </label>
         {options.map((opt, index) => (
           <input
             key={index}
@@ -94,17 +99,23 @@ export default function QuestionUploader({ testId }) {
             value={opt}
             onChange={(e) => handleOptionChange(index, e.target.value)}
             placeholder={`Option ${index + 1}`}
-            className='w-full p-2 border rounded mb-2'
+            className='w-full p-3 border border-slate-300 rounded-lg mb-2 text-slate-900 placeholder:text-slate-500'
             required
           />
         ))}
       </div>
       <div>
-        <label className='block font-bold'>Correct Answer</label>
+        <label
+          htmlFor='correct-answer'
+          className='block text-sm font-medium text-slate-800 mb-1'
+        >
+          Correct Answer
+        </label>
         <select
+          id='correct-answer'
           value={correctAnswer}
           onChange={(e) => setCorrectAnswer(e.target.value)}
-          className='w-full p-2 border rounded'
+          className='w-full p-3 border border-slate-300 rounded-lg text-slate-900'
           required
         >
           <option value='' disabled>
@@ -122,11 +133,21 @@ export default function QuestionUploader({ testId }) {
       </div>
       <button
         type='submit'
-        className='w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700'
+        className='w-full px-4 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700'
       >
         Add Question
       </button>
-      {status && <p className='mt-2 text-center'>{status}</p>}
+
+      {/* THIS IS THE FIX: The text color is now conditional */}
+      {status && (
+        <p
+          className={`mt-2 text-center text-sm font-medium ${
+            status.startsWith("Error:") ? "text-red-600" : "text-green-600"
+          }`}
+        >
+          {status}
+        </p>
+      )}
     </form>
   );
 }

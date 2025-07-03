@@ -1,23 +1,24 @@
 import { db } from "@/lib/firebase";
-import { collection, getDocs, query, orderBy } from "firebase/firestore";
-import BlogPostCard from "@/components/blog/BlogPostCard";
+import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
+import BlogList from "@/components/blog/BlogList";
 
-// This is a Server Component, so we can fetch data directly.
-async function getPosts() {
+// This function now only fetches the FIRST page of posts on the server
+async function getInitialPosts() {
   const postsCollection = collection(db, "posts");
-  const q = query(postsCollection, orderBy("createdAt", "desc"));
+  const q = query(postsCollection, orderBy("createdAt", "desc"), limit(6));
   const postsSnapshot = await getDocs(q);
 
   const posts = postsSnapshot.docs.map((doc) => ({
     id: doc.id,
     ...doc.data(),
+    // Convert timestamp to a serializable format for the client component
+    createdAt: doc.data().createdAt.toMillis(),
   }));
-
   return posts;
 }
 
 export default async function BlogPage() {
-  const posts = await getPosts();
+  const initialPosts = await getInitialPosts();
 
   return (
     <div className='bg-white min-h-screen'>
@@ -36,20 +37,15 @@ export default async function BlogPage() {
       </div>
       <div className='container mx-auto px-4 sm:px-6 lg:px-8 pb-16 md:pb-24'>
         <div className='-mt-16'>
-          {posts.length > 0 ? (
-            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
-              {posts.map((post) => (
-                <BlogPostCard key={post.id} post={post} />
-              ))}
-            </div>
+          {initialPosts.length > 0 ? (
+            <BlogList initialPosts={initialPosts} />
           ) : (
             <div className='text-center py-16 px-6 bg-white rounded-2xl shadow-xl border border-slate-100'>
               <h3 className='text-2xl font-bold text-slate-900'>
                 Our Library is Growing!
               </h3>
               <p className='mt-2 text-slate-700'>
-                New articles are being written. Please check back soon for
-                valuable insights.
+                New articles are being written. Please check back soon.
               </p>
             </div>
           )}
@@ -57,5 +53,4 @@ export default async function BlogPage() {
       </div>
     </div>
   );
-
 }

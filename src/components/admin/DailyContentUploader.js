@@ -2,18 +2,17 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import toast from "react-hot-toast"; // Import toast
 
 export default function DailyContentUploader({ uploadType }) {
-  // State to hold the SVG code as strings
   const [svgCodes, setSvgCodes] = useState({});
-  const [category, setCategory] = useState(""); // Only for GK
-  const [status, setStatus] = useState("");
+  const [category, setCategory] = useState("");
+  const [isUploading, setIsUploading] = useState(false); // Changed from 'status'
   const router = useRouter();
 
-  // Generic file handler that uses FileReader
   const handleFileChange = (e) => {
     const file = e.target.files[0];
-    const { name } = e.target; // 'wordSvg', 'meaningSvg', or 'contentSvg'
+    const { name } = e.target;
 
     if (file) {
       const reader = new FileReader();
@@ -26,9 +25,9 @@ export default function DailyContentUploader({ uploadType }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setStatus("Uploading...");
+    setIsUploading(true);
+    const loadingToast = toast.loading("Uploading content..."); // Use toast for loading
 
-    // Prepare payload based on upload type
     const payload = {
       type: uploadType,
       category: uploadType === "gk" ? category : undefined,
@@ -42,35 +41,46 @@ export default function DailyContentUploader({ uploadType }) {
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) throw new Error("Failed to upload content");
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Failed to upload");
+      }
 
-      setStatus("Content uploaded successfully!");
+      toast.success("Content uploaded successfully!", { id: loadingToast }); // Use toast for success
       e.target.reset();
       setSvgCodes({});
       setCategory("");
-      router.refresh();
+      router.refresh(); // Refresh page to show the new item in the list
     } catch (error) {
-      setStatus(`Error: ${error.message}`);
+      toast.error(`Error: ${error.message}`, { id: loadingToast }); // Use toast for error
+    } finally {
+      setIsUploading(false);
     }
   };
 
   return (
-    <div className='bg-white p-6 rounded-lg shadow-md'>
-      <h2 className='text-xl font-semibold mb-4'>
+    <div>
+      <h2 className='text-xl font-semibold mb-6 text-slate-900'>
         Upload New{" "}
         {uploadType === "vocabulary" ? "Vocabulary" : "General Knowledge"}
       </h2>
-      <form onSubmit={handleSubmit} className='space-y-4'>
+      <form onSubmit={handleSubmit} className='space-y-6'>
         {uploadType === "vocabulary" ? (
           <>
             <div>
-              <label className='block font-bold'>Word SVG</label>
+              <label
+                htmlFor='wordSvg'
+                className='block text-sm font-medium text-slate-800 mb-1'
+              >
+                Word SVG
+              </label>
               <input
+                id='wordSvg'
                 type='file'
                 name='wordSvg'
                 accept='image/svg+xml'
                 onChange={handleFileChange}
-                className='w-full'
+                className='w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100'
                 required
               />
               {svgCodes.wordSvg && (
@@ -78,13 +88,19 @@ export default function DailyContentUploader({ uploadType }) {
               )}
             </div>
             <div>
-              <label className='block font-bold'>Meaning SVG</label>
+              <label
+                htmlFor='meaningSvg'
+                className='block text-sm font-medium text-slate-800 mb-1'
+              >
+                Meaning SVG
+              </label>
               <input
+                id='meaningSvg'
                 type='file'
                 name='meaningSvg'
                 accept='image/svg+xml'
                 onChange={handleFileChange}
-                className='w-full'
+                className='w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100'
                 required
               />
               {svgCodes.meaningSvg && (
@@ -97,13 +113,19 @@ export default function DailyContentUploader({ uploadType }) {
         ) : (
           <>
             <div>
-              <label className='block font-bold'>Content SVG</label>
+              <label
+                htmlFor='contentSvg'
+                className='block text-sm font-medium text-slate-800 mb-1'
+              >
+                Content SVG
+              </label>
               <input
+                id='contentSvg'
                 type='file'
                 name='contentSvg'
                 accept='image/svg+xml'
                 onChange={handleFileChange}
-                className='w-full'
+                className='w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100'
                 required
               />
               {svgCodes.contentSvg && (
@@ -113,13 +135,19 @@ export default function DailyContentUploader({ uploadType }) {
               )}
             </div>
             <div>
-              <label className='block font-bold'>Category</label>
+              <label
+                htmlFor='category'
+                className='block text-sm font-medium text-slate-800 mb-1'
+              >
+                Category
+              </label>
               <input
+                id='category'
                 type='text'
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 placeholder='e.g., Country Capitals'
-                className='w-full p-2 border rounded'
+                className='w-full p-3 border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-500'
                 required
               />
             </div>
@@ -127,11 +155,11 @@ export default function DailyContentUploader({ uploadType }) {
         )}
         <button
           type='submit'
-          className='w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700'
+          disabled={isUploading}
+          className='w-full px-4 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-green-400'
         >
-          Upload
+          {isUploading ? "Uploading..." : "Upload"}
         </button>
-        {status && <p className='mt-2 text-center'>{status}</p>}
       </form>
     </div>
   );

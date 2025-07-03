@@ -1,9 +1,15 @@
 "use client";
+
 import { useState, useMemo } from "react";
 import TestCard from "./TestCard";
 
-export default function TestList({ tests }) {
+const PAGE_SIZE = 9;
+
+export default function TestList({ initialTests }) {
+  const [tests, setTests] = useState(initialTests);
   const [searchTerm, setSearchTerm] = useState("");
+  const [hasMore, setHasMore] = useState(initialTests.length === PAGE_SIZE);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const filteredTests = useMemo(() => {
     if (!searchTerm) return tests;
@@ -16,10 +22,35 @@ export default function TestList({ tests }) {
     );
   }, [searchTerm, tests]);
 
+  const loadMoreTests = async () => {
+    if (!hasMore || loadingMore) return;
+    setLoadingMore(true);
+
+    try {
+      const lastTest = tests[tests.length - 1];
+      const cursor = lastTest ? lastTest.createdAt : "";
+
+      const res = await fetch(`/api/mock-tests?cursor=${cursor}`);
+      const newTests = await res.json();
+
+      if (Array.isArray(newTests)) {
+        setTests((prev) => [...prev, ...newTests]);
+        if (newTests.length < PAGE_SIZE) {
+          setHasMore(false);
+        }
+      } else {
+        setHasMore(false);
+      }
+    } catch (error) {
+      console.error("Failed to load more tests", error);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
   return (
     <div>
       <div className='mb-12 max-w-2xl mx-auto'>
-        {/* Input field styled for high contrast and visibility */}
         <input
           type='text'
           placeholder='Search Tests by Title, Topic, or Exam...'
@@ -42,18 +73,32 @@ export default function TestList({ tests }) {
               No Matching Tests Found
             </h3>
             <p className='mt-2 text-gray-600'>
-              Try adjusting your search term or check back later for new tests.
+              Try adjusting your search term.
             </p>
           </div>
         )
       ) : (
-        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-pulse'>
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className='h-72 bg-slate-200 rounded-2xl'></div>
-          ))}
+        <div className='text-center py-16 px-6 bg-white rounded-2xl shadow-lg border border-slate-100'>
+          <h3 className='text-2xl font-bold text-gray-800'>
+            No Tests Available
+          </h3>
+          <p className='mt-2 text-gray-600'>
+            Our team is working on adding new tests. Please check back soon!
+          </p>
+        </div>
+      )}
+
+      {hasMore && (
+        <div className='text-center mt-16'>
+          <button
+            onClick={loadMoreTests}
+            disabled={loadingMore}
+            className='px-8 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400 transition-all'
+          >
+            {loadingMore ? "Loading..." : "Load More Tests"}
+          </button>
         </div>
       )}
     </div>
   );
-
 }

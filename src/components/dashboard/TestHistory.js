@@ -1,46 +1,56 @@
 "use client";
-import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 export default function TestHistory() {
   const { user } = useAuth();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [hasMore, setHasMore] = useState(true); // To know if there are more results to load
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      const fetchHistory = async () => {
-        try {
-          const res = await fetch(`/api/users/${user.uid}/results`);
-          if (!res.ok) {
-            // Check if the response was successful
-            throw new Error(`API responded with status: ${res.status}`);
-          }
-          const data = await res.json();
+  const fetchHistory = async (isInitialLoad = false) => {
+    if (!user) return;
+    if (isInitialLoad) setLoading(true);
+    else setLoadingMore(true);
 
-          // --- THIS IS THE FIX ---
-          // Ensure the data is an array before setting it
-          if (Array.isArray(data)) {
-            setHistory(data);
-          } else {
-            console.error("Received non-array response from API:", data);
-            setHistory([]); // Set to empty array on unexpected response
-          }
-        } catch (error) {
-          console.error("Failed to fetch test history", error);
-          setHistory([]); // Also set to empty array on fetch error
-        } finally {
-          setLoading(false);
+    try {
+      // Determine the cursor for the next page
+      const lastItem = history.length > 0 ? history[history.length - 1] : null;
+      const cursor = lastItem ? new Date(lastItem.completedAt).getTime() : "";
+
+      const res = await fetch(
+        `/api/users/${user.uid}/results?cursor=${cursor}`
+      );
+      const data = await res.json();
+
+      if (Array.isArray(data)) {
+        // Append new data to the existing history
+        setHistory((prev) => (isInitialLoad ? data : [...prev, ...data]));
+        // If we receive fewer items than the page size, there are no more pages
+        if (data.length < 5) {
+          setHasMore(false);
         }
-      };
-      fetchHistory();
+      } else {
+        setHasMore(false);
+      }
+    } catch (error) {
+      console.error("Failed to fetch test history", error);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
     }
+  };
+
+  // Initial load
+  useEffect(() => {
+    fetchHistory(true);
   }, [user]);
 
   if (loading) {
     return (
-      <p className='mt-2 text-lg text-slate-700'>
+      <p className='mt-2 text-lg text-slate-900'>
         Loading your test history...
       </p>
     );
@@ -48,9 +58,12 @@ export default function TestHistory() {
 
   if (history.length === 0) {
     return (
-      <p className='mt-2 text-lg text-slate-700'>
+      <p className='mt-2 text-lg text-slate-900'>
         You haven't completed any tests yet.{" "}
-        <Link href='/mock-tests' className='font-bold underline'>
+        <Link
+          href='/mock-tests'
+          className='font-bold text-indigo-600 underline'
+        >
           Start one now!
         </Link>
       </p>
@@ -120,7 +133,17 @@ export default function TestHistory() {
           </div>
         ))
       )}
+      {hasMore && (
+        <div className='text-center mt-6'>
+          <button
+            onClick={() => fetchHistory(false)}
+            disabled={loadingMore}
+            className='px-6 py-2 bg-slate-200 text-slate-800 font-semibold rounded-lg hover:bg-slate-300 disabled:opacity-50'
+          >
+            {loadingMore ? "Loading..." : "Load More"}
+          </button>
+        </div>
+      )}
     </div>
   );
-
 }

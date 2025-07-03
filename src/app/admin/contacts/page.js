@@ -1,19 +1,26 @@
 import { db } from "@/lib/firebase";
-import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
+import ContactList from "@/components/admin/ContactList";
 
-async function getContacts() {
+// This function now only fetches the FIRST page of contacts on the server
+async function getInitialContacts() {
   const contactsRef = collection(db, "contacts");
-  const q = query(contactsRef, orderBy("submittedAt", "desc"));
+  const q = query(contactsRef, orderBy("submittedAt", "desc"), limit(10));
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-    submittedAt: doc.data().submittedAt.toDate().toLocaleString(),
-  }));
+
+  return snapshot.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      // Convert timestamp to a serializable format
+      submittedAt: data.submittedAt ? data.submittedAt.toMillis() : null,
+    };
+  });
 }
 
 export default async function ContactsPage() {
-  const contacts = await getContacts();
+  const initialContacts = await getInitialContacts();
 
   return (
     <div>
@@ -30,59 +37,7 @@ export default async function ContactsPage() {
         </a>
       </div>
 
-      <div className='bg-white p-4 sm:p-6 rounded-2xl shadow-lg'>
-        {/* On medium screens and up, use a table */}
-        <div className='hidden md:block'>
-          <table className='w-full text-left'>
-            <thead className='bg-slate-50'>
-              <tr>
-                <th className='p-4 font-bold text-slate-800'>Name</th>
-                <th className='p-4 font-bold text-slate-800'>Email</th>
-                <th className='p-4 font-bold text-slate-800'>Message</th>
-                <th className='p-4 font-bold text-slate-800'>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {contacts.map((contact) => (
-                <tr key={contact.id} className='border-b border-slate-100'>
-                  <td className='p-4 text-slate-800'>{contact.name}</td>
-                  <td className='p-4 text-slate-800'>{contact.email}</td>
-                  <td className='p-4 text-slate-700 max-w-sm truncate'>
-                    {contact.message}
-                  </td>
-                  <td className='p-4 text-slate-600'>{contact.submittedAt}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* On mobile, use a list of cards */}
-        <div className='md:hidden space-y-4'>
-          {contacts.map((contact) => (
-            <div
-              key={contact.id}
-              className='p-4 border border-slate-200 rounded-lg bg-slate-50'
-            >
-              <p className='font-bold text-slate-900'>{contact.name}</p>
-              <p className='text-sm text-indigo-600'>{contact.email}</p>
-              <p className='mt-2 text-sm text-slate-600'>
-                {contact.submittedAt}
-              </p>
-              <p className='mt-4 p-3 bg-white border rounded text-slate-800'>
-                {contact.message}
-              </p>
-            </div>
-          ))}
-        </div>
-
-        {contacts.length === 0 && (
-          <p className='text-center p-8 text-slate-600'>
-            No contact submissions found.
-          </p>
-        )}
-      </div>
+      <ContactList initialContacts={initialContacts} />
     </div>
   );
-
 }

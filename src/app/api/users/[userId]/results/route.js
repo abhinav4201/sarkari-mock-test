@@ -10,25 +10,40 @@ import {
 } from "firebase/firestore";
 import { NextResponse } from "next/server";
 
+const PAGE_SIZE = 5; // Fetch 5 results at a time
+
 export async function GET(request, { params }) {
-  console.log("--- API Route: /api/users/[userId]/results ---");
   try {
     const { userId } = params;
-    console.log(`Fetching results for userId: ${userId}`);
-
+    const { searchParams } = new URL(request.url);
+    const cursor = searchParams.get("cursor");
     // 1. Fetch user's test results
-    const resultsQuery = query(
+    let resultsQuery;
+    const baseQuery = [
       collection(db, "mockTestResults"),
       where("userId", "==", userId),
-      orderBy("completedAt", "desc")
-    );
+      orderBy("completedAt", "desc"),
+    ];
+
+    if (cursor) {
+      // If there's a cursor, fetch the next page starting after the last document
+      const cursorTimestamp = Timestamp.fromMillis(parseInt(cursor));
+      resultsQuery = query(
+        ...baseQuery,
+        startAfter(cursorTimestamp),
+        limit(PAGE_SIZE)
+      );
+    } else {
+      // If no cursor, fetch the very first page
+      resultsQuery = query(...baseQuery, limit(PAGE_SIZE));
+    }
+
     const resultsSnapshot = await getDocs(resultsQuery);
 
+
     if (resultsSnapshot.empty) {
-      console.log("No results found for this user. Returning empty array.");
       return NextResponse.json([], { status: 200 });
     }
-    console.log(`Found ${resultsSnapshot.size} result document(s).`);
 
     // 2. Fetch details for each test
     const results = await Promise.all(
@@ -37,8 +52,6 @@ export async function GET(request, { params }) {
         try {
           const resultData = resultDoc.data();
 
-          // --- ADDED DETAILED LOGGING FOR EACH DOCUMENT ---
-          console.log(`Processing resultId: ${resultId}`);
 
           if (!resultData.testId) {
             console.error(
