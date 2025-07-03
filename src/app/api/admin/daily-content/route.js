@@ -4,37 +4,37 @@ import { NextResponse } from "next/server";
 
 export async function POST(request) {
   try {
-    const { type, urls, category } = await request.json();
+    const { type, svgCodes, category } = await request.json();
 
     let data;
     let collectionName;
 
     switch (type) {
       case "vocabulary":
-        if (!urls.wordSvg || !urls.meaningSvg) {
+        if (!svgCodes.wordSvg || !svgCodes.meaningSvg) {
           return NextResponse.json(
-            { message: "Missing vocabulary image URLs" },
+            { message: "Missing vocabulary SVG code" },
             { status: 400 }
           );
         }
         collectionName = "dailyVocabulary";
         data = {
-          wordSvgUrl: urls.wordSvg,
-          meaningSvgUrl: urls.meaningSvg,
+          wordSvgCode: svgCodes.wordSvg,
+          meaningSvgCode: svgCodes.meaningSvg,
           createdAt: serverTimestamp(),
         };
         break;
 
       case "gk":
-        if (!urls.contentSvg || !category) {
+        if (!svgCodes.contentSvg || !category) {
           return NextResponse.json(
-            { message: "Missing GK content URL or category" },
+            { message: "Missing GK SVG code or category" },
             { status: 400 }
           );
         }
         collectionName = "dailyGk";
         data = {
-          contentSvgUrl: urls.contentSvg,
+          contentSvgCode: svgCodes.contentSvg,
           category: category,
           createdAt: serverTimestamp(),
         };

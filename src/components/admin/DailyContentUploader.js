@@ -1,59 +1,41 @@
 "use client";
 
 import { useState } from "react";
-import { storage } from "@/lib/firebase";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useRouter } from "next/navigation";
 
 export default function DailyContentUploader({ uploadType }) {
-  // 'vocabulary' or 'gk'
-  const [files, setFiles] = useState({});
+  // State to hold the SVG code as strings
+  const [svgCodes, setSvgCodes] = useState({});
   const [category, setCategory] = useState(""); // Only for GK
   const [status, setStatus] = useState("");
   const router = useRouter();
 
+  // Generic file handler that uses FileReader
   const handleFileChange = (e) => {
-    setFiles({ ...files, [e.target.name]: e.target.files[0] });
+    const file = e.target.files[0];
+    const { name } = e.target; // 'wordSvg', 'meaningSvg', or 'contentSvg'
+
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        setSvgCodes((prev) => ({ ...prev, [name]: evt.target.result }));
+      };
+      reader.readAsText(file);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setStatus("Uploading...");
 
-    const isVocabulary = uploadType === "vocabulary";
-    const requiredFiles = isVocabulary
-      ? ["wordSvg", "meaningSvg"]
-      : ["contentSvg"];
-
-    for (const reqFile of requiredFiles) {
-      if (!files[reqFile]) {
-        setStatus(`Error: Please select the ${reqFile} file.`);
-        return;
-      }
-    }
+    // Prepare payload based on upload type
+    const payload = {
+      type: uploadType,
+      category: uploadType === "gk" ? category : undefined,
+      svgCodes: svgCodes,
+    };
 
     try {
-      // 1. Upload all files to Firebase Storage and get URLs
-      const uploadPromises = Object.entries(files).map(async ([key, file]) => {
-        const storageRef = ref(
-          storage,
-          `daily-content/${uploadType}/${Date.now()}_${file.name}`
-        );
-        const snapshot = await uploadBytes(storageRef, file);
-        const downloadURL = await getDownloadURL(snapshot.ref);
-        return { [key]: downloadURL };
-      });
-
-      const uploadedUrlsArray = await Promise.all(uploadPromises);
-      const uploadedUrls = Object.assign({}, ...uploadedUrlsArray);
-
-      // 2. Send data to our API route
-      const payload = {
-        type: uploadType,
-        urls: uploadedUrls,
-        ...(isVocabulary ? {} : { category }), // Add category only for GK
-      };
-
       const res = await fetch("/api/admin/daily-content", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -64,7 +46,7 @@ export default function DailyContentUploader({ uploadType }) {
 
       setStatus("Content uploaded successfully!");
       e.target.reset();
-      setFiles({});
+      setSvgCodes({});
       setCategory("");
       router.refresh();
     } catch (error) {
@@ -91,6 +73,9 @@ export default function DailyContentUploader({ uploadType }) {
                 className='w-full'
                 required
               />
+              {svgCodes.wordSvg && (
+                <p className='text-xs text-green-600 mt-1'>Word SVG loaded.</p>
+              )}
             </div>
             <div>
               <label className='block font-bold'>Meaning SVG</label>
@@ -102,6 +87,11 @@ export default function DailyContentUploader({ uploadType }) {
                 className='w-full'
                 required
               />
+              {svgCodes.meaningSvg && (
+                <p className='text-xs text-green-600 mt-1'>
+                  Meaning SVG loaded.
+                </p>
+              )}
             </div>
           </>
         ) : (
@@ -116,6 +106,11 @@ export default function DailyContentUploader({ uploadType }) {
                 className='w-full'
                 required
               />
+              {svgCodes.contentSvg && (
+                <p className='text-xs text-green-600 mt-1'>
+                  Content SVG loaded.
+                </p>
+              )}
             </div>
             <div>
               <label className='block font-bold'>Category</label>
