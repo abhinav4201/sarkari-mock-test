@@ -22,56 +22,92 @@ export default async function PreTestStartPage({ params }) {
   const canStartTest = !test.isPremium; // Simplified logic for now
 
   return (
-    <div className='bg-gray-50 flex items-center justify-center min-h-screen p-4'>
-      <div className='max-w-2xl w-full bg-white p-8 rounded-xl shadow-lg'>
-        {test.isPremium && (
-          <div className='text-center mb-4'>
-            <span className='bg-yellow-400 text-yellow-800 text-sm font-bold px-3 py-1 rounded-full'>
-              PREMIUM TEST
-            </span>
-          </div>
-        )}
-        <h1 className='text-3xl font-bold text-center text-gray-900'>
-          {test.title}
-        </h1>
-        <p className='text-center text-gray-500 mt-1'>{test.examName}</p>
-
-        <div className='my-8 border-t border-b py-6 grid grid-cols-2 gap-4'>
-          <div className='flex items-center space-x-3'>
-            <FileText className='text-blue-500' />{" "}
-            <span>{test.questionCount || 0} Questions</span>
-          </div>
-          <div className='flex items-center space-x-3'>
-            <Clock className='text-blue-500' />{" "}
-            <span>{test.estimatedTime} Minutes</span>
-          </div>
-          <div className='flex items-center space-x-3'>
-            <Book className='text-blue-500' />{" "}
-            <span>Subject: {test.subject}</span>
-          </div>
-          <div className='flex items-center space-x-3'>
-            <Tag className='text-blue-500' /> <span>Topic: {test.topic}</span>
-          </div>
+    <div className='bg-slate-100 min-h-screen flex flex-col items-center justify-center p-4'>
+      <div className='w-full max-w-4xl'>
+        {/* Header */}
+        <div className='bg-white p-4 rounded-t-2xl shadow-lg border-b border-slate-200 flex justify-between items-center sticky top-0 z-10'>
+          <h1 className='text-lg md:text-xl font-bold text-slate-900 truncate'>
+            Mock Test in Progress
+          </h1>
+          <div className='text-xl md:text-2xl font-bold text-red-600 bg-red-100 px-3 py-1 rounded-full'>{`${minutes}:${
+            seconds < 10 ? "0" : ""
+          }${seconds}`}</div>
         </div>
 
-        <div className='text-center'>
-          {canStartTest ? (
-            <Link
-              href={`/mock-tests/take/${test.id}`}
-              className='w-full inline-block px-8 py-4 bg-green-600 text-white rounded-lg text-lg font-bold hover:bg-green-700 transition-transform transform hover:scale-105'
-            >
-              Start Test Now
-            </Link>
+        <div className='bg-white p-6 sm:p-8 rounded-b-2xl shadow-lg'>
+          {/* Question Area */}
+          {currentQuestion ? (
+            <div>
+              <h2 className='text-lg font-semibold mb-4 text-slate-900'>
+                Question {currentQuestionIndex + 1}{" "}
+                <span className='text-slate-500'>of {questions.length}</span>
+              </h2>
+              <div
+                className='w-full h-auto border-2 border-slate-200 rounded-lg p-4 bg-slate-50 mb-6'
+                dangerouslySetInnerHTML={{
+                  __html: currentQuestion.questionSvgCode,
+                }}
+              />
+              <div className='space-y-4'>
+                {currentQuestion.options.map((option, index) => (
+                  <button
+                    key={index}
+                    onClick={() =>
+                      handleAnswerSelect(currentQuestion.id, option)
+                    }
+                    className={`block w-full text-left p-4 border-2 rounded-lg transition-all duration-200 text-base md:text-lg font-medium ${
+                      answers[currentQuestion.id] === option
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-md"
+                        : "bg-white text-slate-900 border-slate-300 hover:border-indigo-500 hover:bg-indigo-50"
+                    }`}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
           ) : (
-            <button
-              disabled
-              className='w-full inline-block px-8 py-4 bg-gray-400 text-white rounded-lg text-lg font-bold cursor-not-allowed items-center justify-center'
-            >
-              <Shield className='mr-2' /> Upgrade to Premium to Start
-            </button>
+            <div className='text-center p-8'>
+              <p className='text-slate-700'>Loading questions...</p>
+            </div>
           )}
+
+          {/* Navigation */}
+          <div className='flex justify-between mt-10 pt-6 border-t border-slate-200'>
+            <button
+              onClick={() =>
+                setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))
+              }
+              disabled={currentQuestionIndex === 0}
+              className='px-6 py-2 bg-slate-200 text-slate-800 font-semibold rounded-lg disabled:opacity-50 hover:bg-slate-300 transition-colors'
+            >
+              Previous
+            </button>
+            {currentQuestionIndex === questions.length - 1 ? (
+              <button
+                onClick={submitTest}
+                disabled={testState === "submitting"}
+                className='px-6 py-2 bg-green-600 text-white font-semibold rounded-lg disabled:bg-green-400 hover:bg-green-700 transition-colors'
+              >
+                {testState === "submitting" ? "Submitting..." : "Submit Test"}
+              </button>
+            ) : (
+              <button
+                onClick={() =>
+                  setCurrentQuestionIndex((prev) =>
+                    Math.min(questions.length - 1, prev + 1)
+                  )
+                }
+                disabled={currentQuestionIndex === questions.length - 1}
+                className='px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg disabled:opacity-50 hover:bg-indigo-700 transition-colors'
+              >
+                Next
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
+
 }

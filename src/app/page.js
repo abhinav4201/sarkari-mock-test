@@ -21,17 +21,17 @@ export default async function HomePage() {
   const recentPosts = await getRecentPosts();
 
   return (
-    <div className='bg-slate-50 text-slate-800'>
+    <div className='bg-slate-50 text-slate-900'>
       {/* ===================================
-          1. Hero Section
-      =================================== */}
+            1. Hero Section
+        =================================== */}
       <section className='relative pt-24 pb-28 md:pt-32 md:pb-36'>
         <div className='absolute inset-0 bottom-1/2 bg-white'></div>
         <div className='relative container mx-auto px-6 text-center'>
           <h1 className='text-4xl md:text-6xl font-extrabold tracking-tighter text-slate-900'>
             Master Your Competitive Exams
           </h1>
-          <p className='mt-6 max-w-2xl mx-auto text-lg text-slate-600'>
+          <p className='mt-6 max-w-2xl mx-auto text-lg text-slate-700'>
             The ultimate platform with high-quality mock tests, daily current
             affairs, and expert analysis to help you achieve your goals.
           </p>
@@ -48,15 +48,15 @@ export default async function HomePage() {
       </section>
 
       {/* ===================================
-          2. Trust & Features Section
-      =================================== */}
+            2. Trust & Features Section
+        =================================== */}
       <section className='py-20 bg-white'>
         <div className='container mx-auto px-6'>
           <div className='text-center'>
             <h2 className='text-3xl font-bold'>
               Your Path to Success Starts Here
             </h2>
-            <p className='mt-2 text-lg text-slate-600'>
+            <p className='mt-2 text-lg text-slate-700'>
               Everything you need, all in one place.
             </p>
           </div>
@@ -64,7 +64,7 @@ export default async function HomePage() {
             <div className='p-8 bg-slate-50 rounded-xl shadow-sm'>
               <Timer className='h-10 w-10 text-indigo-600' />
               <h3 className='mt-4 text-xl font-bold'>Realistic Timed Tests</h3>
-              <p className='mt-2 text-slate-600'>
+              <p className='mt-2 text-slate-700'>
                 Experience real exam conditions with our timed mock tests to
                 improve your speed and accuracy.
               </p>
@@ -72,7 +72,7 @@ export default async function HomePage() {
             <div className='p-8 bg-slate-50 rounded-xl shadow-sm'>
               <Target className='h-10 w-10 text-indigo-600' />
               <h3 className='mt-4 text-xl font-bold'>Daily GK & Vocabulary</h3>
-              <p className='mt-2 text-slate-600'>
+              <p className='mt-2 text-slate-700'>
                 Stay updated with curated daily general knowledge and essential
                 vocabulary to ace your exams.
               </p>
@@ -82,7 +82,7 @@ export default async function HomePage() {
               <h3 className='mt-4 text-xl font-bold'>
                 Expert Analysis & Notes
               </h3>
-              <p className='mt-2 text-slate-600'>
+              <p className='mt-2 text-slate-700'>
                 Get detailed performance analysis after every test and access
                 our library of expert-written notes.
               </p>
@@ -92,8 +92,8 @@ export default async function HomePage() {
       </section>
 
       {/* ===================================
-          3. "How It Works" Section
-      =================================== */}
+            3. "How It Works" Section
+        =================================== */}
       <section className='py-20'>
         <div className='container mx-auto px-6'>
           <div className='text-center'>
@@ -107,7 +107,7 @@ export default async function HomePage() {
                 1
               </div>
               <h3 className='mt-6 text-xl font-bold'>Create an Account</h3>
-              <p className='mt-2 text-slate-600'>
+              <p className='mt-2 text-slate-700'>
                 Sign up for free to get access to daily content and track your
                 progress.
               </p>
@@ -117,7 +117,7 @@ export default async function HomePage() {
                 2
               </div>
               <h3 className='mt-6 text-xl font-bold'>Choose a Test</h3>
-              <p className='mt-2 text-slate-600'>
+              <p className='mt-2 text-slate-700'>
                 Browse our extensive library of mock tests for various
                 competitive exams.
               </p>
@@ -127,7 +127,7 @@ export default async function HomePage() {
                 3
               </div>
               <h3 className='mt-6 text-xl font-bold'>Analyze & Improve</h3>
-              <p className='mt-2 text-slate-600'>
+              <p className='mt-2 text-slate-700'>
                 Take tests and get detailed performance reports to identify your
                 strengths and weaknesses.
               </p>
@@ -137,8 +137,8 @@ export default async function HomePage() {
       </section>
 
       {/* ===================================
-          4. Latest Blog Posts Section
-      =================================== */}
+            4. Latest Blog Posts Section
+        =================================== */}
       {recentPosts.length > 0 && (
         <section className='py-20 bg-white'>
           <div className='container mx-auto px-6'>
@@ -163,8 +163,8 @@ export default async function HomePage() {
       )}
 
       {/* ===================================
-          5. Final Call to Action
-      =================================== */}
+            5. Final Call to Action
+        =================================== */}
       <section className='py-20'>
         <div className='container mx-auto px-6'>
           <div className='bg-indigo-700 text-white rounded-2xl shadow-xl p-10 md:p-16 text-center'>
@@ -181,4 +181,5 @@ export default async function HomePage() {
       </section>
     </div>
   );
+
 }

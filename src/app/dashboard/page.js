@@ -34,17 +34,29 @@ export default async function DashboardPage() {
   const gk = await getDailyGk();
 
   return (
-    <div className='bg-gray-50 min-h-screen'>
-      <div className='container mx-auto px-4 py-8'>
+    <div className='bg-slate-100 min-h-screen'>
+      <div className='container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12'>
         <WelcomeHeader />
-        <div className='mt-8'>
-          <DailyDose vocabulary={vocabulary} gk={gk} />
-        </div>
-        <div className='mt-8 bg-white p-6 rounded-lg shadow-md'>
-          <h2 className='text-2xl font-bold mb-4'>Your Recent Activity</h2>
-          <TestHistory />
+        <div className='mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8 items-start'>
+          {/* Main Column */}
+          <div className='lg:col-span-2 space-y-8'>
+            <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-slate-200'>
+              <h2 className='text-2xl font-bold text-slate-900 mb-6'>
+                Your Test History
+              </h2>
+              <TestHistory />
+            </div>
+          </div>
+
+          {/* Side Column */}
+          <div className='lg:col-span-1'>
+            <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-slate-200'>
+              <DailyDose vocabulary={vocabulary} gk={gk} />
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
+
 }

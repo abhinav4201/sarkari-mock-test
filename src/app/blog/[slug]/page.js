@@ -58,23 +58,26 @@ export default async function BlogPost({ params }) {
   );
 
   return (
-    <div className='bg-white'>
-      <div className='container mx-auto px-4 py-16'>
-        <article className='max-w-3xl mx-auto'>
-          <p className='text-gray-500 mb-2'>{formattedDate}</p>
-          <h1 className='text-4xl md:text-5xl font-extrabold text-gray-900 mb-4'>
-            {post.title}
-          </h1>
+    <div className='bg-white py-16 md:py-24'>
+      <div className='container mx-auto px-4 sm:px-6 lg:px-8'>
+        <article className='max-w-4xl mx-auto'>
+          <div className='text-center'>
+            <p className='text-base font-semibold text-indigo-600 tracking-wide uppercase'>
+              {formattedDate}
+            </p>
+            <h1 className='mt-2 text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tight'>
+              {post.title}
+            </h1>
+          </div>
 
-          <YouTubeEmbed url={post.youtubeUrl} />
+          {post.youtubeUrl && <YouTubeEmbed url={post.youtubeUrl} />}
 
-          {/* Render the post content from your Rich Text Editor */}
-          <div
-            className='prose lg:prose-xl max-w-none'
-            dangerouslySetInnerHTML={{ __html: post.content }}
-          ></div>
+          <div className='mt-12 prose prose-lg lg:prose-xl max-w-none prose-h2:font-bold prose-h2:text-slate-800 prose-a:text-indigo-600 prose-img:rounded-xl prose-img:shadow-lg'>
+            <div dangerouslySetInnerHTML={{ __html: post.content }} />
+          </div>
         </article>
       </div>
     </div>
   );
+
 }

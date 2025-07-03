@@ -13,10 +13,23 @@ export default function TestHistory() {
       const fetchHistory = async () => {
         try {
           const res = await fetch(`/api/users/${user.uid}/results`);
+          if (!res.ok) {
+            // Check if the response was successful
+            throw new Error(`API responded with status: ${res.status}`);
+          }
           const data = await res.json();
-          setHistory(data);
+
+          // --- THIS IS THE FIX ---
+          // Ensure the data is an array before setting it
+          if (Array.isArray(data)) {
+            setHistory(data);
+          } else {
+            console.error("Received non-array response from API:", data);
+            setHistory([]); // Set to empty array on unexpected response
+          }
         } catch (error) {
           console.error("Failed to fetch test history", error);
+          setHistory([]); // Also set to empty array on fetch error
         } finally {
           setLoading(false);
         }
@@ -42,33 +55,65 @@ export default function TestHistory() {
 
   return (
     <div className='space-y-4'>
-      {history.map((item) => (
-        <div
-          key={item.resultId}
-          className='p-4 border rounded-lg flex justify-between items-center bg-gray-50'
-        >
-          <div>
-            <h3 className='font-bold text-lg text-gray-800'>
-              {item.testTitle}
-            </h3>
-            <p className='text-sm text-gray-500'>
-              Completed on: {new Date(item.completedAt).toLocaleDateString()}
-            </p>
-            <p className='text-gray-700'>
-              Score:{" "}
-              <span className='font-bold'>
-                {item.score} / {item.totalQuestions}
-              </span>
-            </p>
-          </div>
-          <Link
-            href={`/mock-tests/results/${item.resultId}`}
-            className='px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700'
+      {loading ? (
+        [...Array(3)].map((_, i) => (
+          <div
+            key={i}
+            className='p-4 border rounded-xl flex justify-between items-center bg-slate-50 animate-pulse'
           >
-            View Result
+            <div className='w-full'>
+              <div className='h-6 w-3/5 bg-slate-200 rounded-md'></div>
+              <div className='h-4 w-2/5 bg-slate-200 rounded-md mt-2'></div>
+            </div>
+            <div className='h-10 w-24 bg-slate-200 rounded-lg'></div>
+          </div>
+        ))
+      ) : history.length === 0 ? (
+        <div className='text-center py-10 px-4 border-2 border-dashed rounded-xl border-slate-300'>
+          <h3 className='text-lg font-semibold text-slate-900'>
+            No Tests Taken Yet
+          </h3>
+          <p className='mt-1 text-slate-700'>
+            Your completed test results will appear here.
+          </p>
+          <Link
+            href='/mock-tests'
+            className='mt-4 inline-block px-5 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700'
+          >
+            Browse Tests
           </Link>
         </div>
-      ))}
+      ) : (
+        history.map((item) => (
+          <div
+            key={item.resultId}
+            className='p-4 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:justify-between sm:items-center bg-white hover:bg-slate-50 transition-colors'
+          >
+            <div className='mb-4 sm:mb-0'>
+              <h3 className='font-bold text-lg text-slate-900'>
+                {item.testTitle}
+              </h3>
+              <p className='text-sm text-slate-600 mt-1'>
+                Completed on: {new Date(item.completedAt).toLocaleDateString()}
+              </p>
+              <p className='text-slate-800 mt-2'>
+                Score:{" "}
+                <span className='font-extrabold text-lg text-indigo-600'>
+                  {item.score}
+                </span>{" "}
+                / {item.totalQuestions}
+              </p>
+            </div>
+            <Link
+              href={`/mock-tests/results/${item.resultId}`}
+              className='flex-shrink-0 px-4 py-2 bg-indigo-100 text-indigo-700 text-sm font-semibold rounded-lg hover:bg-indigo-200 text-center'
+            >
+              View Result
+            </Link>
+          </div>
+        ))
+      )}
     </div>
   );
+
 }

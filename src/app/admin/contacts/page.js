@@ -17,33 +17,72 @@ export default async function ContactsPage() {
 
   return (
     <div>
-      <div className='flex justify-between items-center mb-6'>
-        <h1 className='text-3xl font-bold'>Contact Submissions</h1>
+      <div className='flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-4'>
+        <h1 className='text-3xl font-bold text-slate-900'>
+          Contact Submissions
+        </h1>
         <a
           href='/api/admin/download/contacts'
           download
-          className='px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700'
+          className='px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 text-center'
         >
           Download as CSV
         </a>
       </div>
-      {/* We will add date filtering later */}
-      <div className='bg-white p-4 rounded-lg shadow-md'>
-        {/* Table to display contacts */}
-        <table className='w-full'>
-          {/* Table Head */}
-          <tbody>
-            {contacts.map((contact) => (
-              <tr key={contact.id}>
-                <td className='p-2 border-b'>{contact.name}</td>
-                <td className='p-2 border-b'>{contact.email}</td>
-                <td className='p-2 border-b'>{contact.message}</td>
-                <td className='p-2 border-b'>{contact.submittedAt}</td>
+
+      <div className='bg-white p-4 sm:p-6 rounded-2xl shadow-lg'>
+        {/* On medium screens and up, use a table */}
+        <div className='hidden md:block'>
+          <table className='w-full text-left'>
+            <thead className='bg-slate-50'>
+              <tr>
+                <th className='p-4 font-bold text-slate-800'>Name</th>
+                <th className='p-4 font-bold text-slate-800'>Email</th>
+                <th className='p-4 font-bold text-slate-800'>Message</th>
+                <th className='p-4 font-bold text-slate-800'>Date</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {contacts.map((contact) => (
+                <tr key={contact.id} className='border-b border-slate-100'>
+                  <td className='p-4 text-slate-800'>{contact.name}</td>
+                  <td className='p-4 text-slate-800'>{contact.email}</td>
+                  <td className='p-4 text-slate-700 max-w-sm truncate'>
+                    {contact.message}
+                  </td>
+                  <td className='p-4 text-slate-600'>{contact.submittedAt}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* On mobile, use a list of cards */}
+        <div className='md:hidden space-y-4'>
+          {contacts.map((contact) => (
+            <div
+              key={contact.id}
+              className='p-4 border border-slate-200 rounded-lg bg-slate-50'
+            >
+              <p className='font-bold text-slate-900'>{contact.name}</p>
+              <p className='text-sm text-indigo-600'>{contact.email}</p>
+              <p className='mt-2 text-sm text-slate-600'>
+                {contact.submittedAt}
+              </p>
+              <p className='mt-4 p-3 bg-white border rounded text-slate-800'>
+                {contact.message}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {contacts.length === 0 && (
+          <p className='text-center p-8 text-slate-600'>
+            No contact submissions found.
+          </p>
+        )}
       </div>
     </div>
   );
+
 }
