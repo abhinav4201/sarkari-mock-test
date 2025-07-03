@@ -3,6 +3,28 @@ import { collection, getDocs, query, where, limit } from "firebase/firestore";
 import YouTubeEmbed from "@/components/blog/YouTubeEmbed";
 import { notFound } from "next/navigation";
 
+
+// ADD THIS FUNCTION
+export async function generateMetadata({ params }) {
+  const { slug } = params;
+  const post = await getPostBySlug(slug); // We'll reuse your existing function
+
+  if (!post) {
+    return {
+      title: 'Post Not Found',
+      description: 'The post you are looking for does not exist.',
+    };
+  }
+
+  // Create a plain text excerpt for the description
+  const excerpt = post.content.substring(0, 150).replace(/<[^>]+>/g, '');
+
+  return {
+    title: `${post.title} | Sarkari Mock Test`,
+    description: excerpt,
+  };
+}
+
 // This function fetches a single post by its slug
 async function getPostBySlug(slug) {
   const postsCollection = collection(db, "posts");

@@ -2,6 +2,7 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getAuth } from "firebase/auth"; // <-- ADD THIS LINE
 
 // Your web app's Firebase configuration from the .env.local file
 const firebaseConfig = {
@@ -14,10 +15,10 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-// To prevent re-initializing on hot reloads in development, we check if an app is already initialized.
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 
 const db = getFirestore(app);
 const storage = getStorage(app);
+const auth = getAuth(app); // <-- ADD THIS LINE
 
-export { db, storage };
+export { db, storage, auth }; // <-- ADD auth TO THE EXPORT

@@ -1,12 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { storage } from "@/lib/firebase";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useRouter } from "next/navigation";
 
 export default function QuestionUploader({ testId }) {
-  const [questionSvg, setQuestionSvg] = useState(null);
+  const [questionSvgCode, setQuestionSvgCode] = useState(""); // We store the SVG *code* here
   const [options, setOptions] = useState(["", "", "", ""]);
   const [correctAnswer, setCorrectAnswer] = useState("");
   const [status, setStatus] = useState("");
@@ -18,50 +16,51 @@ export default function QuestionUploader({ testId }) {
     setOptions(newOptions);
   };
 
+  // This function reads the selected file and stores its text content
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        // The result of the read operation
+        setQuestionSvgCode(evt.target.result);
+      };
+      // Read the file as a text string
+      reader.readAsText(file);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!questionSvg || options.includes("") || !correctAnswer) {
-      setStatus("Error: Please fill all fields and select a file.");
+    if (!questionSvgCode || options.includes("") || !correctAnswer) {
+      setStatus("Error: Please select an SVG file and fill all fields.");
       return;
     }
-    setStatus("Uploading...");
+    setStatus("Submitting...");
 
     try {
-      // 1. Upload SVG to Firebase Storage
-      const storageRef = ref(
-        storage,
-        `mockTestQuestions/${testId}/${Date.now()}_${questionSvg.name}`
-      );
-      const snapshot = await uploadBytes(storageRef, questionSvg);
-      const downloadURL = await getDownloadURL(snapshot.ref);
-
-      // 2. Send data to our API route
+      // The payload is already correct because we're sending the SVG code string
       const res = await fetch("/api/admin/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           testId,
-          questionSvgUrl: downloadURL,
+          questionSvgCode,
           options,
           correctAnswer,
         }),
       });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || "Failed to add question");
-      }
+      if (!res.ok) throw new Error("Failed to add question");
 
       setStatus("Question added successfully!");
-      // Reset form
-      setQuestionSvg(null);
-      e.target.reset(); // Resets file input and other form elements
+      e.target.reset();
+      setQuestionSvgCode("");
       setOptions(["", "", "", ""]);
       setCorrectAnswer("");
-      router.refresh(); // Refresh the page to show the new question in the list
+      router.refresh();
     } catch (error) {
       setStatus(`Error: ${error.message}`);
-      console.error(error);
     }
   };
 
@@ -69,14 +68,23 @@ export default function QuestionUploader({ testId }) {
     <form onSubmit={handleSubmit} className='space-y-4'>
       <div>
         <label className='block font-bold'>Question SVG</label>
+        {/* We use input type="file" for a better UX */}
         <input
           type='file'
           accept='image/svg+xml'
-          onChange={(e) => setQuestionSvg(e.target.files[0])}
+          onChange={handleFileChange} // The magic happens here
           className='w-full p-2 border rounded file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100'
           required
         />
+        {/* Optional: Show a preview or confirmation that the file is loaded */}
+        {questionSvgCode && (
+          <p className='text-xs text-green-600 mt-1'>
+            SVG file loaded successfully.
+          </p>
+        )}
       </div>
+
+      {/* The rest of the form is unchanged */}
       <div>
         <label className='block font-bold'>Options</label>
         {options.map((opt, index) => (
@@ -115,7 +123,6 @@ export default function QuestionUploader({ testId }) {
       <button
         type='submit'
         className='w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700'
-        disabled={status.includes("Uploading")}
       >
         Add Question
       </button>

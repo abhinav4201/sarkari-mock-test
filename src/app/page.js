@@ -122,8 +122,7 @@ export default async function HomePage() {
             Sign up today to access daily content, track your progress, and take
             your first step towards success.
           </p>
-          <SignUpButton />{" "}
-          {/* <-- Replace the old button with this component */}
+          <SignUpButton />
         </div>
       </section>
     </div>

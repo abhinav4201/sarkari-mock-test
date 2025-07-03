@@ -6,9 +6,8 @@ import {
   signOut,
   onAuthStateChanged,
   GoogleAuthProvider,
-  getAuth,
 } from "firebase/auth";
-import { db } from "@/lib/firebase"; // Assuming your firebase.js is in /lib
+import { auth } from "@/lib/firebase"; // <-- IMPORT auth FROM YOUR HELPER FILE
 
 const AuthContext = createContext();
 
@@ -16,15 +15,24 @@ export const AuthContextProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const auth = getAuth();
+  // REMOVED: const auth = getAuth(); - We now import it directly.
 
-  const googleSignIn = () => {
+  const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+
+  const googleSignIn = async () => {
     const provider = new GoogleAuthProvider();
-    signInWithPopup(auth, provider);
+    const result = await signInWithPopup(auth, provider);
+
+    if (result.user.email === adminEmail) {
+      window.location.href = "/admin";
+    } else {
+      window.location.href = "/dashboard";
+    }
   };
 
-  const logOut = () => {
-    signOut(auth);
+  const logOut = async () => {
+    await signOut(auth);
+    window.location.href = "/";
   };
 
   useEffect(() => {
@@ -33,7 +41,7 @@ export const AuthContextProvider = ({ children }) => {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [auth]);
+  }, []); // auth dependency removed as it's now a stable import
 
   return (
     <AuthContext.Provider value={{ user, loading, googleSignIn, logOut }}>

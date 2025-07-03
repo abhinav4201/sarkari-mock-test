@@ -2,6 +2,7 @@ import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 import DailyDose from "@/components/dashboard/DailyDose";
 import WelcomeHeader from "@/components/dashboard/WelcomeHeader";
+import TestHistory from "@/components/dashboard/TestHistory";
 
 // Server-side function to get the latest vocabulary
 async function getDailyVocabulary() {
@@ -41,10 +42,7 @@ export default async function DashboardPage() {
         </div>
         <div className='mt-8 bg-white p-6 rounded-lg shadow-md'>
           <h2 className='text-2xl font-bold mb-4'>Your Recent Activity</h2>
-          <p className='text-gray-500'>
-            Your recent mock test results will appear here.
-          </p>
-          {/* This will be filled in a future step */}
+          <TestHistory />
         </div>
       </div>
     </div>

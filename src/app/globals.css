@@ -19,8 +19,36 @@
   }
 }
 
+/* Add these new styles at the bottom of your globals.css */
+
+/* 1. Set a clean base for the entire page */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  @apply bg-gray-50 text-gray-700 antialiased;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11'; /* Enhances font readability */
+}
+
+/* 2. Professional styles for headings */
+h1, h2, h3, h4, h5, h6 {
+  @apply font-bold text-gray-900 tracking-tight;
+}
+
+h1 {
+  @apply text-4xl md:text-5xl;
+}
+
+h2 {
+  @apply text-3xl;
+}
+
+h3 {
+  @apply text-2xl;
+}
+
+p {
+  @apply leading-relaxed; /* Improves paragraph readability */
+}
+
+/* 3. A subtle style for links */
+a {
+  @apply text-blue-600 hover:text-blue-800 transition-colors duration-200;
 }

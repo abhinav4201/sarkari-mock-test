@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const adminLinks = [
+  { name: "Dashboard", href: "/admin" },
   { name: "Blog Management", href: "/admin/blog" },
   { name: "Mock Tests", href: "/admin/mock-tests" }, // Renamed for clarity
   { name: "Daily Content", href: "/admin/daily-content" }, // <-- ADD THIS LINE
