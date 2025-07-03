@@ -77,6 +77,7 @@ export default function BlogEditor() {
   const [slug, setSlug] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [featuredImageSvgCode, setFeaturedImageSvgCode] = useState(""); 
 
   const editor = useEditor({
     extensions: [
@@ -94,6 +95,18 @@ export default function BlogEditor() {
       },
     },
   });
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        setFeaturedImageSvgCode(evt.target.result);
+        toast.success("Featured image loaded.");
+      };
+      reader.readAsText(file);
+    }
+  }; 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -186,6 +199,31 @@ export default function BlogEditor() {
           className='w-full p-3 border border-slate-300 rounded-lg text-slate-900'
         />
       </div>
+      <div>
+        <label
+          htmlFor='featured-image'
+          className='block text-sm font-medium text-slate-800 mb-1'
+        >
+          Featured Image SVG (Optional)
+        </label>
+        <input
+          id='featured-image'
+          type='file'
+          accept='image/svg+xml'
+          onChange={handleFileChange}
+          className='w-full text-sm text-slate-700 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100'
+        />
+      </div>
+      {featuredImageSvgCode && (
+        <div>
+          <label className='block text-sm font-medium text-slate-900'>
+            Image Preview
+          </label>
+          <div className='mt-1 border border-slate-300 rounded-lg p-2 h-40 overflow-auto bg-slate-50'>
+            <div dangerouslySetInnerHTML={{ __html: featuredImageSvgCode }} />
+          </div>
+        </div>
+      )}
       <div>
         <label className='block text-sm font-medium text-slate-800 mb-1'>
           Content

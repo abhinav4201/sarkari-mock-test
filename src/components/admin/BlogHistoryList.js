@@ -1,0 +1,150 @@
+"use client";
+
+import { useState } from "react";
+import toast from "react-hot-toast";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import ConfirmationModal from "@/components/ui/ConfirmationModal";
+import Modal from "@/components/ui/Modal";
+import EditPostForm from "./EditPostForm"; // <-- Import the new form
+
+const PAGE_SIZE = 5;
+
+export default function BlogHistoryList({ initialPosts }) {
+  const [posts, setPosts] = useState(initialPosts);
+  const [hasMore, setHasMore] = useState(initialPosts.length === PAGE_SIZE);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // State for modals
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [deletingPostId, setDeletingPostId] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingPost, setEditingPost] = useState(null);
+
+  const router = useRouter();
+
+  const loadMorePosts = async () => {
+    toast("Load More functionality coming soon!");
+  };
+
+  const handleDeleteClick = (postId) => {
+    setDeletingPostId(postId);
+    setIsConfirmModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/posts/${deletingPostId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete post");
+
+      toast.success("Post deleted successfully!");
+      setPosts((prev) => prev.filter((p) => p.id !== deletingPostId));
+      router.refresh();
+    } catch (error) {
+      toast.error(`Error: ${error.message}`);
+    } finally {
+      setIsConfirmModalOpen(false);
+      setDeletingPostId(null);
+      setIsDeleting(false);
+    }
+  };
+
+  const handleEdit = (post) => {
+    setEditingPost(post);
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateSuccess = () => {
+    setIsEditModalOpen(false);
+    setEditingPost(null);
+    router.refresh();
+  };
+
+  return (
+    <>
+      <ConfirmationModal
+        isOpen={isConfirmModalOpen}
+        onClose={() => setIsConfirmModalOpen(false)}
+        onConfirm={confirmDelete}
+        title='Delete Post'
+        message='Are you sure you want to permanently delete this blog post?'
+        confirmText='Delete'
+        isLoading={isDeleting}
+      />
+
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title='Edit Blog Post'
+      >
+        {/* Replace the placeholder with the actual form */}
+        {editingPost && (
+          <EditPostForm post={editingPost} onFormSubmit={handleUpdateSuccess} />
+        )}
+      </Modal>
+
+      <div className='space-y-4'>
+        {posts.length > 0 ? (
+          posts.map((post) => (
+            <div
+              key={post.id}
+              className='p-4 border border-slate-200 rounded-lg bg-white'
+            >
+              <div className='flex flex-col sm:flex-row justify-between sm:items-start gap-4'>
+                <div>
+                  <h3 className='font-bold text-lg text-slate-900'>
+                    {post.title}
+                  </h3>
+                  <p className='text-sm text-slate-900'>
+                    Published on:{" "}
+                    {new Date(post.createdAt).toLocaleDateString()}
+                  </p>
+                  <Link
+                    href={`/blog/${post.slug}`}
+                    target='_blank'
+                    className='text-sm text-indigo-600 hover:underline'
+                  >
+                    View Post &rarr;
+                  </Link>
+                </div>
+                <div className='flex items-center gap-2 flex-shrink-0'>
+                  <button
+                    onClick={() => handleEdit(post)}
+                    className='text-sm font-medium text-blue-600 hover:text-blue-800'
+                  >
+                    Edit
+                  </button>
+                  <span className='text-slate-300'>|</span>
+                  <button
+                    onClick={() => handleDeleteClick(post.id)}
+                    className='text-sm font-medium text-red-600 hover:text-red-800'
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        ) : (
+          <p className='text-center p-8 text-slate-700'>No blog posts found.</p>
+        )}
+      </div>
+
+      {hasMore && (
+        <div className='text-center mt-8'>
+          <button
+            onClick={loadMorePosts}
+            disabled={loadingMore}
+            className='px-6 py-2 bg-slate-200 text-slate-900 font-semibold rounded-lg hover:bg-slate-300'
+          >
+            {loadingMore ? "Loading..." : "Load More"}
+          </button>
+        </div>
+      )}
+    </>
+  );
+}

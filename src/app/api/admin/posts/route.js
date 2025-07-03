@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 
 export async function POST(request) {
   try {
-    const { title, content, slug, youtubeUrl } = await request.json();
+    const { title, content, slug, youtubeUrl, featuredImageSvgCode } =
+      await request.json();
 
     if (!title || !content || !slug) {
       return NextResponse.json(
@@ -18,7 +19,8 @@ export async function POST(request) {
       title,
       content,
       slug,
-      youtubeUrl,
+      youtubeUrl: youtubeUrl || "",
+      featuredImageSvgCode: featuredImageSvgCode || "", // Save the new field
       createdAt: serverTimestamp(),
     });
 
