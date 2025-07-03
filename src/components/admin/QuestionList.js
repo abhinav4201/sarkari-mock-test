@@ -3,67 +3,72 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
-import Modal from "@/components/ui/Modal"; // Import the Modal
-import EditQuestionForm from "./EditQuestionForm"; // Import the Form
+import Modal from "@/components/ui/Modal";
+import EditQuestionForm from "./EditQuestionForm";
+import ConfirmationModal from "@/components/ui/ConfirmationModal"; // <-- Import the confirmation modal
 
 export default function QuestionList({ initialQuestions, testId }) {
-  // No longer need local 'questions' state, as router.refresh will handle updates.
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // State for the edit modal
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
+
+  // State for the delete confirmation modal
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [deletingQuestionId, setDeletingQuestionId] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const router = useRouter();
 
-  const handleDelete = async (questionId) => {
-    if (!confirm("Are you sure you want to delete this question?")) {
-      return;
-    }
+  // This function opens the confirmation modal instead of deleting directly
+  const handleDeleteClick = (questionId) => {
+    setDeletingQuestionId(questionId);
+    setIsConfirmModalOpen(true);
+  };
 
-    const loadingToast = toast.loading("Deleting question...");
+  // This function contains the actual deletion logic, called by the modal
+  const confirmDelete = async () => {
+    setIsDeleting(true);
     try {
-      const res = await fetch(`/api/admin/questions/${questionId}`, {
+      const res = await fetch(`/api/admin/questions/${deletingQuestionId}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ testId }),
       });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || "Failed to delete");
-      }
+      if (!res.ok) throw new Error("Failed to delete question");
 
-      toast.success("Question deleted!", { id: loadingToast });
-      router.refresh(); // Re-fetches server data and re-renders the page
+      toast.success("Question deleted!");
+      router.refresh(); // Re-fetches server data to update the list
     } catch (error) {
-      toast.error(`Error: ${error.message}`, { id: loadingToast });
+      toast.error(`Error: ${error.message}`);
+    } finally {
+      // Close the modal and reset state regardless of outcome
+      setIsConfirmModalOpen(false);
+      setDeletingQuestionId(null);
+      setIsDeleting(false);
     }
   };
 
-  // THIS IS THE FIX: This function now correctly sets the state
-  // to open the modal with the selected question's data.
+  // --- Edit Handlers ---
   const handleEdit = (question) => {
     setEditingQuestion(question);
-    setIsModalOpen(true);
+    setIsEditModalOpen(true);
   };
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setEditingQuestion(null);
-  };
-
-  // This function is passed to the form to be called on a successful update
   const handleUpdateSuccess = () => {
-    handleCloseModal();
+    setIsEditModalOpen(false);
+    setEditingQuestion(null);
     router.refresh();
   };
 
   return (
     <>
-      {/* The Modal component is here, but invisible until isModalOpen is true */}
+      {/* Edit Modal */}
       <Modal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
         title='Edit Question'
       >
-        {/* Ensure we only render the form when there's a question to edit */}
         {editingQuestion && (
           <EditQuestionForm
             question={editingQuestion}
@@ -71,6 +76,17 @@ export default function QuestionList({ initialQuestions, testId }) {
           />
         )}
       </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={isConfirmModalOpen}
+        onClose={() => setIsConfirmModalOpen(false)}
+        onConfirm={confirmDelete}
+        title='Delete Question'
+        message='Are you sure you want to permanently delete this question? This action cannot be undone.'
+        confirmText='Delete'
+        isLoading={isDeleting}
+      />
 
       <div className='space-y-6'>
         {initialQuestions.length > 0 ? (
@@ -90,7 +106,7 @@ export default function QuestionList({ initialQuestions, testId }) {
                   </button>
                   <span className='text-slate-300'>|</span>
                   <button
-                    onClick={() => handleDelete(q.id)}
+                    onClick={() => handleDeleteClick(q.id)}
                     className='text-sm font-medium text-red-600 hover:text-red-800'
                   >
                     Delete
@@ -132,7 +148,7 @@ export default function QuestionList({ initialQuestions, testId }) {
             </div>
           ))
         ) : (
-          <p className='text-center text-slate-600 p-8'>
+          <p className='text-center text-slate-700 p-8'>
             No questions added for this test yet.
           </p>
         )}
