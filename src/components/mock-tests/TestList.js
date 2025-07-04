@@ -1,15 +1,37 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import TestCard from "./TestCard";
+import { useAuth } from "@/context/AuthContext"; // Import the useAuth hook
 
 const PAGE_SIZE = 9;
 
 export default function TestList({ initialTests }) {
+  const { user } = useAuth(); // Get the current user
   const [tests, setTests] = useState(initialTests);
   const [searchTerm, setSearchTerm] = useState("");
   const [hasMore, setHasMore] = useState(initialTests.length === PAGE_SIZE);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [takenTestIds, setTakenTestIds] = useState(new Set()); // State to store taken test IDs
+
+  // THIS IS THE NEW LOGIC:
+  // When the component mounts and we have a user, fetch their taken tests.
+  useEffect(() => {
+    if (user) {
+      const fetchTakenTests = async () => {
+        try {
+          const res = await fetch(`/api/users/${user.uid}/taken-tests`);
+          const ids = await res.json();
+          if (Array.isArray(ids)) {
+            setTakenTestIds(new Set(ids));
+          }
+        } catch (error) {
+          console.error("Could not fetch taken tests", error);
+        }
+      };
+      fetchTakenTests();
+    }
+  }, [user]);
 
   const filteredTests = useMemo(() => {
     if (!searchTerm) return tests;
@@ -64,7 +86,11 @@ export default function TestList({ initialTests }) {
         filteredTests.length > 0 ? (
           <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
             {filteredTests.map((test) => (
-              <TestCard key={test.id} test={test} />
+              <TestCard
+                key={test.id}
+                test={test}
+                hasTaken={takenTestIds.has(test.id)}
+              />
             ))}
           </div>
         ) : (

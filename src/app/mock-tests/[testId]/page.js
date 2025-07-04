@@ -1,113 +1,99 @@
+import PreviousResult from "@/components/mock-tests/PreviousResult";
+import StartTestButton from "@/components/mock-tests/StartTestButton";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
+import { Book, Clock, FileText, Tag } from "lucide-react";
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import { FileText, Clock, Tag, Book, Shield } from "lucide-react";
 
 async function getTestDetails(testId) {
   const testRef = doc(db, "mockTests", testId);
   const testSnap = await getDoc(testRef);
-  return testSnap.exists() ? { id: testSnap.id, ...testSnap.data() } : null;
+  if (!testSnap.exists()) {
+    return null;
+  }
+
+  const data = testSnap.data();
+  return {
+    id: testSnap.id,
+    ...data,
+    createdAt: data.createdAt ? data.createdAt.toMillis() : null,
+  };
 }
 
 export default async function PreTestStartPage({ params }) {
-  const test = await getTestDetails(params.testId);
+  const { testId } = await params; // Await params to resolve the promise
+  const test = await getTestDetails(testId);
 
   if (!test) {
     notFound();
   }
 
-  // Future monetization logic would go here.
-  // For now, we just check the flag to change the button's appearance.
-  const canStartTest = !test.isPremium; // Simplified logic for now
-
   return (
-    <div className='bg-slate-100 min-h-screen flex flex-col items-center justify-center p-4'>
-      <div className='w-full max-w-4xl'>
-        {/* Header */}
-        <div className='bg-white p-4 rounded-t-2xl shadow-lg border-b border-slate-200 flex justify-between items-center sticky top-0 z-10'>
-          <h1 className='text-lg md:text-xl font-bold text-slate-900 truncate'>
-            Mock Test in Progress
+    <div className='bg-slate-100 flex items-center justify-center min-h-screen p-4'>
+      <div className='max-w-2xl w-full bg-white p-8 md:p-12 rounded-2xl shadow-2xl border border-slate-200'>
+        {test.isPremium && (
+          <div className='flex justify-center mb-6'>
+            <span className='bg-amber-100 text-amber-800 text-sm font-bold px-4 py-1 rounded-full flex items-center'>
+              <svg
+                xmlns='http://www.w3.org/2000/svg'
+                viewBox='0 0 20 20'
+                fill='currentColor'
+                className='w-5 h-5 mr-2'
+              >
+                <path
+                  fillRule='evenodd'
+                  d='M9.69 18.933l.003.001C9.89 19.02 10 19 10 19s.11.02.308-.066l.002-.001.006-.003.018-.008a5.741 5.741 0 00.281-.14c.186-.1.4-.27.615-.454L16 14.8V7a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2v1H4a2 2 0 00-2 2v7.8l5.076 3.454c.215.184.43.354.615.454.094.05.183.097.28.14l.018.008.006.003zM10 16.5a1 1 0 01-1-1v-1a1 1 0 112 0v1a1 1 0 01-1 1z'
+                  clipRule='evenodd'
+                />
+              </svg>
+              PREMIUM TEST
+            </span>
+          </div>
+        )}
+        <div className='text-center'>
+          <p className='text-indigo-600 font-semibold'>{test.examName}</p>
+          <h1 className='text-3xl md:text-4xl font-extrabold text-slate-900 mt-2'>
+            {test.title}
           </h1>
-          <div className='text-xl md:text-2xl font-bold text-red-600 bg-red-100 px-3 py-1 rounded-full'>{`${minutes}:${
-            seconds < 10 ? "0" : ""
-          }${seconds}`}</div>
         </div>
 
-        <div className='bg-white p-6 sm:p-8 rounded-b-2xl shadow-lg'>
-          {/* Question Area */}
-          {currentQuestion ? (
-            <div>
-              <h2 className='text-lg font-semibold mb-4 text-slate-900'>
-                Question {currentQuestionIndex + 1}{" "}
-                <span className='text-slate-500'>of {questions.length}</span>
-              </h2>
-              <div
-                className='w-full h-auto border-2 border-slate-200 rounded-lg p-4 bg-slate-50 mb-6'
-                dangerouslySetInnerHTML={{
-                  __html: currentQuestion.questionSvgCode,
-                }}
-              />
-              <div className='space-y-4'>
-                {currentQuestion.options.map((option, index) => (
-                  <button
-                    key={index}
-                    onClick={() =>
-                      handleAnswerSelect(currentQuestion.id, option)
-                    }
-                    className={`block w-full text-left p-4 border-2 rounded-lg transition-all duration-200 text-base md:text-lg font-medium ${
-                      answers[currentQuestion.id] === option
-                        ? "bg-indigo-600 text-white border-indigo-600 shadow-md"
-                        : "bg-white text-slate-900 border-slate-300 hover:border-indigo-500 hover:bg-indigo-50"
-                    }`}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className='text-center p-8'>
-              <p className='text-slate-700'>Loading questions...</p>
-            </div>
-          )}
-
-          {/* Navigation */}
-          <div className='flex justify-between mt-10 pt-6 border-t border-slate-200'>
-            <button
-              onClick={() =>
-                setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))
-              }
-              disabled={currentQuestionIndex === 0}
-              className='px-6 py-2 bg-slate-200 text-slate-800 font-semibold rounded-lg disabled:opacity-50 hover:bg-slate-300 transition-colors'
-            >
-              Previous
-            </button>
-            {currentQuestionIndex === questions.length - 1 ? (
-              <button
-                onClick={submitTest}
-                disabled={testState === "submitting"}
-                className='px-6 py-2 bg-green-600 text-white font-semibold rounded-lg disabled:bg-green-400 hover:bg-green-700 transition-colors'
-              >
-                {testState === "submitting" ? "Submitting..." : "Submit Test"}
-              </button>
-            ) : (
-              <button
-                onClick={() =>
-                  setCurrentQuestionIndex((prev) =>
-                    Math.min(questions.length - 1, prev + 1)
-                  )
-                }
-                disabled={currentQuestionIndex === questions.length - 1}
-                className='px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg disabled:opacity-50 hover:bg-indigo-700 transition-colors'
-              >
-                Next
-              </button>
-            )}
+        <div className='my-8 border-t border-b border-slate-200 py-6 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-slate-700'>
+          <div className='flex items-center space-x-3'>
+            <FileText className='text-indigo-500 h-5 w-5 flex-shrink-0' />{" "}
+            <span>{test.questionCount || 0} Questions</span>
           </div>
+          <div className='flex items-center space-x-3'>
+            <Clock className='text-indigo-500 h-5 w-5 flex-shrink-0' />{" "}
+            <span>{test.estimatedTime} Minutes duration</span>
+          </div>
+          <div className='flex items-center space-x-3'>
+            <Book className='text-indigo-500 h-5 w-5 flex-shrink-0' />{" "}
+            <span>
+              Subject:{" "}
+              <span className='font-medium text-slate-900'>{test.subject}</span>
+            </span>
+          </div>
+          <div className='flex items-center space-x-3'>
+            <Tag className='text-indigo-500 h-5 w-5 flex-shrink-0' />{" "}
+            <span>
+              Topic:{" "}
+              <span className='font-medium text-slate-900'>{test.topic}</span>
+            </span>
+          </div>
+        </div>
+        <PreviousResult testId={test.id} />
+        <div className='mt-4 text-center'>
+          <p className='text-sm text-slate-600'>
+            Ensure you have a stable connection. The timer will start
+            immediately once you begin.
+          </p>
+        </div>
+
+        <div className='mt-8 text-center'>
+          {/* The smart button handles all logic for login checks and premium status */}
+          <StartTestButton test={test} />
         </div>
       </div>
     </div>
   );
-
 }

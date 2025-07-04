@@ -24,16 +24,22 @@ export const AuthContextProvider = ({ children }) => {
 
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
-  const googleSignIn = useCallback(async () => {
-    const provider = new GoogleAuthProvider();
-    const result = await signInWithPopup(auth, provider);
+  // THIS IS THE FIX: The function now accepts a 'redirectUrl' parameter.
+  const googleSignIn = useCallback(
+    async (redirectUrl = "/dashboard") => {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
 
-    if (result.user.email === adminEmail) {
-      window.location.href = "/admin";
-    } else {
-      window.location.href = "/dashboard";
-    }
-  }, [adminEmail]);
+      // Admin redirect always takes priority
+      if (result.user.email === adminEmail) {
+        window.location.href = "/admin";
+      } else {
+        // Otherwise, go to the URL that was provided, or the dashboard as a fallback.
+        window.location.href = redirectUrl;
+      }
+    },
+    [adminEmail]
+  );
 
   const logOut = useCallback(async () => {
     await signOut(auth);
@@ -41,21 +47,11 @@ export const AuthContextProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    console.log("AuthContext: Setting up Firebase auth state listener...");
-
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      // THIS IS THE CRUCIAL PART. If you don't see this message, Firebase isn't connecting properly.
-      console.log("AuthContext: Auth state changed. User:", currentUser);
-
       setUser(currentUser);
       setLoading(false);
     });
-
-    // Cleanup function to remove the listener when the component unmounts
-    return () => {
-      console.log("AuthContext: Cleaning up auth state listener.");
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   const value = useMemo(
