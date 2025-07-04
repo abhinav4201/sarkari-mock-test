@@ -3,21 +3,20 @@ import { collection, getDocs, query, where, limit } from "firebase/firestore";
 import YouTubeEmbed from "@/components/blog/YouTubeEmbed";
 import { notFound } from "next/navigation";
 
-
 // ADD THIS FUNCTION
 export async function generateMetadata({ params }) {
-  const { slug } = params;
-  const post = await getPostBySlug(slug); // We'll reuse your existing function
+  const { slug } = await params; // Await params to resolve the promise
+  const post = await getPostBySlug(slug);
 
   if (!post) {
     return {
-      title: 'Post Not Found',
-      description: 'The post you are looking for does not exist.',
+      title: "Post Not Found",
+      description: "The post you are looking for does not exist.",
     };
   }
 
   // Create a plain text excerpt for the description
-  const excerpt = post.content.substring(0, 150).replace(/<[^>]+>/g, '');
+  const excerpt = post.content.substring(0, 150).replace(/<[^>]+>/g, "");
 
   return {
     title: `${post.title} | Sarkari Mock Test`,
@@ -40,7 +39,7 @@ async function getPostBySlug(slug) {
 }
 
 export default async function BlogPost({ params }) {
-  const { slug } = params;
+  const { slug } = await params; // Await params to resolve the promise
   const post = await getPostBySlug(slug);
 
   // If no post is found, show the 404 page
@@ -72,12 +71,11 @@ export default async function BlogPost({ params }) {
 
           {post.youtubeUrl && <YouTubeEmbed url={post.youtubeUrl} />}
 
-          <div className='mt-12 prose prose-lg lg:prose-xl max-w-none prose-h2:font-bold prose-h2:text-slate-800 prose-a:text-indigo-600 prose-img:rounded-xl prose-img:shadow-lg'>
+          <div className='text-slate-900 mt-12 prose prose-lg lg:prose-xl max-w-none prose-h2:font-bold prose-h2:text-slate-800 prose-a:text-indigo-600 prose-img:rounded-xl prose-img:shadow-lg'>
             <div dangerouslySetInnerHTML={{ __html: post.content }} />
           </div>
         </article>
       </div>
     </div>
   );
-
 }
