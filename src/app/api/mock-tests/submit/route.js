@@ -1,3 +1,5 @@
+// src/app/api/mock-tests/submit/route.js
+
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -25,27 +27,42 @@ export async function POST(request) {
       where("testId", "==", testId)
     );
     const questionsSnapshot = await getDocs(q);
-    const correctAnswers = {};
+    const correctAnswersMap = new Map();
     questionsSnapshot.forEach((doc) => {
-      correctAnswers[doc.id] = doc.data().correctAnswer;
+      correctAnswersMap.set(doc.id, doc.data().correctAnswer);
     });
 
-    // 2. Calculate the score
+    if (correctAnswersMap.size === 0) {
+      throw new Error(
+        "No questions found for this test, cannot calculate score."
+      );
+    }
+
+    // --- THIS IS THE CORRECTED SCORE CALCULATION ---
     let score = 0;
+    const totalQuestions = correctAnswersMap.size;
+
     for (const questionId in answers) {
-      if (answers[questionId] === correctAnswers[questionId]) {
+      const userAnswerObject = answers[questionId];
+      const correctAnswer = correctAnswersMap.get(questionId);
+
+      // FIX: Access the 'answer' property inside the object for comparison
+      if (userAnswerObject && userAnswerObject.answer === correctAnswer) {
         score++;
       }
     }
+
+    const incorrectAnswers = totalQuestions - score;
 
     // 3. Save the result to the 'mockTestResults' collection
     const resultsCollection = collection(db, "mockTestResults");
     const resultDocRef = await addDoc(resultsCollection, {
       userId,
       testId,
-      answers,
+      answers, // The detailed answers object is saved correctly
       score,
-      totalQuestions: questionsSnapshot.size,
+      totalQuestions,
+      incorrectAnswers, // Also save the incorrect answer count
       completedAt: serverTimestamp(),
     });
 
@@ -57,7 +74,7 @@ export async function POST(request) {
   } catch (error) {
     console.error("Error submitting test:", error);
     return NextResponse.json(
-      { message: "Internal Server Error" },
+      { message: "Internal Server Error", error: error.message },
       { status: 500 }
     );
   }

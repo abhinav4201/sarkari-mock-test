@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 
 export async function GET(request, { params }) {
   try {
-    const { testId } = params;
+    const { testId } = await params; // Await params to resolve the promise
     if (!testId) {
       return NextResponse.json(
         { message: "Test ID is missing" },

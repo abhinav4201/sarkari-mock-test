@@ -1,18 +1,26 @@
+// app/api/users/[userId]/results/route.js
+
 import { db } from "@/lib/firebase";
 import {
   collection,
-  getDocs,
   query,
   where,
   orderBy,
+  limit,
+  startAfter,
+  getDocs,
   doc,
   getDoc,
 } from "firebase/firestore";
 import { NextResponse } from "next/server";
 
+const PAGE_SIZE = 10;
+
 export async function GET(request, { params }) {
   try {
-    const { userId } = await params; // Await params to resolve the promise
+    const { userId } = await params;
+    const { searchParams } = new URL(request.url);
+    const cursor = searchParams.get("cursor");
 
     if (!userId) {
       return NextResponse.json(
@@ -21,46 +29,60 @@ export async function GET(request, { params }) {
       );
     }
 
-    // 1. Fetch user's test results, ordered by most recent
-    const resultsQuery = query(
-      collection(db, "mockTestResults"),
+    const resultsRef = collection(db, "mockTestResults");
+    let q = query(
+      resultsRef,
       where("userId", "==", userId),
-      orderBy("completedAt", "desc")
+      orderBy("completedAt", "desc"),
+      limit(PAGE_SIZE)
     );
-    const resultsSnapshot = await getDocs(resultsQuery);
 
-    if (resultsSnapshot.empty) {
-      return NextResponse.json([], { status: 200 });
+    if (cursor) {
+      const cursorDoc = await getDoc(doc(db, "mockTestResults", cursor));
+      if (cursorDoc.exists()) {
+        q = query(q, startAfter(cursorDoc));
+      }
     }
 
-    // 2. Fetch details for each test they took
-    const results = await Promise.all(
-      resultsSnapshot.docs.map(async (resultDoc) => {
-        const resultData = resultDoc.data();
-        const testRef = doc(db, "mockTests", resultData.testId);
-        const testSnap = await getDoc(testRef);
+    const querySnapshot = await getDocs(q);
 
-        const testTitle = testSnap.exists()
-          ? testSnap.data().title
-          : "Deleted Test";
+    let results = [];
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      results.push({
+        id: doc.id,
+        ...data,
+        completedAt: data.completedAt.toDate().toISOString(),
+      });
+    });
 
-        return {
-          resultId: resultDoc.id,
-          score: resultData.score,
-          totalQuestions: resultData.totalQuestions,
-          completedAt: resultData.completedAt
-            ? resultData.completedAt.toMillis()
-            : null,
-          testTitle: testTitle,
-        };
-      })
-    );
+    // --- FIX: Fetch test titles to include in the response ---
+    if (results.length > 0) {
+      const testIds = [...new Set(results.map((res) => res.testId))]; // Get unique test IDs
+      const testsQuery = query(
+        collection(db, "mockTests"),
+        where("__name__", "in", testIds)
+      );
+      const testsSnapshot = await getDocs(testsQuery);
+      const testsMap = new Map();
+      testsSnapshot.forEach((doc) => testsMap.set(doc.id, doc.data()));
 
-    return NextResponse.json(results, { status: 200 });
+      // Add the testTitle to each result object
+      results = results.map((res) => ({
+        ...res,
+        testTitle: testsMap.get(res.testId)?.title || "Unknown Test",
+      }));
+    }
+
+    const lastVisible = querySnapshot.docs[querySnapshot.docs.length - 1];
+    const nextCursor = lastVisible ? lastVisible.id : null;
+
+    // Return the data in the expected object format
+    return NextResponse.json({ results, nextCursor }, { status: 200 });
   } catch (error) {
     console.error("Error fetching user results:", error);
     return NextResponse.json(
-      { message: "Internal Server Error" },
+      { message: "Failed to fetch user results", error: error.message },
       { status: 500 }
     );
   }

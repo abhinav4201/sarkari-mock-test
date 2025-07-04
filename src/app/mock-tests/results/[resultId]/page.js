@@ -9,7 +9,8 @@ import {
 } from "firebase/firestore";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import BackButton from "@/components/BackButton"; // Import the new BackButton component
+import BackButton from "@/components/BackButton";
+import AdvancedAnalysis from "@/components/results/AdvancedAnalysis";
 
 async function getResultData(resultId) {
   const resultRef = doc(db, "mockTestResults", resultId);
@@ -59,6 +60,7 @@ export default async function ResultPage({ params }) {
             <p className='text-2xl font-semibold bg-white/20 px-4 py-1 inline-block rounded-full'>
               {percentage}%
             </p>
+            <AdvancedAnalysis resultId={resultId} />
           </div>
 
           {/* Question by Question Review */}
@@ -69,8 +71,8 @@ export default async function ResultPage({ params }) {
             <div className='space-y-8'>
               {Object.keys(questions).map((questionId, index) => {
                 const question = questions[questionId];
-                const userAnswer = answers[questionId];
-                const isCorrect = userAnswer === question.correctAnswer;
+                const userAnswer = answers[questionId]; // { answer, timeTaken }
+                const isCorrect = userAnswer?.answer === question.correctAnswer;
 
                 return (
                   <div
@@ -97,7 +99,7 @@ export default async function ResultPage({ params }) {
                           isCorrect ? "text-green-800" : "text-red-800"
                         }`}
                       >
-                        {userAnswer || "Not Answered"}
+                        {userAnswer?.answer || "Not Answered"}
                       </span>
                     </p>
                     {!isCorrect && (
@@ -115,7 +117,7 @@ export default async function ResultPage({ params }) {
           </div>
 
           <div className='text-center mt-12 flex justify-center space-x-4'>
-            <BackButton /> {/* Add the BackButton component */}
+            <BackButton />
             <Link
               href='/mock-tests'
               className='px-8 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-all shadow-md hover:shadow-lg'

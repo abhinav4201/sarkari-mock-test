@@ -7,31 +7,81 @@ import { useAuth } from "@/context/AuthContext";
 export default function TestTakingPage() {
   const [questions, setQuestions] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState({});
+  // State for selected options remains the same
+  const [selectedOptions, setSelectedOptions] = useState({});
   const [timeLeft, setTimeLeft] = useState(0);
   const [testState, setTestState] = useState("loading"); // loading, in-progress, submitting, completed
+
+  // --- NEW STATE FOR TIME TRACKING ---
+  // 1. Tracks time spent on each question in seconds
+  const [timePerQuestion, setTimePerQuestion] = useState({});
+  // 2. Stores the timestamp (Date.now()) when the current question was displayed
+  const [questionStartTime, setQuestionStartTime] = useState(0);
+
   const { user } = useAuth();
   const router = useRouter();
   const params = useParams();
   const { testId } = params;
 
-  // Function to handle test submission
+  // --- UPDATED SUBMISSION LOGIC ---
   const submitTest = useCallback(async () => {
     setTestState("submitting");
+
+    // 3. Before submitting, record the time spent on the very last question
+    const lastQuestionId = questions[currentQuestionIndex]?.id;
+    let finalTimePerQuestion = { ...timePerQuestion };
+    if (lastQuestionId) {
+      const timeSpent = (Date.now() - questionStartTime) / 1000;
+      finalTimePerQuestion[lastQuestionId] =
+        (finalTimePerQuestion[lastQuestionId] || 0) + timeSpent;
+    }
+
+    // 4. Combine the selected answers and the time spent into the final payload
+    const finalAnswers = {};
+    for (const qId in selectedOptions) {
+      finalAnswers[qId] = {
+        answer: selectedOptions[qId],
+        timeTaken: finalTimePerQuestion[qId] || 0, // Use recorded time, default to 0
+      };
+    }
+    // Also include questions that were seen but not answered
+    for (const qId in finalTimePerQuestion) {
+      if (!finalAnswers[qId]) {
+        finalAnswers[qId] = {
+          answer: null, // Mark as not answered
+          timeTaken: finalTimePerQuestion[qId],
+        };
+      }
+    }
+
     try {
       const res = await fetch("/api/mock-tests/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.uid, testId, answers }),
+        // 5. Send the new, detailed answers object
+        body: JSON.stringify({
+          userId: user.uid,
+          testId,
+          answers: finalAnswers,
+        }),
       });
       if (!res.ok) throw new Error("Failed to submit test.");
       const result = await res.json();
       router.push(`/mock-tests/results/${result.resultId}`);
     } catch (error) {
       console.error(error);
-      setTestState("in-progress"); // Revert state on failure
+      setTestState("in-progress");
     }
-  }, [answers, router, testId, user]);
+  }, [
+    selectedOptions,
+    timePerQuestion,
+    questions,
+    currentQuestionIndex,
+    questionStartTime,
+    router,
+    testId,
+    user,
+  ]);
 
   // Fetch test details and questions
   useEffect(() => {
@@ -49,6 +99,8 @@ export default function TestTakingPage() {
 
         setQuestions(questionsData);
         setTestState("in-progress");
+        // 6. Start the timer for the very first question
+        setQuestionStartTime(Date.now());
       } catch (error) {
         console.error("Failed to load test:", error);
         setTestState("error");
@@ -59,7 +111,7 @@ export default function TestTakingPage() {
     }
   }, [testId]);
 
-  // Countdown Timer Logic
+  // Countdown Timer Logic (no changes needed here)
   useEffect(() => {
     if (testState !== "in-progress" || timeLeft <= 0) {
       if (timeLeft <= 0 && testState === "in-progress") submitTest();
@@ -72,29 +124,40 @@ export default function TestTakingPage() {
     return () => clearInterval(timerId);
   }, [timeLeft, testState, submitTest]);
 
-  const handleAnswerSelect = (questionId, option) => {
-    setAnswers({ ...answers, [questionId]: option });
+  // --- NEW NAVIGATION FUNCTION ---
+  // 7. This function now handles time tracking when moving between questions
+  const navigateToQuestion = (newIndex) => {
+    const timeSpent = (Date.now() - questionStartTime) / 1000; // time in seconds
+    const currentQuestionId = questions[currentQuestionIndex].id;
+
+    // Add the time spent to any existing time for that question (in case user goes back and forth)
+    setTimePerQuestion((prevTimes) => ({
+      ...prevTimes,
+      [currentQuestionId]: (prevTimes[currentQuestionId] || 0) + timeSpent,
+    }));
+
+    // Set the new question index
+    setCurrentQuestionIndex(newIndex);
+    // Reset the start time for the new question
+    setQuestionStartTime(Date.now());
   };
 
+  const handleAnswerSelect = (questionId, option) => {
+    setSelectedOptions({ ...selectedOptions, [questionId]: option });
+  };
+
+  // --- Rendering Logic (No major changes, just wiring up new functions) ---
   if (testState === "loading") {
     return (
       <div className='flex justify-center items-center h-screen bg-slate-100'>
-        <p className='text-lg font-medium text-slate-800'>
-          Preparing Your Test...
-        </p>
+        <p>Preparing Your Test...</p>
       </div>
     );
   }
-
   if (testState === "error") {
     return (
-      <div className='flex justify-center items-center h-screen bg-slate-100 text-center p-4'>
-        <div>
-          <p className='text-xl font-bold text-red-600'>Failed to Load Test</p>
-          <p className='text-slate-700 mt-2'>
-            Please try again later or contact support.
-          </p>
-        </div>
+      <div className='flex justify-center items-center h-screen bg-slate-100'>
+        <p>Failed to Load Test</p>
       </div>
     );
   }
@@ -140,7 +203,7 @@ export default function TestTakingPage() {
                       handleAnswerSelect(currentQuestion.id, option)
                     }
                     className={`block w-full text-left p-4 border-2 rounded-lg transition-all duration-200 text-base md:text-lg font-medium ${
-                      answers[currentQuestion.id] === option
+                      selectedOptions[currentQuestion.id] === option
                         ? "bg-indigo-600 text-white border-indigo-600 shadow-md"
                         : "bg-white text-slate-900 border-slate-300 hover:border-indigo-500 hover:bg-indigo-50"
                     }`}
@@ -159,9 +222,7 @@ export default function TestTakingPage() {
           {/* Navigation */}
           <div className='flex justify-between mt-10 pt-6 border-t border-slate-200'>
             <button
-              onClick={() =>
-                setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))
-              }
+              onClick={() => navigateToQuestion(currentQuestionIndex - 1)}
               disabled={currentQuestionIndex === 0}
               className='px-8 py-3 bg-slate-200 text-slate-800 font-semibold rounded-lg disabled:opacity-50 hover:bg-slate-300 transition-colors'
             >
@@ -177,11 +238,7 @@ export default function TestTakingPage() {
               </button>
             ) : (
               <button
-                onClick={() =>
-                  setCurrentQuestionIndex((prev) =>
-                    Math.min(questions.length - 1, prev + 1)
-                  )
-                }
+                onClick={() => navigateToQuestion(currentQuestionIndex + 1)}
                 disabled={currentQuestionIndex === questions.length - 1}
                 className='px-8 py-3 bg-indigo-600 text-white font-semibold rounded-lg disabled:opacity-50 hover:bg-indigo-700 transition-colors'
               >
