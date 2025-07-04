@@ -2,11 +2,11 @@
 
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Placeholder from "@tiptap/extension-placeholder"; // <-- Import the new extension
-import { useState } from "react";
+import Placeholder from "@tiptap/extension-placeholder";
+import { useState, useEffect } from "react"; // Import useEffect
 import toast from "react-hot-toast";
 
-// A simple toolbar for our editor with corrected high-contrast styles
+// A simple toolbar for our editor (no changes needed here)
 const TiptapToolbar = ({ editor }) => {
   if (!editor) {
     return null;
@@ -77,19 +77,34 @@ export default function BlogEditor() {
   const [slug, setSlug] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [featuredImageSvgCode, setFeaturedImageSvgCode] = useState(""); 
+  const [featuredImageSvgCode, setFeaturedImageSvgCode] = useState("");
+  // --- NEW STATE ---
+  // Tracks if the user has manually edited the slug
+  const [isSlugManuallyEdited, setIsSlugManuallyEdited] = useState(false);
+
+  // --- NEW LOGIC: Auto-generate slug from title ---
+  useEffect(() => {
+    // Only generate slug if the user hasn't manually edited it
+    if (!isSlugManuallyEdited) {
+      const generatedSlug = title
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, "") // Remove non-alphanumeric characters except spaces and hyphens
+        .trim() // Trim leading/trailing whitespace
+        .replace(/\s+/g, "-") // Replace spaces with hyphens
+        .replace(/-+/g, "-"); // Replace multiple hyphens with a single one
+      setSlug(generatedSlug);
+    }
+  }, [title, isSlugManuallyEdited]);
 
   const editor = useEditor({
     extensions: [
       StarterKit,
-      // Configure the placeholder extension
       Placeholder.configure({
         placeholder: "Start writing your amazing blog post here...",
       }),
     ],
     editorProps: {
       attributes: {
-        // These prose classes ensure the text you TYPE is black and high-contrast
         class:
           "prose prose-lg max-w-none w-full p-4 border-x border-b border-slate-300 rounded-b-lg min-h-[200px] focus:outline-none text-slate-900",
       },
@@ -106,7 +121,7 @@ export default function BlogEditor() {
       };
       reader.readAsText(file);
     }
-  }; 
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -118,14 +133,23 @@ export default function BlogEditor() {
       const res = await fetch("/api/admin/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, content: htmlContent, slug, youtubeUrl }),
+        body: JSON.stringify({
+          title,
+          content: htmlContent,
+          slug,
+          youtubeUrl,
+          featuredImageSvgCode, // Include the SVG code in the submission
+        }),
       });
       if (!res.ok) throw new Error("Server responded with an error");
       toast.success("Post created successfully!", { id: loadingToast });
+      // Clear all fields after successful submission
       editor.commands.clearContent();
       setTitle("");
       setSlug("");
       setYoutubeUrl("");
+      setFeaturedImageSvgCode("");
+      setIsSlugManuallyEdited(false); // Reset slug edit tracking
     } catch (error) {
       toast.error(`Error: ${error.message}`, { id: loadingToast });
     } finally {
@@ -133,12 +157,10 @@ export default function BlogEditor() {
     }
   };
 
-  const handleSlugGeneration = () => {
-    const generatedSlug = title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)+/g, "");
-    setSlug(generatedSlug);
+  // --- NEW LOGIC: Handle manual slug input ---
+  const handleSlugChange = (e) => {
+    setIsSlugManuallyEdited(true); // Mark slug as manually edited
+    setSlug(e.target.value);
   };
 
   return (
@@ -166,30 +188,22 @@ export default function BlogEditor() {
         >
           Post Slug (URL)
         </label>
-        <div className='flex items-center space-x-2'>
-          <input
-            id='blog-slug'
-            type='text'
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            className='w-full p-3 border border-slate-300 rounded-lg text-slate-900'
-            required
-          />
-          <button
-            type='button'
-            onClick={handleSlugGeneration}
-            className='px-4 py-3 bg-indigo-100 text-indigo-700 font-semibold rounded-lg hover:bg-indigo-200'
-          >
-            Generate
-          </button>
-        </div>
+        {/* The "Generate" button is now removed */}
+        <input
+          id='blog-slug'
+          type='text'
+          value={slug}
+          onChange={handleSlugChange} // Use the new handler
+          className='w-full p-3 border border-slate-300 rounded-lg text-slate-900'
+          required
+        />
       </div>
       <div>
         <label
           htmlFor='youtube-url'
           className='block text-sm font-medium text-slate-800 mb-1'
         >
-          YouTube URL
+          YouTube URL (Optional)
         </label>
         <input
           id='youtube-url'
