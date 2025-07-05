@@ -94,8 +94,6 @@ export default function BulkQuestionUploader({ testId }) {
             { id: loadingToast }
           );
           router.refresh();
-          if (onUploadSuccess) {
-            onUploadSuccess();}
           
         } catch (error) {
           toast.error(`Error: ${error.message}`, { id: loadingToast });
