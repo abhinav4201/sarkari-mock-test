@@ -1,14 +1,14 @@
 "use client";
 
-import { db } from "@/lib/firebase";
-import Placeholder from "@tiptap/extension-placeholder";
-import { EditorContent, useEditor } from "@tiptap/react";
+import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { doc, updateDoc } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import Placeholder from "@tiptap/extension-placeholder";
+import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
+import { db } from "@/lib/firebase";
+import { doc, updateDoc } from "firebase/firestore";
 
-// Reusable Tiptap Toolbar
+// TiptapToolbar can be reused here
 const TiptapToolbar = ({ editor }) => {
   if (!editor) return null;
   return (
@@ -48,6 +48,17 @@ const TiptapToolbar = ({ editor }) => {
       </button>
       <button
         type='button'
+        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+        className={`px-2 py-1 rounded font-medium text-sm ${
+          editor.isActive("heading", { level: 3 })
+            ? "bg-indigo-600 text-white"
+            : "text-slate-700 hover:bg-slate-200"
+        }`}
+      >
+        H3
+      </button>
+      <button
+        type='button'
         onClick={() => editor.chain().focus().toggleBulletList().run()}
         className={`px-2 py-1 rounded font-medium text-sm ${
           editor.isActive("bulletList")
@@ -62,6 +73,7 @@ const TiptapToolbar = ({ editor }) => {
 };
 
 export default function EditPostForm({ post, onFormSubmit }) {
+  // State for every field in a blog post
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
@@ -71,13 +83,13 @@ export default function EditPostForm({ post, onFormSubmit }) {
   const editor = useEditor({
     extensions: [
       StarterKit,
-      Placeholder.configure({ placeholder: "Write your content here..." }),
+      Placeholder.configure({ placeholder: "Your content here..." }),
     ],
-    content: "", // Start empty, will be populated by useEffect
+    content: "",
     editorProps: {
       attributes: {
         class:
-          "prose max-w-none w-full p-4 border-x border-b border-slate-300 rounded-b-lg min-h-[200px] focus:outline-none text-slate-900",
+          "prose prose-lg max-w-none w-full p-4 border-x border-b border-slate-300 rounded-b-lg min-h-[200px] focus:outline-none text-slate-900",
       },
     },
   });
@@ -133,7 +145,7 @@ export default function EditPostForm({ post, onFormSubmit }) {
   return (
     <form onSubmit={handleSubmit} className='space-y-6'>
       <div>
-        <label className='block text-sm font-medium text-slate-800 mb-1'>
+        <label className='block text-sm font-medium text-slate-900 mb-1'>
           Post Title
         </label>
         <input
@@ -145,8 +157,31 @@ export default function EditPostForm({ post, onFormSubmit }) {
         />
       </div>
       <div>
-        <label className='block text-sm font-medium text-slate-800 mb-1'>
-          Featured Image SVG
+        <label className='block text-sm font-medium text-slate-900 mb-1'>
+          Post Slug (URL)
+        </label>
+        <input
+          type='text'
+          value={slug}
+          onChange={(e) => setSlug(e.target.value)}
+          className='w-full p-3 border text-slate-900 border-slate-300 rounded-lg'
+          required
+        />
+      </div>
+      <div>
+        <label className='block text-sm font-medium text-slate-900 mb-1'>
+          YouTube URL (Optional)
+        </label>
+        <input
+          type='url'
+          value={youtubeUrl}
+          onChange={(e) => setYoutubeUrl(e.target.value)}
+          className='w-full p-3 border text-slate-900 border-slate-300 rounded-lg'
+        />
+      </div>
+      <div>
+        <label className='block text-sm font-medium text-slate-900 mb-1'>
+          Featured Image SVG (Optional)
         </label>
         <input
           type='file'
@@ -155,11 +190,21 @@ export default function EditPostForm({ post, onFormSubmit }) {
           className='w-full text-sm text-slate-900 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100'
         />
       </div>
+      {featuredImageSvgCode && (
+        <div>
+          <label className='block text-sm font-medium text-slate-900'>
+            Image Preview
+          </label>
+          <div className='mt-1 border border-slate-300 rounded-lg p-2 h-40 overflow-auto bg-slate-50'>
+            <div dangerouslySetInnerHTML={{ __html: featuredImageSvgCode }} />
+          </div>
+        </div>
+      )}
       <div>
         <label className='block text-sm font-medium text-slate-900 mb-1'>
           Content
         </label>
-        <div className='border border-slate-300 text-slate-900 rounded-lg overflow-hidden'>
+        <div className='border border-slate-300 rounded-lg overflow-hidden'>
           <TiptapToolbar editor={editor} />
           <EditorContent editor={editor} />
         </div>
