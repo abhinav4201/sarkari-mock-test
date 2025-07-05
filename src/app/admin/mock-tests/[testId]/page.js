@@ -10,7 +10,6 @@ import {
   getDocs,
   query,
   where,
-  orderBy,
 } from "firebase/firestore";
 import QuestionUploader from "@/components/admin/QuestionUploader";
 import BulkQuestionUploader from "@/components/admin/BulkQuestionUploader";
@@ -26,8 +25,7 @@ async function getTestDetails(testId) {
 async function getTestQuestions(testId) {
   const q = query(
     collection(db, "mockTestQuestions"),
-    where("testId", "==", testId),
-    orderBy("createdAt", "asc")
+    where("testId", "==", testId)
   );
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map((doc) => ({
@@ -44,7 +42,10 @@ export default function ManageTestQuestionsPage() {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // We wrap the data loading logic in useCallback so we can pass it down to children
+  // without causing unnecessary re-renders.
   const loadData = useCallback(async () => {
+    // We don't set loading to true here, as it will be handled by the initial load or specific actions
     try {
       const [testData, questionsData] = await Promise.all([
         getTestDetails(testId),
@@ -62,6 +63,7 @@ export default function ManageTestQuestionsPage() {
     }
   }, [testId]);
 
+  // Initial data fetch
   useEffect(() => {
     if (testId) {
       setLoading(true);
@@ -101,6 +103,7 @@ export default function ManageTestQuestionsPage() {
             <h2 className='text-xl font-semibold mb-6 text-slate-900'>
               Add New Question
             </h2>
+            {/* Pass the loadData function as a prop */}
             <QuestionUploader testId={testId} onUploadSuccess={loadData} />
           </div>
           <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-lg'>
@@ -110,6 +113,7 @@ export default function ManageTestQuestionsPage() {
             <p className='text-sm text-slate-700 mb-4'>
               Upload multiple questions at once using a CSV file.
             </p>
+            {/* Pass the loadData function as a prop */}
             <BulkQuestionUploader testId={testId} onUploadSuccess={loadData} />
           </div>
         </div>
@@ -117,7 +121,7 @@ export default function ManageTestQuestionsPage() {
           <h2 className='text-xl font-semibold mb-6 text-slate-900'>
             Added Questions
           </h2>
-          {/* We now pass the 'questions' state directly as a prop named 'questions' */}
+          {/* Pass the questions state and the refresh function to the list */}
           <QuestionList
             questions={questions}
             testId={testId}

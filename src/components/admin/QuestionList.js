@@ -104,7 +104,7 @@ export default function QuestionList({ questions, testId, onDataChange }) {
                 </div>
               </div>
               <div
-                className='mt-2 border rounded-md p-2 bg-slate-50'
+                className='mt-2 h-48 overflow-auto rounded-md border bg-slate-50 p-2 [&_svg]:h-full [&_svg]:w-full [&_svg]:object-contain'
                 dangerouslySetInnerHTML={{ __html: q.questionSvgCode }}
               />
               <ul className='text-sm space-y-1 mt-2'>

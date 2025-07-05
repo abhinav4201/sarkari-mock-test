@@ -5,7 +5,7 @@ import toast from "react-hot-toast";
 import { db } from "@/lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import Modal from "@/components/ui/Modal";
-import { Expand } from "lucide-react";
+import { Expand, XCircle } from "lucide-react"; // Import an icon for the remove button
 
 const textToSvg = (text) => {
   const sanitizedText = text
@@ -58,6 +58,18 @@ export default function EditQuestionForm({ question, onFormSubmit }) {
         setQuestionText("");
       };
       reader.readAsText(file);
+    }
+  };
+
+  // New handler to remove the SVG
+  const handleRemoveSvg = () => {
+    setQuestionSvgCode("");
+    // This clears the file input so the same file can be re-uploaded
+    const fileInput = document.querySelector(
+      "input[type='file'][accept='image/svg+xml']"
+    );
+    if (fileInput) {
+      fileInput.value = "";
     }
   };
 
@@ -125,7 +137,7 @@ export default function EditQuestionForm({ question, onFormSubmit }) {
             onChange={handleTextChange}
             disabled={!!questionSvgCode}
             placeholder='Type question text here...'
-            className='w-full p-3 border border-slate-300 rounded-lg disabled:bg-slate-100'
+            className='w-full p-3 border text-slate-900 border-slate-300 rounded-lg disabled:bg-slate-100'
           />
         </div>
         <div className='text-center text-sm font-semibold text-slate-500'>
@@ -140,7 +152,7 @@ export default function EditQuestionForm({ question, onFormSubmit }) {
             accept='image/svg+xml'
             onChange={handleFileChange}
             disabled={!!questionText}
-            className='w-full text-sm text-slate-700 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100'
+            className='w-full text-sm text-slate-900 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100'
           />
         </div>
 
@@ -150,15 +162,26 @@ export default function EditQuestionForm({ question, onFormSubmit }) {
               <label className='text-sm font-medium text-slate-900'>
                 Preview
               </label>
-              <button
-                type='button'
-                onClick={openPreview}
-                className='flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800'
-              >
-                <Expand className='h-4 w-4 mr-1' /> View Fullscreen
-              </button>
+              <div className='flex items-center gap-4'>
+                {questionSvgCode && (
+                  <button
+                    type='button'
+                    onClick={handleRemoveSvg}
+                    className='flex items-center text-sm font-medium text-red-600 hover:text-red-800'
+                  >
+                    <XCircle className='h-4 w-4 mr-1' />
+                    Remove SVG
+                  </button>
+                )}
+                <button
+                  type='button'
+                  onClick={openPreview}
+                  className='flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800'
+                >
+                  <Expand className='h-4 w-4 mr-1' /> View Fullscreen
+                </button>
+              </div>
             </div>
-            {/* THIS IS THE FIX: We wrap the SVG in a div that controls its size */}
             <div className='border border-slate-300 rounded-lg p-2 h-40 overflow-auto bg-slate-50 [&>div]:w-full [&>div]:h-full [&_svg]:w-full [&_svg]:h-full [&_svg]:object-contain'>
               <div
                 dangerouslySetInnerHTML={{
@@ -180,7 +203,7 @@ export default function EditQuestionForm({ question, onFormSubmit }) {
               value={opt}
               onChange={(e) => handleOptionChange(index, e.target.value)}
               placeholder={`Option ${index + 1}`}
-              className='w-full p-3 border border-slate-300 rounded-lg mb-2'
+              className='w-full p-3 border text-slate-900 border-slate-300 rounded-lg mb-2'
               required
             />
           ))}
@@ -196,7 +219,7 @@ export default function EditQuestionForm({ question, onFormSubmit }) {
             id='edit-correct-answer'
             value={correctAnswer}
             onChange={(e) => setCorrectAnswer(e.target.value)}
-            className='w-full p-3 border border-slate-300 rounded-lg'
+            className='w-full p-3 border text-slate-900 border-slate-300 rounded-lg'
             required
           >
             <option value='' disabled>
