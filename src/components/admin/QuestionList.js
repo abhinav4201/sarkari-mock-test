@@ -7,6 +7,7 @@ import EditQuestionForm from "./EditQuestionForm";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
 import { db } from "@/lib/firebase";
 import { doc, runTransaction, deleteDoc } from "firebase/firestore";
+import SvgDisplayer from "@/components/ui/SvgDisplayer";
 
 export default function QuestionList({ questions, testId, onDataChange }) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -103,9 +104,13 @@ export default function QuestionList({ questions, testId, onDataChange }) {
                   </button>
                 </div>
               </div>
-              <div
+              {/* <div
                 className='mt-2 h-48 overflow-auto rounded-md border bg-slate-50 p-2 [&_svg]:h-full [&_svg]:w-full [&_svg]:object-contain'
                 dangerouslySetInnerHTML={{ __html: q.questionSvgCode }}
+              /> */}
+              <SvgDisplayer
+                svgCode={q.questionSvgCode}
+                className='mt-2 h-auto min-h-[12rem] rounded-md border bg-slate-50 flex items-center'
               />
               <ul className='text-sm space-y-1 mt-2'>
                 {q.options.map((opt, i) => (

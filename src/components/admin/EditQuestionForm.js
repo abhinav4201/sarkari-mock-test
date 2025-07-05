@@ -1,19 +1,60 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import toast from "react-hot-toast";
+import Modal from "@/components/ui/Modal";
+import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import { db } from "@/lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
-import Modal from "@/components/ui/Modal";
 import { Expand, XCircle } from "lucide-react"; // Import an icon for the remove button
+import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 
+
+/**
+ * Converts a string of text into a multi-line, responsive SVG image.
+ * Uses a <foreignObject> to embed HTML for automatic word wrapping.
+ * @param {string} text The text to convert.
+ * @returns {string} The SVG code as a string.
+ */
 const textToSvg = (text) => {
+  // Sanitize text to be safely embedded in HTML
   const sanitizedText = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
-  const style = `font-family: Arial, sans-serif; font-size: 24px; fill: #1e293b;`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100"><text x="10" y="40" style="${style}">${sanitizedText}</text></svg>`;
+
+  const svgWidth = 800; // The base width of the SVG canvas
+  const svgHeight = 250; // Increased height to allow for several lines of text
+
+  // CSS for the wrapping div inside the SVG
+  const style = `
+    box-sizing: border-box;
+    font-family: Arial, sans-serif;
+    font-size: 28px;
+    color: #1e293b;
+    line-height: 1.4;
+    white-space: normal;
+    word-wrap: break-word;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+  `;
+
+  // The SVG structure with a foreignObject containing a div
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}">
+      <foreignObject x="15" y="15" width="${svgWidth - 30}" height="${
+    svgHeight - 30
+  }">
+        <div xmlns="http://www.w3.org/1999/xhtml" style="${style
+          .replace(/\s\s+/g, " ")
+          .trim()}">
+          <div>${sanitizedText}</div>
+        </div>
+      </foreignObject>
+    </svg>
+  `;
 };
 
 export default function EditQuestionForm({ question, onFormSubmit }) {
@@ -120,9 +161,9 @@ export default function EditQuestionForm({ question, onFormSubmit }) {
         title='SVG Fullscreen Preview'
       >
         <div className='p-4 bg-slate-100 rounded-lg'>
-          <div
-            className='w-full h-full'
-            dangerouslySetInnerHTML={{ __html: previewingSvg }}
+          <SvgDisplayer
+            svgCode={previewingSvg}
+            className='w-full h-96 bg-slate-100 rounded-lg flex items-center justify-center'
           />
         </div>
       </Modal>
@@ -182,13 +223,10 @@ export default function EditQuestionForm({ question, onFormSubmit }) {
                 </button>
               </div>
             </div>
-            <div className='border border-slate-300 rounded-lg p-2 h-40 overflow-auto bg-slate-50 [&>div]:w-full [&>div]:h-full [&_svg]:w-full [&_svg]:h-full [&_svg]:object-contain'>
-              <div
-                dangerouslySetInnerHTML={{
-                  __html: questionSvgCode || textToSvg(questionText),
-                }}
-              />
-            </div>
+            <SvgDisplayer
+              svgCode={questionSvgCode || textToSvg(questionText)}
+              className='h-auto min-h-[10rem] border border-slate-300 rounded-lg bg-slate-50 flex items-center'
+            />
           </div>
         )}
 

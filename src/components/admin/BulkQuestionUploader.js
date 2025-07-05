@@ -11,13 +11,48 @@ import {
 } from "firebase/firestore";
 import Papa from "papaparse";
 
+/**
+ * Converts a string of text into a multi-line, responsive SVG image.
+ * Uses a <foreignObject> to embed HTML for automatic word wrapping.
+ * @param {string} text The text to convert.
+ * @returns {string} The SVG code as a string.
+ */
 const textToSvg = (text) => {
+  // Sanitize text to be safely embedded in HTML
   const sanitizedText = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
-  const style = `font-family: Arial, sans-serif; font-size: 24px; fill: #1e293b;`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100"><text x="10" y="40" style="${style}">${sanitizedText}</text></svg>`;
+
+  const svgWidth = 800; // The base width of the SVG canvas
+  const svgHeight = 250; // Increased height to allow for several lines of text
+
+  // CSS for the wrapping div inside the SVG
+  const style = `
+    box-sizing: border-box;
+    font-family: Arial, sans-serif;
+    font-size: 28px;
+    color: #1e293b;
+    line-height: 1.4;
+    white-space: normal;
+    word-wrap: break-word;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+  `;
+
+  // The SVG structure with a foreignObject containing a div
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}">
+      <foreignObject x="15" y="15" width="${svgWidth - 30}" height="${svgHeight - 30}">
+        <div xmlns="http://www.w3.org/1999/xhtml" style="${style.replace(/\s\s+/g, ' ').trim()}">
+          <div>${sanitizedText}</div>
+        </div>
+      </foreignObject>
+    </svg>
+  `;
 };
 
 export default function BulkQuestionUploader({ testId, onUploadSuccess }) {

@@ -1,6 +1,7 @@
 "use client";
 
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
+import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -166,18 +167,18 @@ export default function ContentList({ initialContent, contentType, onEdit }) {
                     <label className='block text-sm font-medium text-slate-600 mb-1'>
                       Word
                     </label>
-                    <div
-                      className='h-40 border rounded-lg p-2 bg-slate-50 [&>svg]:w-full [&>svg]:h-full [&>svg]:object-contain'
-                      dangerouslySetInnerHTML={{ __html: item.wordSvgCode }}
+                    <SvgDisplayer
+                      svgCode={item.wordSvgCode}
+                      className='h-auto min-h-[8rem] border rounded-lg bg-slate-50 flex items-center'
                     />
                   </div>
                   <div>
                     <label className='block text-sm font-medium text-slate-600 mb-1'>
                       Meaning
                     </label>
-                    <div
-                      className='h-40 border rounded-lg p-2 bg-slate-50 [&>svg]:w-full [&>svg]:h-full [&>svg]:object-contain'
-                      dangerouslySetInnerHTML={{ __html: item.meaningSvgCode }}
+                    <SvgDisplayer
+                      svgCode={item.meaningSvgCode}
+                      className='h-auto min-h-[8rem] border rounded-lg bg-slate-50 flex items-center'
                     />
                   </div>
                 </div>
@@ -186,9 +187,9 @@ export default function ContentList({ initialContent, contentType, onEdit }) {
                   <label className='block text-sm font-medium text-slate-600 mb-1'>
                     Content
                   </label>
-                  <div
-                    className='h-48 border rounded-lg p-2 bg-slate-50 [&>svg]:w-full [&>svg]:h-full [&>svg]:object-contain'
-                    dangerouslySetInnerHTML={{ __html: item.contentSvgCode }}
+                  <SvgDisplayer
+                    svgCode={item.contentSvgCode}
+                    className='h-auto min-h-[10rem] border rounded-lg bg-slate-50 flex items-center'
                   />
                 </div>
               )}
