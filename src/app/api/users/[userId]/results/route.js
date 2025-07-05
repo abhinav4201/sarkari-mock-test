@@ -1,5 +1,3 @@
-// app/api/users/[userId]/results/route.js
-
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -18,7 +16,7 @@ const PAGE_SIZE = 10;
 
 export async function GET(request, { params }) {
   try {
-    const { userId } = await params;
+    const { userId } = params;
     const { searchParams } = new URL(request.url);
     const cursor = searchParams.get("cursor");
 
@@ -56,9 +54,8 @@ export async function GET(request, { params }) {
       });
     });
 
-    // --- FIX: Fetch test titles to include in the response ---
     if (results.length > 0) {
-      const testIds = [...new Set(results.map((res) => res.testId))]; // Get unique test IDs
+      const testIds = [...new Set(results.map((res) => res.testId))];
       const testsQuery = query(
         collection(db, "mockTests"),
         where("__name__", "in", testIds)
@@ -67,7 +64,6 @@ export async function GET(request, { params }) {
       const testsMap = new Map();
       testsSnapshot.forEach((doc) => testsMap.set(doc.id, doc.data()));
 
-      // Add the testTitle to each result object
       results = results.map((res) => ({
         ...res,
         testTitle: testsMap.get(res.testId)?.title || "Unknown Test",
@@ -77,7 +73,7 @@ export async function GET(request, { params }) {
     const lastVisible = querySnapshot.docs[querySnapshot.docs.length - 1];
     const nextCursor = lastVisible ? lastVisible.id : null;
 
-    // Return the data in the expected object format
+    // This ensures the data is returned in the format the frontend expects
     return NextResponse.json({ results, nextCursor }, { status: 200 });
   } catch (error) {
     console.error("Error fetching user results:", error);
