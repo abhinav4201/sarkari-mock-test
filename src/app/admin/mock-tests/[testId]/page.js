@@ -1,3 +1,7 @@
+"use client"; // This converts the page to a Client Component
+
+import { useState, useEffect, useCallback } from "react";
+import { useParams, notFound } from "next/navigation";
 import { db } from "@/lib/firebase";
 import {
   doc,
@@ -7,11 +11,11 @@ import {
   query,
   where,
 } from "firebase/firestore";
-import { notFound } from "next/navigation";
 import QuestionUploader from "@/components/admin/QuestionUploader";
 import BulkQuestionUploader from "@/components/admin/BulkQuestionUploader";
 import QuestionList from "@/components/admin/QuestionList";
 
+// Helper functions can remain, as they'll be called from the client
 async function getTestDetails(testId) {
   const testRef = doc(db, "mockTests", testId);
   const testSnap = await getDoc(testRef);
@@ -27,24 +31,58 @@ async function getTestQuestions(testId) {
     where("testId", "==", testId)
   );
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map((doc) => {
-    const data = doc.data();
-    return {
-      id: doc.id,
-      ...data,
-      // If createdAt exists, convert it to milliseconds. Otherwise, use null.
-      createdAt: data.createdAt ? data.createdAt.toMillis() : null,
-    };
-  });
+  return querySnapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
 }
 
-export default async function ManageTestQuestionsPage({ params }) {
-  const { testId } = await params; // Await params to resolve the promise
-  const test = await getTestDetails(testId);
-  const questions = await getTestQuestions(testId);
+export default function ManageTestQuestionsPage() {
+  const params = useParams();
+  const testId = params.testId;
+
+  // State to hold the data and loading status
+  const [test, setTest] = useState(null);
+  const [questions, setQuestions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch data on the client side when the component mounts
+  useEffect(() => {
+    if (!testId) return;
+
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const [testData, questionsData] = await Promise.all([
+          getTestDetails(testId),
+          getTestQuestions(testId),
+        ]);
+
+        if (!testData) {
+          // Handle case where test is not found
+          notFound();
+          return;
+        }
+
+        setTest(testData);
+        setQuestions(questionsData);
+      } catch (error) {
+        console.error("Failed to load test data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [testId]);
+
+  if (loading) {
+    return <div className='text-center p-12'>Loading Test Details...</div>;
+  }
 
   if (!test) {
-    notFound();
+    // This will be shown if the test was not found after loading
+    return <div className='text-center p-12'>Test not found.</div>;
   }
 
   return (
@@ -53,7 +91,7 @@ export default async function ManageTestQuestionsPage({ params }) {
         Manage Questions
       </h1>
       <p className='text-lg text-indigo-600 font-semibold'>{test.title}</p>
-      <p className='mb-6 text-slate-600 mt-1'>
+      <p className='mb-6 text-slate-700 mt-1'>
         Currently has {questions.length} question(s).
       </p>
 
@@ -72,9 +110,8 @@ export default async function ManageTestQuestionsPage({ params }) {
             <h2 className='text-xl font-semibold mb-6 text-slate-900'>
               Bulk Upload
             </h2>
-            <p className='text-sm text-slate-600 mb-4'>
-              Upload multiple questions at once using a CSV file. Paste the full
-              SVG code for each question into the 'questionSvgCode' column.
+            <p className='text-sm text-slate-700 mb-4'>
+              Upload multiple questions at once using a CSV file.
             </p>
             <BulkQuestionUploader testId={testId} />
           </div>

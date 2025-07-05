@@ -1,8 +1,11 @@
+"use client"; // This converts the page to a Client Component
+
+import { useState, useEffect, useCallback } from "react";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 import ContactList from "@/components/admin/ContactList";
 
-// This function now only fetches the FIRST page of contacts on the server
+// Helper function to fetch the initial batch of contacts
 async function getInitialContacts() {
   const contactsRef = collection(db, "contacts");
   const q = query(contactsRef, orderBy("submittedAt", "desc"), limit(10));
@@ -13,14 +16,33 @@ async function getInitialContacts() {
     return {
       id: doc.id,
       ...data,
-      // Convert timestamp to a serializable format
       submittedAt: data.submittedAt ? data.submittedAt.toMillis() : null,
     };
   });
 }
 
-export default async function ContactsPage() {
-  const initialContacts = await getInitialContacts();
+export default function ContactsPage() {
+  // State to hold the contacts and loading status
+  const [initialContacts, setInitialContacts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Use a useCallback to memoize the data fetching function
+  const loadContacts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const contacts = await getInitialContacts();
+      setInitialContacts(contacts);
+    } catch (error) {
+      console.error("Failed to load contacts:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Fetch data on the client side when the component mounts
+  useEffect(() => {
+    loadContacts();
+  }, [loadContacts]);
 
   return (
     <div>
@@ -37,7 +59,12 @@ export default async function ContactsPage() {
         </a>
       </div>
 
-      <ContactList initialContacts={initialContacts} />
+      {/* Conditionally render the list or a loading message */}
+      {loading ? (
+        <div className='text-center p-8'>Loading contacts...</div>
+      ) : (
+        <ContactList initialContacts={initialContacts} />
+      )}
     </div>
   );
 }
