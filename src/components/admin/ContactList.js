@@ -1,6 +1,9 @@
 "use client";
 
+import { db } from "@/lib/firebase";
+import { deleteDoc, doc } from "firebase/firestore";
 import { useState } from "react";
+import toast from "react-hot-toast";
 
 const PAGE_SIZE = 10;
 
@@ -8,6 +11,9 @@ export default function ContactList({ initialContacts }) {
   const [contacts, setContacts] = useState(initialContacts);
   const [hasMore, setHasMore] = useState(initialContacts.length === PAGE_SIZE);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [deletingContactId, setDeletingContactId] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadMoreContacts = async () => {
     if (!hasMore || loadingMore) return;
@@ -34,9 +40,39 @@ export default function ContactList({ initialContacts }) {
       setLoadingMore(false);
     }
   };
+  const handleDeleteClick = (contactId) => {
+    setDeletingContactId(contactId);
+    setIsConfirmModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    setIsDeleting(true);
+    try {
+      // Delete the document directly from the client
+      await deleteDoc(doc(db, "contacts", deletingContactId));
+
+      toast.success("Contact submission deleted!");
+      setContacts((prev) => prev.filter((c) => c.id !== deletingContactId));
+    } catch (error) {
+      toast.error(`Error: ${error.message}`);
+    } finally {
+      setIsConfirmModalOpen(false);
+      setDeletingContactId(null);
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <div className='bg-white p-4 sm:p-6 rounded-2xl shadow-lg'>
+      <ConfirmationModal
+        isOpen={isConfirmModalOpen}
+        onClose={() => setIsConfirmModalOpen(false)}
+        onConfirm={confirmDelete}
+        title='Delete Submission'
+        message='Are you sure you want to permanently delete this contact submission?'
+        confirmText='Delete'
+        isLoading={isDeleting}
+      />
       {contacts.length > 0 ? (
         <>
           {/* On medium screens and up, use a table */}
@@ -61,6 +97,14 @@ export default function ContactList({ initialContacts }) {
                     <td className='p-4 text-slate-600'>
                       {new Date(contact.submittedAt).toLocaleString()}
                     </td>
+                    <td className='p-4'>
+                      <button
+                        onClick={() => handleDeleteClick(contact.id)}
+                        className='text-sm font-medium text-red-600 hover:text-red-800'
+                      >
+                        Delete
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -82,6 +126,14 @@ export default function ContactList({ initialContacts }) {
                 <p className='mt-4 p-3 bg-white border rounded text-slate-800'>
                   {contact.message}
                 </p>
+                <div className='mt-4'>
+                  <button
+                    onClick={() => handleDeleteClick(contact.id)}
+                    className='text-sm font-medium text-red-600 hover:text-red-800'
+                  >
+                    Delete Submission
+                  </button>
+                </div>
               </div>
             ))}
           </div>

@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import Modal from "@/components/ui/Modal"; // Import the reusable Modal component
 import { Expand } from "lucide-react"; // Import an icon for the fullscreen button
+import { db } from "@/lib/firebase";
+import { doc, updateDoc } from "firebase/firestore";
 
 export default function EditQuestionForm({ question, onFormSubmit }) {
   // State for each form field
@@ -52,16 +54,13 @@ export default function EditQuestionForm({ question, onFormSubmit }) {
     const loadingToast = toast.loading("Updating question...");
 
     try {
-      const res = await fetch(`/api/admin/questions/${question.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ questionSvgCode, options, correctAnswer }),
-      });
+      const questionRef = doc(db, "mockTestQuestions", question.id);
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || "Failed to update question");
-      }
+      await updateDoc(questionRef, {
+        questionSvgCode,
+        options,
+        correctAnswer,
+      });
 
       toast.success("Question updated successfully!", { id: loadingToast });
       onFormSubmit();

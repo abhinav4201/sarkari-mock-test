@@ -7,6 +7,8 @@ import Link from "next/link";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
 import Modal from "@/components/ui/Modal";
 import EditPostForm from "./EditPostForm"; // <-- Import the new form
+import { db } from "@/lib/firebase"; // Import db
+import { doc, deleteDoc } from "firebase/firestore"; 
 
 const PAGE_SIZE = 5;
 
@@ -36,14 +38,12 @@ export default function BlogHistoryList({ initialPosts }) {
   const confirmDelete = async () => {
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/admin/posts/${deletingPostId}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("Failed to delete post");
+      // Delete the document directly from the client
+      const postRef = doc(db, "posts", deletingPostId);
+      await deleteDoc(postRef);
 
       toast.success("Post deleted successfully!");
-      setPosts((prev) => prev.filter((p) => p.id !== deletingPostId));
-      router.refresh();
+      setPosts((prev) => prev.filter((p) => p.id !== deletingPostId)); // Update UI immediately
     } catch (error) {
       toast.error(`Error: ${error.message}`);
     } finally {

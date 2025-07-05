@@ -1,9 +1,11 @@
 "use client";
 
-import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
+import { db } from "@/lib/firebase";
 import Placeholder from "@tiptap/extension-placeholder";
-import { useState, useEffect } from "react";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import { doc, updateDoc } from "firebase/firestore";
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
 // Reusable Tiptap Toolbar
@@ -107,18 +109,17 @@ export default function EditPostForm({ post, onFormSubmit }) {
     const loadingToast = toast.loading("Updating post...");
 
     try {
-      const res = await fetch(`/api/admin/posts/${post.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          content: htmlContent,
-          slug,
-          youtubeUrl,
-          featuredImageSvgCode,
-        }),
+      // Create a reference to the specific post document
+      const postRef = doc(db, "posts", post.id);
+
+      // Update the document directly from the client
+      await updateDoc(postRef, {
+        title,
+        content: htmlContent,
+        slug,
+        youtubeUrl: youtubeUrl || "",
+        featuredImageSvgCode: featuredImageSvgCode || "",
       });
-      if (!res.ok) throw new Error("Failed to update post");
 
       toast.success("Post updated successfully!", { id: loadingToast });
       onFormSubmit(); // Close modal and refresh list

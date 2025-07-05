@@ -1,9 +1,11 @@
 "use client";
 
+import ConfirmationModal from "@/components/ui/ConfirmationModal"; // <-- Import new modal
+import { db } from "@/lib/firebase";
+import { deleteDoc, doc } from "firebase/firestore";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import toast from "react-hot-toast";
-import { useRouter } from "next/navigation";
-import ConfirmationModal from "@/components/ui/ConfirmationModal"; // <-- Import new modal
 
 const PAGE_SIZE = 5;
 
@@ -33,18 +35,13 @@ export default function ContentList({ initialContent, contentType, onEdit }) {
   const confirmDelete = async () => {
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/admin/daily-content/${deletingContentId}`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: contentType }),
-      });
-      if (!res.ok) throw new Error("Failed to delete item.");
+      // Delete the document directly from the client
+      await deleteDoc(doc(db, contentType, deletingContentId));
 
       toast.success("Item deleted!");
       setContent((prev) =>
         prev.filter((item) => item.id !== deletingContentId)
       );
-      router.refresh();
     } catch (error) {
       toast.error(`Error: ${error.message}`);
     } finally {

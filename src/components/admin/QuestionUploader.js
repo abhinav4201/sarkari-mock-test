@@ -2,6 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { db } from "@/lib/firebase";
+import {
+  collection,
+  doc,
+  runTransaction,
+  serverTimestamp,
+} from "firebase/firestore";
 
 export default function QuestionUploader({ testId }) {
   const [questionSvgCode, setQuestionSvgCode] = useState("");
@@ -36,22 +43,26 @@ export default function QuestionUploader({ testId }) {
     setStatus("Submitting...");
 
     try {
-      const res = await fetch("/api/admin/questions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      // Run the transaction directly from the client
+      await runTransaction(db, async (transaction) => {
+        const testRef = doc(db, "mockTests", testId);
+        const testDoc = await transaction.get(testRef);
+        if (!testDoc.exists()) throw new Error("Parent test does not exist!");
+
+        // Write 1: Create new question
+        const newQuestionRef = doc(collection(db, "mockTestQuestions"));
+        transaction.set(newQuestionRef, {
           testId,
           questionSvgCode,
           options,
           correctAnswer,
-        }),
-      });
+          createdAt: serverTimestamp(),
+        });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        // Use the specific error message from the API if available
-        throw new Error(errorData.message || "Failed to add question");
-      }
+        // Write 2: Update the question count
+        const newCount = (testDoc.data().questionCount || 0) + 1;
+        transaction.update(testRef, { questionCount: newCount });
+      });
 
       setStatus("Question added successfully!");
       e.target.reset();

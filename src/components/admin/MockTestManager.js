@@ -1,6 +1,9 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import toast from "react-hot-toast";
 
 export default function MockTestManager() {
   const [title, setTitle] = useState("");
@@ -9,33 +12,28 @@ export default function MockTestManager() {
   const [examName, setExamName] = useState("");
   const [estimatedTime, setEstimatedTime] = useState(0);
   const [isPremium, setIsPremium] = useState(false);
-  const [status, setStatus] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setStatus("Creating test...");
+    setIsLoading(true);
+    const loadingToast = toast.loading("Creating new test...");
 
     try {
-      const res = await fetch("/api/admin/mock-tests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          topic,
-          subject,
-          examName,
-          estimatedTime: Number(estimatedTime),
-          isPremium,
-        }),
+      // Write directly to the 'mockTests' collection from the client
+      await addDoc(collection(db, "mockTests"), {
+        title,
+        topic,
+        subject,
+        examName,
+        estimatedTime: Number(estimatedTime),
+        isPremium,
+        questionCount: 0,
+        createdAt: serverTimestamp(),
       });
 
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to create test");
-      }
-
-      setStatus("Test created successfully! Refreshing...");
+      toast.success("Test created successfully!", { id: loadingToast });
       e.target.reset();
       setTitle("");
       setTopic("");
@@ -43,9 +41,11 @@ export default function MockTestManager() {
       setExamName("");
       setEstimatedTime(0);
       setIsPremium(false);
-      router.refresh();
+      router.refresh(); // Refresh the page to show the new test in the list
     } catch (error) {
-      setStatus(`Error: ${error.message}`);
+      toast.error(`Error: ${error.message}`, { id: loadingToast });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -54,7 +54,7 @@ export default function MockTestManager() {
       <div>
         <label
           htmlFor='test-title'
-          className='block text-sm font-medium text-slate-800 mb-1'
+          className='block text-sm font-medium text-slate-900 mb-1'
         >
           Test Title
         </label>
@@ -70,7 +70,7 @@ export default function MockTestManager() {
       <div>
         <label
           htmlFor='test-topic'
-          className='block text-sm font-medium text-slate-800 mb-1'
+          className='block text-sm font-medium text-slate-900 mb-1'
         >
           Topic
         </label>
@@ -87,7 +87,7 @@ export default function MockTestManager() {
       <div>
         <label
           htmlFor='test-subject'
-          className='block text-sm font-medium text-slate-800 mb-1'
+          className='block text-sm font-medium text-slate-900 mb-1'
         >
           Subject
         </label>
@@ -104,7 +104,7 @@ export default function MockTestManager() {
       <div>
         <label
           htmlFor='test-exam'
-          className='block text-sm font-medium text-slate-800 mb-1'
+          className='block text-sm font-medium text-slate-900 mb-1'
         >
           Exam Name
         </label>
@@ -120,7 +120,7 @@ export default function MockTestManager() {
       <div>
         <label
           htmlFor='test-time'
-          className='block text-sm font-medium text-slate-800 mb-1'
+          className='block text-sm font-medium text-slate-900 mb-1'
         >
           Estimated Time (in minutes)
         </label>
@@ -151,11 +151,10 @@ export default function MockTestManager() {
       <button
         type='submit'
         className='w-full px-4 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-green-400'
-        disabled={status.includes("Creating")}
+        disabled={isLoading}
       >
-        Create Test
+        {isLoading ? "Creating..." : "Create Test"}
       </button>
-      {status && <p className='mt-2 text-center text-sm'>{status}</p>}
     </form>
   );
 }

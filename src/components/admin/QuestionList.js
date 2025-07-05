@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import Modal from "@/components/ui/Modal";
 import EditQuestionForm from "./EditQuestionForm";
 import ConfirmationModal from "@/components/ui/ConfirmationModal"; // <-- Import the confirmation modal
+import { db } from "@/lib/firebase";
+import { doc, runTransaction } from "firebase/firestore";
 
 export default function QuestionList({ initialQuestions, testId }) {
   // State for the edit modal
@@ -29,20 +31,24 @@ export default function QuestionList({ initialQuestions, testId }) {
   const confirmDelete = async () => {
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/admin/questions/${deletingQuestionId}`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ testId }),
+      // Run the delete transaction directly from the client
+      await runTransaction(db, async (transaction) => {
+        const testRef = doc(db, "mockTests", testId);
+        const questionRef = doc(db, "mockTestQuestions", deletingQuestionId);
+
+        const testDoc = await transaction.get(testRef);
+        if (!testDoc.exists()) throw new Error("Parent test does not exist!");
+
+        transaction.delete(questionRef);
+        const newCount = Math.max(0, (testDoc.data().questionCount || 0) - 1);
+        transaction.update(testRef, { questionCount: newCount });
       });
 
-      if (!res.ok) throw new Error("Failed to delete question");
-
       toast.success("Question deleted!");
-      router.refresh(); // Re-fetches server data to update the list
+      router.refresh();
     } catch (error) {
       toast.error(`Error: ${error.message}`);
     } finally {
-      // Close the modal and reset state regardless of outcome
       setIsConfirmModalOpen(false);
       setDeletingQuestionId(null);
       setIsDeleting(false);

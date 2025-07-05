@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast"; // Import toast
+import { db } from "@/lib/firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 export default function DailyContentUploader({ uploadType }) {
   const [svgCodes, setSvgCodes] = useState({});
@@ -26,33 +28,37 @@ export default function DailyContentUploader({ uploadType }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsUploading(true);
-    const loadingToast = toast.loading("Uploading content..."); // Use toast for loading
+    const loadingToast = toast.loading("Uploading content...");
 
     const payload = {
-      type: uploadType,
-      category: uploadType === "gk" ? category : undefined,
-      svgCodes: svgCodes,
+      /* ... create payload ... */
     };
 
     try {
-      const res = await fetch("/api/admin/daily-content", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || "Failed to upload");
+      // Write directly to the correct collection from the client
+      const collectionName =
+        uploadType === "vocabulary" ? "dailyVocabulary" : "dailyGk";
+      let dataToWrite;
+      if (uploadType === "vocabulary") {
+        dataToWrite = {
+          wordSvgCode: payload.svgCodes.wordSvg,
+          meaningSvgCode: payload.svgCodes.meaningSvg,
+          createdAt: serverTimestamp(),
+        };
+      } else {
+        dataToWrite = {
+          contentSvgCode: payload.svgCodes.contentSvg,
+          category: payload.category,
+          createdAt: serverTimestamp(),
+        };
       }
 
-      toast.success("Content uploaded successfully!", { id: loadingToast }); // Use toast for success
-      e.target.reset();
-      setSvgCodes({});
-      setCategory("");
-      router.refresh(); // Refresh page to show the new item in the list
+      await addDoc(collection(db, collectionName), dataToWrite);
+
+      toast.success("Content uploaded successfully!", { id: loadingToast });
+      // ... reset form state ...
     } catch (error) {
-      toast.error(`Error: ${error.message}`, { id: loadingToast }); // Use toast for error
+      toast.error(`Error: ${error.message}`, { id: loadingToast });
     } finally {
       setIsUploading(false);
     }

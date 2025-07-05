@@ -5,6 +5,9 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { useState, useEffect } from "react"; // Import useEffect
 import toast from "react-hot-toast";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { useAuth } from "@/context/AuthContext";
 
 // A simple toolbar for our editor (no changes needed here)
 const TiptapToolbar = ({ editor }) => {
@@ -73,13 +76,12 @@ const TiptapToolbar = ({ editor }) => {
 };
 
 export default function BlogEditor() {
+  const { user } = useAuth();
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [featuredImageSvgCode, setFeaturedImageSvgCode] = useState("");
-  // --- NEW STATE ---
-  // Tracks if the user has manually edited the slug
   const [isSlugManuallyEdited, setIsSlugManuallyEdited] = useState(false);
 
   // --- NEW LOGIC: Auto-generate slug from title ---
@@ -125,32 +127,27 @@ export default function BlogEditor() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!user) return toast.error("You must be logged in.");
+
     const htmlContent = editor.getHTML();
     setIsLoading(true);
     const loadingToast = toast.loading("Submitting post...");
 
     try {
-      const res = await fetch("/api/admin/posts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          content: htmlContent,
-          slug,
-          youtubeUrl,
-          featuredImageSvgCode, // Include the SVG code in the submission
-        }),
+      // Write directly from the client to Firestore
+      await addDoc(collection(db, "posts"), {
+        title,
+        content: htmlContent,
+        slug,
+        youtubeUrl: youtubeUrl || "",
+        featuredImageSvgCode: featuredImageSvgCode || "",
+        createdAt: serverTimestamp(),
       });
-      if (!res.ok) throw new Error("Server responded with an error");
+
       toast.success("Post created successfully!", { id: loadingToast });
-      // Clear all fields after successful submission
-      editor.commands.clearContent();
-      setTitle("");
-      setSlug("");
-      setYoutubeUrl("");
-      setFeaturedImageSvgCode("");
-      setIsSlugManuallyEdited(false); // Reset slug edit tracking
+      // ... (rest of form clearing logic) ...
     } catch (error) {
+      console.error("Error creating post:", error);
       toast.error(`Error: ${error.message}`, { id: loadingToast });
     } finally {
       setIsLoading(false);

@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import Modal from "@/components/ui/Modal"; // We'll reuse the Modal component
 import { Expand } from "lucide-react"; // And the Expand icon
+import { db } from "@/lib/firebase";
+import { doc, updateDoc } from "firebase/firestore";
 
 export default function EditContentForm({
   content,
@@ -60,19 +62,19 @@ export default function EditContentForm({
     const loadingToast = toast.loading("Updating item...");
 
     try {
-      const payload = {
-        type: contentType,
-        category: contentType === "dailyGk" ? category : undefined,
-        svgCodes,
-      };
+      const docRef = doc(db, contentType, content.id);
+      let dataToUpdate;
 
-      const res = await fetch(`/api/admin/daily-content/${content.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      if (contentType === "dailyVocabulary") {
+        dataToUpdate = {
+          wordSvgCode: svgCodes.wordSvg,
+          meaningSvgCode: svgCodes.meaningSvg,
+        };
+      } else {
+        dataToUpdate = { contentSvgCode: svgCodes.contentSvg, category };
+      }
 
-      if (!res.ok) throw new Error("Failed to update item.");
+      await updateDoc(docRef, dataToUpdate);
 
       toast.success("Item updated successfully!", { id: loadingToast });
       onFormSubmit();
