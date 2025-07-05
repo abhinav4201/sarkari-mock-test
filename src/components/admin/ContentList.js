@@ -25,7 +25,6 @@ export default function ContentList({ initialContent, contentType, onEdit }) {
   const [hasMore, setHasMore] = useState(true);
   const [lastDoc, setLastDoc] = useState(null);
 
-  // State for the delete confirmation modal
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [deletingContentId, setDeletingContentId] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -78,10 +77,9 @@ export default function ContentList({ initialContent, contentType, onEdit }) {
     [contentType, lastDoc, hasMore]
   );
 
-  // Initial data fetch
   useEffect(() => {
     loadMoreContent(true);
-  }, [contentType]); // Re-fetch if the content type changes (e.g., switching tabs)
+  }, [contentType]);
 
   const handleDeleteClick = (contentId) => {
     setDeletingContentId(contentId);
@@ -106,7 +104,13 @@ export default function ContentList({ initialContent, contentType, onEdit }) {
   };
 
   if (loading) {
-    return <div className='text-center p-8'>Loading content...</div>;
+    return (
+      <div className='flex items-center justify-center p-12'>
+        <div className='text-lg font-semibold text-slate-700'>
+          Loading Content...
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -121,19 +125,24 @@ export default function ContentList({ initialContent, contentType, onEdit }) {
         isLoading={isDeleting}
       />
 
-      <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-lg mt-8 border border-slate-200'>
-        <h2 className='text-xl font-semibold mb-6 text-slate-900'>
-          Previously Added{" "}
-          {contentType === "dailyVocabulary" ? "Vocabulary" : "GK"}
-        </h2>
-        <div className='space-y-4'>
-          {content.length > 0 ? (
-            content.map((item) => (
-              <div
-                key={item.id}
-                className='p-4 border border-slate-200 rounded-lg'
-              >
-                <div className='flex justify-end gap-2'>
+      <div className='space-y-6'>
+        {content.length > 0 ? (
+          content.map((item) => (
+            <div
+              key={item.id}
+              className='p-4 bg-white border border-slate-200 rounded-xl shadow-sm'
+            >
+              <div className='flex justify-between items-center pb-3 mb-3 border-b border-slate-200'>
+                {/* Header Section */}
+                <div className='font-bold text-slate-800'>
+                  {contentType === "dailyVocabulary" ? (
+                    <span className='text-indigo-600'>Vocabulary</span>
+                  ) : (
+                    <span className='text-emerald-600'>{item.category}</span>
+                  )}
+                </div>
+                {/* Action Buttons */}
+                <div className='flex items-center gap-2'>
                   <button
                     onClick={() => onEdit(item)}
                     className='text-sm font-medium text-blue-600 hover:text-blue-800'
@@ -148,49 +157,63 @@ export default function ContentList({ initialContent, contentType, onEdit }) {
                     Delete
                   </button>
                 </div>
-                {contentType === "dailyVocabulary" ? (
-                  <div className='grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2'>
+              </div>
+
+              {/* Content Section */}
+              {contentType === "dailyVocabulary" ? (
+                <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+                  <div>
+                    <label className='block text-sm font-medium text-slate-600 mb-1'>
+                      Word
+                    </label>
                     <div
-                      className='border rounded-md p-2 bg-slate-50'
+                      className='h-40 border rounded-lg p-2 bg-slate-50 [&>svg]:w-full [&>svg]:h-full [&>svg]:object-contain'
                       dangerouslySetInnerHTML={{ __html: item.wordSvgCode }}
                     />
+                  </div>
+                  <div>
+                    <label className='block text-sm font-medium text-slate-600 mb-1'>
+                      Meaning
+                    </label>
                     <div
-                      className='border rounded-md p-2 bg-slate-50'
+                      className='h-40 border rounded-lg p-2 bg-slate-50 [&>svg]:w-full [&>svg]:h-full [&>svg]:object-contain'
                       dangerouslySetInnerHTML={{ __html: item.meaningSvgCode }}
                     />
                   </div>
-                ) : (
-                  <div>
-                    <p className='font-semibold text-slate-800'>
-                      {item.category}
-                    </p>
-                    <div
-                      className='mt-2 border rounded-md p-2 bg-slate-50'
-                      dangerouslySetInnerHTML={{ __html: item.contentSvgCode }}
-                    />
-                  </div>
-                )}
-              </div>
-            ))
-          ) : (
-            <p className='text-center p-8 text-slate-700'>
-              No content added yet.
+                </div>
+              ) : (
+                <div>
+                  <label className='block text-sm font-medium text-slate-600 mb-1'>
+                    Content
+                  </label>
+                  <div
+                    className='h-48 border rounded-lg p-2 bg-slate-50 [&>svg]:w-full [&>svg]:h-full [&>svg]:object-contain'
+                    dangerouslySetInnerHTML={{ __html: item.contentSvgCode }}
+                  />
+                </div>
+              )}
+            </div>
+          ))
+        ) : (
+          <div className='text-center p-12 bg-white border border-dashed rounded-xl'>
+            <p className='text-slate-700 font-medium'>
+              No content has been added for this category yet.
             </p>
-          )}
-        </div>
-
-        {hasMore && (
-          <div className='text-center pt-6 mt-6 border-t border-slate-200'>
-            <button
-              onClick={() => loadMoreContent(false)}
-              disabled={loadingMore}
-              className='px-6 py-2 bg-slate-200 text-slate-800 font-semibold rounded-lg hover:bg-slate-300'
-            >
-              {loadingMore ? "Loading..." : "Load More"}
-            </button>
           </div>
         )}
       </div>
+
+      {hasMore && (
+        <div className='text-center pt-6 mt-6'>
+          <button
+            onClick={() => loadMoreContent(false)}
+            disabled={loadingMore}
+            className='px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400'
+          >
+            {loadingMore ? "Loading..." : "Load More"}
+          </button>
+        </div>
+      )}
     </>
   );
 }

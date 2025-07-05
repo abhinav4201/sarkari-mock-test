@@ -6,6 +6,7 @@ import ContentList from "@/components/admin/ContentList";
 import Modal from "@/components/ui/Modal";
 import EditContentForm from "@/components/admin/EditContentForm";
 import { useRouter } from "next/navigation";
+import BulkDailyContentUploader from "@/components/admin/BulkDailyContentUploader"; // New Import
 
 export default function DailyContentPage() {
   const [view, setView] = useState("vocabulary");
@@ -23,12 +24,9 @@ export default function DailyContentPage() {
     setEditingContent(null);
   };
 
-  // After a successful edit, we can just close the modal.
-  // The ContentList itself doesn't need to be re-rendered from here.
   const handleUpdateSuccess = () => {
     handleCloseModal();
-    // We can optionally refresh the router if needed, but it may not be necessary
-    // router.refresh();
+    router.refresh(); // Refresh to see updated content
   };
 
   return (
@@ -51,15 +49,32 @@ export default function DailyContentPage() {
         <h1 className='text-3xl font-bold text-slate-900 mb-6'>
           Manage Daily Content
         </h1>
-        <div className='grid grid-cols-1 lg:grid-cols-2 gap-8 items-start'>
-          <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-lg'>
-            <DailyContentUploader uploadType='vocabulary' />
+        {/* Main grid for uploaders */}
+        <div className='grid grid-cols-1 lg:grid-cols-3 gap-8 items-start'>
+          {/* Column for individual uploaders */}
+          <div className='lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-8'>
+            <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-lg'>
+              <DailyContentUploader
+                uploadType='vocabulary'
+                onUploadSuccess={() => router.refresh()}
+              />
+            </div>
+            <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-lg'>
+              <DailyContentUploader
+                uploadType='gk'
+                onUploadSuccess={() => router.refresh()}
+              />
+            </div>
           </div>
-          <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-lg'>
-            <DailyContentUploader uploadType='gk' />
+          {/* Column for the new bulk uploader */}
+          <div className='lg:col-span-1 bg-white p-6 sm:p-8 rounded-2xl shadow-lg'>
+            <BulkDailyContentUploader
+              onUploadSuccess={() => router.refresh()}
+            />
           </div>
         </div>
 
+        {/* Section for previously added content */}
         <div className='mt-12'>
           <div className='flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-4'>
             <h2 className='text-2xl font-bold text-slate-900'>
@@ -76,7 +91,6 @@ export default function DailyContentPage() {
           </div>
 
           <div>
-            {/* The ContentList component now fetches its own data */}
             {view === "vocabulary" && (
               <ContentList
                 contentType='dailyVocabulary'
