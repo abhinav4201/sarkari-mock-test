@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { db } from "@/lib/firebase";
 import {
@@ -10,64 +9,54 @@ import {
   runTransaction,
   serverTimestamp,
 } from "firebase/firestore";
-import Papa from "papaparse"; // Import the Papaparse library
+import Papa from "papaparse";
 
-export default function BulkQuestionUploader({ testId }) {
+const textToSvg = (text) => {
+  const sanitizedText = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  const style = `font-family: Arial, sans-serif; font-size: 24px; fill: #1e293b;`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100"><text x="10" y="40" style="${style}">${sanitizedText}</text></svg>`;
+};
+
+export default function BulkQuestionUploader({ testId, onUploadSuccess }) {
   const [csvFile, setCsvFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
-  const router = useRouter();
 
-  const handleFileChange = (e) => {
-    setCsvFile(e.target.files[0]);
-  };
+  const handleFileChange = (e) => setCsvFile(e.target.files[0]);
 
   const handleUpload = () => {
-    if (!csvFile) {
-      toast.error("Please select a CSV file first.");
-      return;
-    }
-
+    if (!csvFile) return toast.error("Please select a CSV file first.");
     setIsUploading(true);
-    const loadingToast = toast.loading(
-      "Parsing CSV and uploading questions..."
-    );
+    const loadingToast = toast.loading("Uploading questions...");
 
-    // Use Papaparse to correctly read the CSV file
     Papa.parse(csvFile, {
-      header: true, // Treat the first row as headers
+      header: true,
       skipEmptyLines: true,
       complete: async (results) => {
         try {
-          // Check for parsing errors
-          if (results.errors.length > 0) {
-            console.error("CSV Parsing Errors:", results.errors);
-            throw new Error(
-              "Failed to parse CSV file. Please check the format."
-            );
-          }
-
           const questions = results.data.map((row) => {
-            // Validate each row to ensure all required columns are present
             if (
-              !row.questionSvgCode ||
+              (!row.questionText && !row.questionSvgCode) ||
               !row.option1 ||
-              !row.option2 ||
-              !row.option3 ||
               !row.option4 ||
               !row.correctAnswer
             ) {
               throw new Error(
-                "CSV is missing required columns in one or more rows. Please check your file against the template."
+                "CSV is missing required data in one or more rows. Please use the template."
               );
             }
+            const finalSvgCode = row.questionText
+              ? textToSvg(row.questionText)
+              : row.questionSvgCode;
             return {
-              questionSvgCode: row.questionSvgCode,
+              questionSvgCode: finalSvgCode,
               options: [row.option1, row.option2, row.option3, row.option4],
               correctAnswer: row.correctAnswer,
             };
           });
 
-          // Perform the database transaction directly on the client
           await runTransaction(db, async (transaction) => {
             const testRef = doc(db, "mockTests", testId);
             const testDoc = await transaction.get(testRef);
@@ -93,35 +82,31 @@ export default function BulkQuestionUploader({ testId }) {
             `Successfully uploaded ${questions.length} questions!`,
             { id: loadingToast }
           );
-          router.refresh();
-          
+          if (onUploadSuccess) onUploadSuccess();
         } catch (error) {
           toast.error(`Error: ${error.message}`, { id: loadingToast });
         } finally {
           setIsUploading(false);
           setCsvFile(null);
-          // Reset file input
           const fileInput = document.getElementById("csv-upload");
           if (fileInput) fileInput.value = "";
         }
       },
-      error: (error) => {
+      error: (error) =>
         toast.error(`CSV Parsing Error: ${error.message}`, {
           id: loadingToast,
-        });
-        setIsUploading(false);
-      },
+        }),
     });
   };
 
   const downloadTemplate = () => {
     const template =
-      'questionSvgCode,option1,option2,option3,option4,correctAnswer\n"<svg>Your SVG code here...</svg>","Option A","Option B","Option C","Option D","Option A"';
+      'questionText,questionSvgCode,option1,option2,option3,option4,correctAnswer\n"Fill this column OR the SVG code column","","Option A","Option B","Option C","Option D","Option A"\n"","<svg>Fill this column OR the text column</svg>","Option 1","Option 2","Option 3","Option 4","Option 2"';
     const blob = new Blob([template], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", "question_template.csv");
+    link.setAttribute("download", "question_template_hybrid.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -10,76 +10,98 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 
-export default function QuestionUploader({ testId }) {
-  const [questionSvgCode, setQuestionSvgCode] = useState("");
+// Helper function to convert plain text to a basic SVG image
+const textToSvg = (text) => {
+  const sanitizedText = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  const style = `font-family: Arial, sans-serif; font-size: 24px; fill: #1e293b;`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100"><text x="10" y="40" style="${style}">${sanitizedText}</text></svg>`;
+};
+
+export default function QuestionUploader({ testId, onUploadSuccess }) {
+  const [questionText, setQuestionText] = useState("");
+  const [questionSvgFile, setQuestionSvgFile] = useState(null);
   const [options, setOptions] = useState(["", "", "", ""]);
   const [correctAnswer, setCorrectAnswer] = useState("");
-  const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  const handleTextChange = (e) => {
+    setQuestionText(e.target.value);
+    if (e.target.value && questionSvgFile) {
+      setQuestionSvgFile(null);
+      const fileInput = document.getElementById("question-svg-upload");
+      if (fileInput) fileInput.value = "";
+    }
+  };
 
-  const router = useRouter();
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    setQuestionSvgFile(file);
+    if (file) {
+      setQuestionText("");
+    }
+  };
 
+  // THIS IS THE FIX: The missing function has been added back.
   const handleOptionChange = (index, value) => {
     const newOptions = [...options];
     newOptions[index] = value;
     setOptions(newOptions);
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        setQuestionSvgCode(evt.target.result);
-      };
-      reader.readAsText(file);
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!questionSvgCode || options.includes("") || !correctAnswer) {
-      setStatus("Error: Please select an SVG file and fill all fields.");
-      return;
+    if (
+      (!questionText && !questionSvgFile) ||
+      options.some((opt) => opt === "") ||
+      !correctAnswer
+    ) {
+      return toast.error(
+        "Please provide a Text Question OR an SVG file, and fill all options."
+      );
     }
     setIsLoading(true);
-    setStatus("Submitting...");
     const loadingToast = toast.loading("Adding question...");
 
     try {
-      // Run the transaction directly from the client
+      let finalSvgCode = "";
+      if (questionText) {
+        finalSvgCode = textToSvg(questionText);
+      } else if (questionSvgFile) {
+        finalSvgCode = await questionSvgFile.text();
+      }
+
       await runTransaction(db, async (transaction) => {
         const testRef = doc(db, "mockTests", testId);
         const testDoc = await transaction.get(testRef);
         if (!testDoc.exists()) throw new Error("Parent test does not exist!");
 
-        // Write 1: Create new question
         const newQuestionRef = doc(collection(db, "mockTestQuestions"));
         transaction.set(newQuestionRef, {
           testId,
-          questionSvgCode,
+          questionSvgCode: finalSvgCode,
           options,
           correctAnswer,
           createdAt: serverTimestamp(),
         });
 
-        // Write 2: Update the question count
         const newCount = (testDoc.data().questionCount || 0) + 1;
         transaction.update(testRef, { questionCount: newCount });
       });
 
       toast.success("Question added successfully!", { id: loadingToast });
       e.target.reset();
-      setQuestionSvgCode("");
+      setQuestionText("");
+      setQuestionSvgFile(null);
       setOptions(["", "", "", ""]);
       setCorrectAnswer("");
-      router.refresh();
-      if (onUploadSuccess) {
-        onUploadSuccess();
-      }
+      if (onUploadSuccess) onUploadSuccess();
     } catch (error) {
-      setStatus(`Error: ${error.message}`);
+      toast.error(`Error: ${error.message}`, { id: loadingToast });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -87,28 +109,48 @@ export default function QuestionUploader({ testId }) {
     <form onSubmit={handleSubmit} className='space-y-6'>
       <div>
         <label
-          htmlFor='question-svg'
-          className='block text-sm font-medium text-slate-800 mb-1'
+          htmlFor='question-text'
+          className='block text-sm font-medium text-slate-900 mb-1'
         >
-          Question SVG
+          Question (as Text)
         </label>
-        <input
-          id='question-svg'
-          type='file'
-          accept='image/svg+xml'
-          onChange={handleFileChange}
-          className='w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100'
-          required
+        <textarea
+          id='question-text'
+          value={questionText}
+          onChange={handleTextChange}
+          disabled={!!questionSvgFile}
+          placeholder='Type your question here...'
+          className='w-full p-3 border border-slate-300 rounded-lg disabled:bg-slate-100 disabled:cursor-not-allowed text-slate-900'
         />
-        {questionSvgCode && (
-          <p className='text-xs text-green-600 mt-1'>
-            SVG file loaded successfully.
-          </p>
-        )}
+      </div>
+
+      <div className='relative flex items-center'>
+        <div className='flex-grow border-t border-slate-300'></div>
+        <span className='flex-shrink mx-4 text-slate-500 font-semibold'>
+          OR
+        </span>
+        <div className='flex-grow border-t border-slate-300'></div>
       </div>
 
       <div>
-        <label className='block text-sm font-medium text-slate-800 mb-1'>
+        <label
+          htmlFor='question-svg-upload'
+          className='block text-sm font-medium text-slate-900 mb-1'
+        >
+          Question (as SVG File)
+        </label>
+        <input
+          id='question-svg-upload'
+          type='file'
+          accept='image/svg+xml'
+          onChange={handleFileChange}
+          disabled={!!questionText}
+          className='w-full text-sm text-slate-700 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100'
+        />
+      </div>
+
+      <div>
+        <label className='block text-sm font-medium text-slate-900 mb-1'>
           Options
         </label>
         {options.map((opt, index) => (
@@ -118,7 +160,7 @@ export default function QuestionUploader({ testId }) {
             value={opt}
             onChange={(e) => handleOptionChange(index, e.target.value)}
             placeholder={`Option ${index + 1}`}
-            className='w-full p-3 border border-slate-300 rounded-lg mb-2 text-slate-900 placeholder:text-slate-500'
+            className='w-full p-3 border border-slate-300 rounded-lg mb-2 text-slate-900'
             required
           />
         ))}
@@ -126,7 +168,7 @@ export default function QuestionUploader({ testId }) {
       <div>
         <label
           htmlFor='correct-answer'
-          className='block text-sm font-medium text-slate-800 mb-1'
+          className='block text-sm font-medium text-slate-900 mb-1'
         >
           Correct Answer
         </label>
@@ -152,21 +194,11 @@ export default function QuestionUploader({ testId }) {
       </div>
       <button
         type='submit'
-        className='w-full px-4 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700'
+        disabled={isLoading}
+        className='w-full px-4 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-green-400'
       >
-        Add Question
+        {isLoading ? "Adding..." : "Add Question"}
       </button>
-
-      {/* THIS IS THE FIX: The text color is now conditional */}
-      {status && (
-        <p
-          className={`mt-2 text-center text-sm font-medium ${
-            status.startsWith("Error:") ? "text-red-600" : "text-green-600"
-          }`}
-        >
-          {status}
-        </p>
-      )}
     </form>
   );
 }
