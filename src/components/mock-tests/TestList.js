@@ -2,37 +2,50 @@
 
 import { useState, useMemo, useEffect } from "react";
 import TestCard from "./TestCard";
-import { useAuth } from "@/context/AuthContext"; // Import the useAuth hook
+import { useAuth } from "@/context/AuthContext";
+import { db } from "@/lib/firebase";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import toast from "react-hot-toast";
 
 const PAGE_SIZE = 9;
 
 export default function TestList({ initialTests }) {
-  const { user } = useAuth(); // Get the current user
+  const { user } = useAuth();
   const [tests, setTests] = useState(initialTests);
   const [searchTerm, setSearchTerm] = useState("");
   const [hasMore, setHasMore] = useState(initialTests.length === PAGE_SIZE);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [takenTestIds, setTakenTestIds] = useState(new Set()); // State to store taken test IDs
+  const [takenTestIds, setTakenTestIds] = useState(new Set());
 
-  // THIS IS THE NEW LOGIC:
-  // When the component mounts and we have a user, fetch their taken tests.
+  // This effect fetches the user's completed tests directly from the browser
   useEffect(() => {
+    // Only run if a user is logged in
     if (user) {
       const fetchTakenTests = async () => {
         try {
-          const res = await fetch(`/api/users/${user.uid}/taken-tests`);
-          const ids = await res.json();
-          if (Array.isArray(ids)) {
-            setTakenTestIds(new Set(ids));
-          }
+          const resultsQuery = query(
+            collection(db, "mockTestResults"),
+            where("userId", "==", user.uid)
+          );
+          const resultsSnapshot = await getDocs(resultsQuery);
+
+          const ids = new Set();
+          resultsSnapshot.forEach((doc) => {
+            ids.add(doc.data().testId);
+          });
+          setTakenTestIds(ids);
         } catch (error) {
-          console.error("Could not fetch taken tests", error);
+          console.error("Could not fetch user's test history", error);
         }
       };
       fetchTakenTests();
+    } else {
+      // If the user logs out, clear the list of taken tests
+      setTakenTestIds(new Set());
     }
-  }, [user]);
+  }, [user]); // This will re-run whenever the user logs in or out
 
+  // Memoized filtering logic
   const filteredTests = useMemo(() => {
     if (!searchTerm) return tests;
     return tests.filter(
@@ -44,6 +57,7 @@ export default function TestList({ initialTests }) {
     );
   }, [searchTerm, tests]);
 
+  // Logic to load more public tests
   const loadMoreTests = async () => {
     if (!hasMore || loadingMore) return;
     setLoadingMore(true);
@@ -64,6 +78,7 @@ export default function TestList({ initialTests }) {
         setHasMore(false);
       }
     } catch (error) {
+      toast.error("Failed to load more tests.");
       console.error("Failed to load more tests", error);
     } finally {
       setLoadingMore(false);
@@ -82,7 +97,7 @@ export default function TestList({ initialTests }) {
         />
       </div>
 
-      {tests.length > 0 ? (
+      {initialTests.length > 0 ? (
         filteredTests.length > 0 ? (
           <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
             {filteredTests.map((test) => (
@@ -98,7 +113,7 @@ export default function TestList({ initialTests }) {
             <h3 className='text-2xl font-bold text-gray-800'>
               No Matching Tests Found
             </h3>
-            <p className='mt-2 text-gray-600'>
+            <p className='mt-2 text-gray-700'>
               Try adjusting your search term.
             </p>
           </div>
@@ -108,7 +123,7 @@ export default function TestList({ initialTests }) {
           <h3 className='text-2xl font-bold text-gray-800'>
             No Tests Available
           </h3>
-          <p className='mt-2 text-gray-600'>
+          <p className='mt-2 text-gray-700'>
             Our team is working on adding new tests. Please check back soon!
           </p>
         </div>

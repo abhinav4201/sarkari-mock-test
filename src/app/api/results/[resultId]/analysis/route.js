@@ -13,7 +13,7 @@ import { NextResponse } from "next/server";
 
 export async function GET(request, { params }) {
   try {
-    const { resultId } = params;
+    const { resultId } = await params;
     if (!resultId) {
       return NextResponse.json(
         { message: "Result ID is missing." },

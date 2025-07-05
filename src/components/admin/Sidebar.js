@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useAuth } from "@/context/AuthContext"; // Import useAuth to get the logout function
-import { LogOut } from "lucide-react"; // Import an icon for the button
+import { useAuth } from "@/context/AuthContext";
+import { LogOut } from "lucide-react";
 
 const adminLinks = [
   { name: "Dashboard", href: "/admin" },
@@ -14,7 +14,7 @@ const adminLinks = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { logOut } = useAuth(); // Get the logout function from your context
+  const { user, logOut } = useAuth(); // Get the user object
 
   const handleSignOut = async () => {
     try {
@@ -25,12 +25,7 @@ export default function Sidebar() {
   };
 
   return (
-    // The sidebar container with a solid background and full height
     <div className='bg-slate-900 text-slate-300 w-64 p-4 flex flex-col h-full'>
-      {/* THIS IS THE FIX:
-        The header section is now hidden on mobile (hidden) and only visible on desktop (md:flex).
-        This prevents two headers from showing on mobile devices.
-      */}
       <div className='hidden md:flex items-center mb-6 flex-shrink-0'>
         <Link
           href='/admin'
@@ -54,7 +49,6 @@ export default function Sidebar() {
         </Link>
       </div>
 
-      {/* Navigation links */}
       <nav className='flex-grow pt-12 md:pt-0'>
         {adminLinks.map((link) => (
           <Link
@@ -71,8 +65,17 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Logout Button at the bottom of the sidebar */}
+      {/* Logout Button and User Info at the bottom of the sidebar */}
       <div className='mt-6 pt-4 border-t border-slate-700'>
+        {/* THIS IS THE NEW CODE: It displays the logged-in user's email */}
+        {user && (
+          <div className='px-3 py-2 mb-2 text-center'>
+            <p className='text-sm font-medium text-white truncate'>
+              {user.displayName}
+            </p>
+            <p className='text-xs text-slate-400 truncate'>{user.email}</p>
+          </div>
+        )}
         <button
           onClick={handleSignOut}
           className='w-full flex items-center p-3 rounded-lg font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors'
