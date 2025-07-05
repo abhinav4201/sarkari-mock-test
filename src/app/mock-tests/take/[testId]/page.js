@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter, notFound } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
+import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import {
   collection,
   doc,
@@ -220,11 +221,9 @@ export default function TestTakingPage() {
                   of {questions.length}
                 </span>
               </h2>
-              <div
-                className='w-full h-auto border-2 border-slate-200 rounded-lg p-4 bg-slate-50 mb-6'
-                dangerouslySetInnerHTML={{
-                  __html: currentQuestion.questionSvgCode,
-                }}
+              <SvgDisplayer
+                svgCode={currentQuestion.questionSvgCode}
+                className='w-full h-auto min-h-[12rem] border-2 border-slate-200 rounded-lg p-4 bg-slate-50 mb-6 flex items-center'
               />
               <div className='space-y-4'>
                 {currentQuestion.options.map((option, index) => (

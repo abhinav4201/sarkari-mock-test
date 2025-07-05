@@ -7,6 +7,8 @@ import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { db } from "@/lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
+import SvgDisplayer from "@/components/ui/SvgDisplayer"; // NEW: Import SvgDisplayer
+import { XCircle } from "lucide-react"; // NEW: Import icon
 
 // TiptapToolbar can be reused here
 const TiptapToolbar = ({ editor }) => {
@@ -113,6 +115,9 @@ export default function EditPostForm({ post, onFormSubmit }) {
       reader.readAsText(file);
     }
   };
+  const handleRemoveImage = () => {
+    setFeaturedImageSvgCode("");
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -179,10 +184,20 @@ export default function EditPostForm({ post, onFormSubmit }) {
           className='w-full p-3 border text-slate-900 border-slate-300 rounded-lg'
         />
       </div>
-      <div>
+      <div className='flex justify-between items-center'>
         <label className='block text-sm font-medium text-slate-900 mb-1'>
           Featured Image SVG (Optional)
         </label>
+        {/* NEW: Remove button appears when there's an image */}
+        {featuredImageSvgCode && (
+          <button
+            type='button'
+            onClick={handleRemoveImage}
+            className='flex items-center text-sm font-medium text-red-600 hover:text-red-800'
+          >
+            <XCircle className='h-4 w-4 mr-1' /> Remove Image
+          </button>
+        )}
         <input
           type='file'
           accept='image/svg+xml'
@@ -195,8 +210,11 @@ export default function EditPostForm({ post, onFormSubmit }) {
           <label className='block text-sm font-medium text-slate-900'>
             Image Preview
           </label>
-          <div className='mt-1 border border-slate-300 rounded-lg p-2 h-40 overflow-auto bg-slate-50'>
-            <div dangerouslySetInnerHTML={{ __html: featuredImageSvgCode }} />
+          <div className='mt-1'>
+            <SvgDisplayer
+              svgCode={featuredImageSvgCode}
+              className='h-auto min-h-[10rem] border rounded-lg bg-slate-50 flex items-center'
+            />
           </div>
         </div>
       )}

@@ -1,10 +1,11 @@
 "use client";
 
 import { Book, Globe } from "lucide-react";
+import SvgDisplayer from "@/components/ui/SvgDisplayer"; // Import the smart displayer
 
 export default function DailyDose({ vocabulary, gk, isLoading }) {
   if (isLoading) {
-    // Updated skeleton to match the new design
+    // Skeleton loader remains the same and is a good representation
     return (
       <div className='space-y-8 animate-pulse'>
         {/* Vocabulary Skeleton */}
@@ -51,18 +52,20 @@ export default function DailyDose({ vocabulary, gk, isLoading }) {
               <h4 className='font-semibold text-slate-600 text-sm mb-2'>
                 Word
               </h4>
-              <div
-                className='h-24 p-2 bg-slate-50 rounded-lg [&>svg]:w-full [&>svg]:h-full [&>svg]:object-contain'
-                dangerouslySetInnerHTML={{ __html: vocabulary.wordSvgCode }}
+              {/* FIX: Replaced div with SvgDisplayer */}
+              <SvgDisplayer
+                svgCode={vocabulary.wordSvgCode}
+                className='h-auto min-h-[6rem] p-2 bg-slate-50 rounded-lg flex items-center'
               />
             </div>
             <div className='p-4 rounded-xl bg-white border border-slate-200 shadow-sm'>
               <h4 className='font-semibold text-slate-600 text-sm mb-2'>
                 Meaning
               </h4>
-              <div
-                className='h-24 p-2 bg-slate-50 rounded-lg [&>svg]:w-full [&>svg]:h-full [&>svg]:object-contain'
-                dangerouslySetInnerHTML={{ __html: vocabulary.meaningSvgCode }}
+              {/* FIX: Replaced div with SvgDisplayer */}
+              <SvgDisplayer
+                svgCode={vocabulary.meaningSvgCode}
+                className='h-auto min-h-[6rem] p-2 bg-slate-50 rounded-lg flex items-center'
               />
             </div>
           </div>
@@ -89,9 +92,10 @@ export default function DailyDose({ vocabulary, gk, isLoading }) {
               Topic:{" "}
               <span className='font-bold text-slate-800'>{gk.category}</span>
             </h4>
-            <div
-              className='h-32 mt-2 p-2 bg-slate-50 rounded-lg [&>svg]:w-full [&>svg]:h-full [&>svg]:object-contain'
-              dangerouslySetInnerHTML={{ __html: gk.contentSvgCode }}
+            {/* FIX: Replaced div with SvgDisplayer */}
+            <SvgDisplayer
+              svgCode={gk.contentSvgCode}
+              className='mt-2 h-auto min-h-[8rem] p-2 bg-slate-50 rounded-lg flex items-center'
             />
           </div>
         ) : (

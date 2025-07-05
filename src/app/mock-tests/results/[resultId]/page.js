@@ -16,6 +16,7 @@ import { useAuth } from "@/context/AuthContext";
 import toast from "react-hot-toast";
 import BackButton from "@/components/BackButton";
 import AdvancedAnalysis from "@/components/results/AdvancedAnalysis";
+import SvgDisplayer from "@/components/ui/SvgDisplayer"; 
 
 // Helper function to fetch all necessary data
 async function getResultData(resultId, userId) {
@@ -147,11 +148,9 @@ export default function ResultPage() {
                     <h3 className='font-bold text-lg text-slate-900'>
                       Question {index + 1}
                     </h3>
-                    <div
-                      className='w-full h-auto border-2 border-slate-200 rounded-lg p-4 bg-white my-4'
-                      dangerouslySetInnerHTML={{
-                        __html: question.questionSvgCode,
-                      }}
+                    <SvgDisplayer
+                      svgCode={question.questionSvgCode}
+                      className='w-full h-auto min-h-[10rem] border-2 border-slate-200 rounded-lg p-4 bg-white my-4 flex items-center'
                     />
                     <p className='mt-4 text-sm text-slate-700'>
                       Your answer:{" "}

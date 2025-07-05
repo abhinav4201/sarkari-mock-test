@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
+import SvgDisplayer from "@/components/ui/SvgDisplayer";
 
 // A simple toolbar for our editor (no changes needed here)
 const TiptapToolbar = ({ editor }) => {
@@ -230,8 +231,11 @@ export default function BlogEditor() {
           <label className='block text-sm font-medium text-slate-900'>
             Image Preview
           </label>
-          <div className='mt-1 border border-slate-300 rounded-lg p-2 h-40 overflow-auto bg-slate-50'>
-            <div dangerouslySetInnerHTML={{ __html: featuredImageSvgCode }} />
+          <div className='mt-1'>
+            <SvgDisplayer
+              svgCode={featuredImageSvgCode}
+              className='h-auto min-h-[10rem] border rounded-lg bg-slate-50 flex items-center'
+            />
           </div>
         </div>
       )}

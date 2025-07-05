@@ -6,18 +6,26 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
 import Modal from "@/components/ui/Modal";
-import EditPostForm from "./EditPostForm"; // <-- Import the new form
-import { db } from "@/lib/firebase"; // Import db
-import { doc, deleteDoc } from "firebase/firestore"; 
+import EditPostForm from "./EditPostForm";
+import { db } from "@/lib/firebase";
+import {
+  collection,
+  query,
+  orderBy,
+  startAfter,
+  limit,
+  getDocs,
+  doc,
+  deleteDoc,
+} from "firebase/firestore";
 
 const PAGE_SIZE = 5;
 
 export default function BlogHistoryList({ initialPosts }) {
   const [posts, setPosts] = useState(initialPosts);
+  // The 'lastDoc' state has been removed as it was unused.
   const [hasMore, setHasMore] = useState(initialPosts.length === PAGE_SIZE);
   const [loadingMore, setLoadingMore] = useState(false);
-
-  // State for modals
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [deletingPostId, setDeletingPostId] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -27,7 +35,37 @@ export default function BlogHistoryList({ initialPosts }) {
   const router = useRouter();
 
   const loadMorePosts = async () => {
-    toast("Load More functionality coming soon!");
+    if (!hasMore || loadingMore) return;
+    setLoadingMore(true);
+
+    try {
+      const postsRef = collection(db, "posts");
+      // The query correctly uses the 'createdAt' field from the last post object for pagination.
+      const q = query(
+        postsRef,
+        orderBy("createdAt", "desc"),
+        startAfter(posts[posts.length - 1].createdAt),
+        limit(PAGE_SIZE)
+      );
+
+      const snapshot = await getDocs(q);
+      const newPosts = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      if (newPosts.length > 0) {
+        setPosts((prev) => [...prev, ...newPosts]);
+      }
+      if (newPosts.length < PAGE_SIZE) {
+        setHasMore(false);
+      }
+    } catch (error) {
+      toast.error("Failed to load more posts.");
+      console.error(error);
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   const handleDeleteClick = (postId) => {
@@ -38,12 +76,10 @@ export default function BlogHistoryList({ initialPosts }) {
   const confirmDelete = async () => {
     setIsDeleting(true);
     try {
-      // Delete the document directly from the client
       const postRef = doc(db, "posts", deletingPostId);
       await deleteDoc(postRef);
-
       toast.success("Post deleted successfully!");
-      setPosts((prev) => prev.filter((p) => p.id !== deletingPostId)); // Update UI immediately
+      setPosts((prev) => prev.filter((p) => p.id !== deletingPostId));
     } catch (error) {
       toast.error(`Error: ${error.message}`);
     } finally {
@@ -81,7 +117,6 @@ export default function BlogHistoryList({ initialPosts }) {
         onClose={() => setIsEditModalOpen(false)}
         title='Edit Blog Post'
       >
-        {/* Replace the placeholder with the actual form */}
         {editingPost && (
           <EditPostForm post={editingPost} onFormSubmit={handleUpdateSuccess} />
         )}
@@ -101,7 +136,7 @@ export default function BlogHistoryList({ initialPosts }) {
                   </h3>
                   <p className='text-sm text-slate-900'>
                     Published on:{" "}
-                    {new Date(post.createdAt).toLocaleDateString()}
+                    {new Date(post.createdAt.toDate()).toLocaleDateString()}
                   </p>
                   <Link
                     href={`/blog/${post.slug}`}
