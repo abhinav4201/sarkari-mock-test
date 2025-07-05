@@ -1,10 +1,12 @@
-import { db } from "@/lib/firebase";
-import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
+"use client";
+
+import { useState, useEffect } from "react";
 import DailyDose from "@/components/dashboard/DailyDose";
 import WelcomeHeader from "@/components/dashboard/WelcomeHeader";
 import TestHistory from "@/components/dashboard/TestHistory";
+import { db } from "@/lib/firebase";
+import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 
-// Server-side function to get the latest vocabulary
 async function getDailyVocabulary() {
   const q = query(
     collection(db, "dailyVocabulary"),
@@ -13,10 +15,11 @@ async function getDailyVocabulary() {
   );
   const snapshot = await getDocs(q);
   if (snapshot.empty) return null;
-  return snapshot.docs[0].data();
+  const data = snapshot.docs[0].data();
+  // We don't need to serialize timestamps here as this function is now only called on the client
+  return data;
 }
 
-// Server-side function to get the latest GK
 async function getDailyGk() {
   const q = query(
     collection(db, "dailyGk"),
@@ -25,13 +28,33 @@ async function getDailyGk() {
   );
   const snapshot = await getDocs(q);
   if (snapshot.empty) return null;
-  return snapshot.docs[0].data();
+  const data = snapshot.docs[0].data();
+  return data;
 }
 
-export default async function DashboardPage() {
-  // Fetch data on the server
-  const vocabulary = await getDailyVocabulary();
-  const gk = await getDailyGk();
+export default function DashboardPage() {
+  const [vocabulary, setVocabulary] = useState(null);
+  const [gk, setGk] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const [vocabData, gkData] = await Promise.all([
+          getDailyVocabulary(),
+          getDailyGk(),
+        ]);
+        setVocabulary(vocabData);
+        setGk(gkData);
+      } catch (error) {
+        console.error("Failed to load dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, []);
 
   return (
     <div className='bg-slate-100 min-h-screen'>
@@ -51,12 +74,12 @@ export default async function DashboardPage() {
           {/* Side Column */}
           <div className='lg:col-span-1'>
             <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-slate-200'>
-              <DailyDose vocabulary={vocabulary} gk={gk} />
+              {/* The DailyDose component now handles the loading state */}
+              <DailyDose vocabulary={vocabulary} gk={gk} isLoading={loading} />
             </div>
           </div>
         </div>
       </div>
     </div>
   );
-
 }
