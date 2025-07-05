@@ -1,18 +1,29 @@
 "use client";
 
-import ConfirmationModal from "@/components/ui/ConfirmationModal"; // <-- Import new modal
+import ConfirmationModal from "@/components/ui/ConfirmationModal";
 import { db } from "@/lib/firebase";
-import { deleteDoc, doc } from "firebase/firestore";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  startAfter,
+} from "firebase/firestore";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
 const PAGE_SIZE = 5;
 
 export default function ContentList({ initialContent, contentType, onEdit }) {
   const [content, setContent] = useState(initialContent);
-  const [hasMore, setHasMore] = useState(initialContent.length === PAGE_SIZE);
+  const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [lastDoc, setLastDoc] = useState(null);
 
   // State for the delete confirmation modal
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -21,23 +32,66 @@ export default function ContentList({ initialContent, contentType, onEdit }) {
 
   const router = useRouter();
 
-  const loadMore = async () => {
-    toast.info("Load More functionality coming soon!");
-  };
+  useEffect(() => {
+    setContent(initialContent);
+  }, [initialContent]);
 
-  // This function now just opens the confirmation modal
+  const loadMoreContent = useCallback(
+    async (initialLoad = false) => {
+      if (!hasMore && !initialLoad) return;
+      if (initialLoad) setLoading(true);
+      else setLoadingMore(true);
+
+      try {
+        const contentRef = collection(db, contentType);
+        let q;
+        const queryConstraints = [
+          orderBy("createdAt", "desc"),
+          limit(PAGE_SIZE),
+        ];
+
+        if (!initialLoad && lastDoc) {
+          q = query(contentRef, ...queryConstraints, startAfter(lastDoc));
+        } else {
+          q = query(contentRef, ...queryConstraints);
+        }
+
+        const snapshot = await getDocs(q);
+        const newContent = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        setContent((prev) =>
+          initialLoad ? newContent : [...prev, ...newContent]
+        );
+        setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+        setHasMore(newContent.length === PAGE_SIZE);
+      } catch (error) {
+        toast.error("Failed to load content.");
+        console.error("Failed to load content", error);
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [contentType, lastDoc, hasMore]
+  );
+
+  // Initial data fetch
+  useEffect(() => {
+    loadMoreContent(true);
+  }, [contentType]); // Re-fetch if the content type changes (e.g., switching tabs)
+
   const handleDeleteClick = (contentId) => {
     setDeletingContentId(contentId);
     setIsConfirmModalOpen(true);
   };
 
-  // This function contains the actual deletion logic
   const confirmDelete = async () => {
     setIsDeleting(true);
     try {
-      // Delete the document directly from the client
       await deleteDoc(doc(db, contentType, deletingContentId));
-
       toast.success("Item deleted!");
       setContent((prev) =>
         prev.filter((item) => item.id !== deletingContentId)
@@ -51,15 +105,18 @@ export default function ContentList({ initialContent, contentType, onEdit }) {
     }
   };
 
+  if (loading) {
+    return <div className='text-center p-8'>Loading content...</div>;
+  }
+
   return (
     <>
-      {/* Delete Confirmation Modal */}
       <ConfirmationModal
         isOpen={isConfirmModalOpen}
         onClose={() => setIsConfirmModalOpen(false)}
         onConfirm={confirmDelete}
         title='Delete Content'
-        message='Are you sure you want to permanently delete this item? This action cannot be undone.'
+        message='Are you sure you want to permanently delete this item?'
         confirmText='Delete'
         isLoading={isDeleting}
       />
@@ -91,8 +148,6 @@ export default function ContentList({ initialContent, contentType, onEdit }) {
                     Delete
                   </button>
                 </div>
-
-                {/* THIS IS THE CORRECTED CODE */}
                 {contentType === "dailyVocabulary" ? (
                   <div className='grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2'>
                     <div
@@ -127,7 +182,7 @@ export default function ContentList({ initialContent, contentType, onEdit }) {
         {hasMore && (
           <div className='text-center pt-6 mt-6 border-t border-slate-200'>
             <button
-              onClick={loadMore}
+              onClick={() => loadMoreContent(false)}
               disabled={loadingMore}
               className='px-6 py-2 bg-slate-200 text-slate-800 font-semibold rounded-lg hover:bg-slate-300'
             >

@@ -1,3 +1,7 @@
+"use client"; // This converts the page to a Client Component
+
+import { useState, useEffect } from "react";
+import { useParams, notFound, useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
 import {
   doc,
@@ -7,15 +11,21 @@ import {
   where,
   getDocs,
 } from "firebase/firestore";
-import { notFound } from "next/navigation";
 import Link from "next/link";
+import { useAuth } from "@/context/AuthContext";
+import toast from "react-hot-toast";
 import BackButton from "@/components/BackButton";
 import AdvancedAnalysis from "@/components/results/AdvancedAnalysis";
 
-async function getResultData(resultId) {
+// Helper function to fetch all necessary data
+async function getResultData(resultId, userId) {
   const resultRef = doc(db, "mockTestResults", resultId);
   const resultSnap = await getDoc(resultRef);
-  if (!resultSnap.exists()) return null;
+
+  if (!resultSnap.exists() || resultSnap.data().userId !== userId) {
+    // Return null if result doesn't exist or doesn't belong to the user
+    return null;
+  }
 
   const resultData = resultSnap.data();
 
@@ -33,14 +43,66 @@ async function getResultData(resultId) {
   return { ...resultData, questions };
 }
 
-export default async function ResultPage({ params }) {
-  const { resultId } = await params; // Await params to resolve the promise
-  const result = await getResultData(resultId);
+export default function ResultPage() {
+  const params = useParams();
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const resultId = params.resultId;
 
-  if (!result) notFound();
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Wait until Firebase has confirmed the user's auth status
+    if (authLoading) {
+      return;
+    }
+    // If there's no user, they can't view this page
+    if (!user) {
+      toast.error("You must be logged in to view results.");
+      router.push("/mock-tests");
+      return;
+    }
+
+    const loadResult = async () => {
+      setLoading(true);
+      const resultData = await getResultData(resultId, user.uid);
+
+      if (!resultData) {
+        // This handles cases where the result doesn't exist or the user doesn't own it
+        toast.error("Could not find or access this test result.");
+        router.push("/dashboard");
+        return;
+      }
+      setResult(resultData);
+      setLoading(false);
+    };
+
+    if (resultId && user) {
+      loadResult();
+    }
+  }, [resultId, user, authLoading, router]);
+
+  if (loading || authLoading) {
+    return (
+      <div className='text-center p-12 text-lg font-medium'>
+        Loading Your Results...
+      </div>
+    );
+  }
+
+  if (!result) {
+    // This state is reached if the result was not found or access was denied.
+    return (
+      <div className='text-center p-12 text-lg font-medium'>
+        Could not display results.
+      </div>
+    );
+  }
 
   const { score, totalQuestions, answers, questions } = result;
-  const percentage = Math.round((score / totalQuestions) * 100);
+  const percentage =
+    totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0;
 
   return (
     <div className='bg-slate-100 min-h-screen py-12 md:py-20'>
@@ -50,7 +112,6 @@ export default async function ResultPage({ params }) {
             Test Result
           </h1>
 
-          {/* Score Summary */}
           <div className='text-center my-10 p-8 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-2xl shadow-lg'>
             <p className='text-lg opacity-80'>You Scored</p>
             <p className='text-6xl font-extrabold my-2'>
@@ -60,10 +121,10 @@ export default async function ResultPage({ params }) {
             <p className='text-2xl font-semibold bg-white/20 px-4 py-1 inline-block rounded-full'>
               {percentage}%
             </p>
+            {/* The AdvancedAnalysis component will need to be a client component that fetches its own data */}
             <AdvancedAnalysis resultId={resultId} />
           </div>
 
-          {/* Question by Question Review */}
           <div className='mt-12'>
             <h2 className='text-2xl font-bold mb-6 text-slate-900'>
               Detailed Review
@@ -71,7 +132,7 @@ export default async function ResultPage({ params }) {
             <div className='space-y-8'>
               {Object.keys(questions).map((questionId, index) => {
                 const question = questions[questionId];
-                const userAnswer = answers[questionId]; // { answer, timeTaken }
+                const userAnswer = answers[questionId];
                 const isCorrect = userAnswer?.answer === question.correctAnswer;
 
                 return (

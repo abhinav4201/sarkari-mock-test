@@ -15,6 +15,9 @@ export default function QuestionUploader({ testId }) {
   const [options, setOptions] = useState(["", "", "", ""]);
   const [correctAnswer, setCorrectAnswer] = useState("");
   const [status, setStatus] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+
   const router = useRouter();
 
   const handleOptionChange = (index, value) => {
@@ -40,7 +43,9 @@ export default function QuestionUploader({ testId }) {
       setStatus("Error: Please select an SVG file and fill all fields.");
       return;
     }
+    setIsLoading(true);
     setStatus("Submitting...");
+    const loadingToast = toast.loading("Adding question...");
 
     try {
       // Run the transaction directly from the client
@@ -64,12 +69,15 @@ export default function QuestionUploader({ testId }) {
         transaction.update(testRef, { questionCount: newCount });
       });
 
-      setStatus("Question added successfully!");
+      toast.success("Question added successfully!", { id: loadingToast });
       e.target.reset();
       setQuestionSvgCode("");
       setOptions(["", "", "", ""]);
       setCorrectAnswer("");
       router.refresh();
+      if (onUploadSuccess) {
+        onUploadSuccess();
+      }
     } catch (error) {
       setStatus(`Error: ${error.message}`);
     }

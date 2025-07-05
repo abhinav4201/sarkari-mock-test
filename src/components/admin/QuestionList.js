@@ -2,50 +2,33 @@
 
 import { useState } from "react";
 import toast from "react-hot-toast";
-import { useRouter } from "next/navigation";
 import Modal from "@/components/ui/Modal";
 import EditQuestionForm from "./EditQuestionForm";
-import ConfirmationModal from "@/components/ui/ConfirmationModal"; // <-- Import the confirmation modal
+import ConfirmationModal from "@/components/ui/ConfirmationModal";
 import { db } from "@/lib/firebase";
-import { doc, runTransaction } from "firebase/firestore";
+import { doc, runTransaction, deleteDoc } from "firebase/firestore";
 
-export default function QuestionList({ initialQuestions, testId }) {
-  // State for the edit modal
+export default function QuestionList({ questions, testId, onDataChange }) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
-
-  // State for the delete confirmation modal
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [deletingQuestionId, setDeletingQuestionId] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const router = useRouter();
-
-  // This function opens the confirmation modal instead of deleting directly
-  const handleDeleteClick = (questionId) => {
-    setDeletingQuestionId(questionId);
-    setIsConfirmModalOpen(true);
-  };
-
-  // This function contains the actual deletion logic, called by the modal
   const confirmDelete = async () => {
     setIsDeleting(true);
     try {
-      // Run the delete transaction directly from the client
       await runTransaction(db, async (transaction) => {
         const testRef = doc(db, "mockTests", testId);
         const questionRef = doc(db, "mockTestQuestions", deletingQuestionId);
-
         const testDoc = await transaction.get(testRef);
         if (!testDoc.exists()) throw new Error("Parent test does not exist!");
-
         transaction.delete(questionRef);
         const newCount = Math.max(0, (testDoc.data().questionCount || 0) - 1);
         transaction.update(testRef, { questionCount: newCount });
       });
-
       toast.success("Question deleted!");
-      router.refresh();
+      onDataChange();
     } catch (error) {
       toast.error(`Error: ${error.message}`);
     } finally {
@@ -55,21 +38,24 @@ export default function QuestionList({ initialQuestions, testId }) {
     }
   };
 
-  // --- Edit Handlers ---
+  const handleUpdateSuccess = () => {
+    setIsEditModalOpen(false);
+    setEditingQuestion(null);
+    onDataChange();
+  };
+
+  const handleDeleteClick = (questionId) => {
+    setDeletingQuestionId(questionId);
+    setIsConfirmModalOpen(true);
+  };
+
   const handleEdit = (question) => {
     setEditingQuestion(question);
     setIsEditModalOpen(true);
   };
 
-  const handleUpdateSuccess = () => {
-    setIsEditModalOpen(false);
-    setEditingQuestion(null);
-    router.refresh();
-  };
-
   return (
     <>
-      {/* Edit Modal */}
       <Modal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
@@ -82,21 +68,19 @@ export default function QuestionList({ initialQuestions, testId }) {
           />
         )}
       </Modal>
-
-      {/* Delete Confirmation Modal */}
       <ConfirmationModal
         isOpen={isConfirmModalOpen}
         onClose={() => setIsConfirmModalOpen(false)}
         onConfirm={confirmDelete}
         title='Delete Question'
-        message='Are you sure you want to permanently delete this question? This action cannot be undone.'
+        message='Are you sure you want to permanently delete this question?'
         confirmText='Delete'
         isLoading={isDeleting}
       />
 
       <div className='space-y-6'>
-        {initialQuestions.length > 0 ? (
-          initialQuestions.map((q, index) => (
+        {questions && questions.length > 0 ? (
+          questions.map((q, index) => (
             <div
               key={q.id}
               className='p-4 border border-slate-200 rounded-lg bg-white'

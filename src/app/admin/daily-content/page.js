@@ -1,62 +1,18 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import DailyContentUploader from "@/components/admin/DailyContentUploader";
 import ContentList from "@/components/admin/ContentList";
 import Modal from "@/components/ui/Modal";
 import EditContentForm from "@/components/admin/EditContentForm";
-import { db } from "@/lib/firebase";
-import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
-
-// Helper function remains outside the component for clarity
-async function getInitialContent(collectionName) {
-  const contentRef = collection(db, collectionName);
-  const q = query(contentRef, orderBy("createdAt", "desc"), limit(5));
-  const snapshot = await getDocs(q);
-
-  return snapshot.docs.map((doc) => {
-    const data = doc.data();
-    return {
-      id: doc.id,
-      ...data,
-      createdAt: data.createdAt ? data.createdAt.toMillis() : null,
-    };
-  });
-}
+import { useRouter } from "next/navigation";
 
 export default function DailyContentPage() {
-  const [view, setView] = useState("vocabulary"); // 'vocabulary' or 'gk'
-  const [vocab, setVocab] = useState([]);
-  const [gk, setGk] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  // State to manage the Edit Modal
+  const [view, setView] = useState("vocabulary");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingContent, setEditingContent] = useState(null);
+  const router = useRouter();
 
-  // Use useCallback to memoize the data loading function
-  const loadContent = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [vocabData, gkData] = await Promise.all([
-        getInitialContent("dailyVocabulary"),
-        getInitialContent("dailyGk"),
-      ]);
-      setVocab(vocabData);
-      setGk(gkData);
-    } catch (error) {
-      console.error("Failed to load content:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Load content on initial render
-  useEffect(() => {
-    loadContent();
-  }, [loadContent]);
-
-  // Function to open the modal with the correct item data
   const handleOpenEditModal = (content) => {
     setEditingContent(content);
     setIsModalOpen(true);
@@ -67,15 +23,16 @@ export default function DailyContentPage() {
     setEditingContent(null);
   };
 
-  // This function is called after a successful edit to refresh the data
+  // After a successful edit, we can just close the modal.
+  // The ContentList itself doesn't need to be re-rendered from here.
   const handleUpdateSuccess = () => {
     handleCloseModal();
-    loadContent(); // Refetch the data to show the changes
+    // We can optionally refresh the router if needed, but it may not be necessary
+    // router.refresh();
   };
 
   return (
     <>
-      {/* The Modal for editing content */}
       <Modal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
@@ -118,26 +75,18 @@ export default function DailyContentPage() {
             </select>
           </div>
 
-          {loading ? (
-            <div className='text-center p-8'>Loading content...</div>
-          ) : (
-            <div>
-              {view === "vocabulary" && (
-                <ContentList
-                  initialContent={vocab}
-                  contentType='dailyVocabulary'
-                  onEdit={handleOpenEditModal}
-                />
-              )}
-              {view === "gk" && (
-                <ContentList
-                  initialContent={gk}
-                  contentType='dailyGk'
-                  onEdit={handleOpenEditModal}
-                />
-              )}
-            </div>
-          )}
+          <div>
+            {/* The ContentList component now fetches its own data */}
+            {view === "vocabulary" && (
+              <ContentList
+                contentType='dailyVocabulary'
+                onEdit={handleOpenEditModal}
+              />
+            )}
+            {view === "gk" && (
+              <ContentList contentType='dailyGk' onEdit={handleOpenEditModal} />
+            )}
+          </div>
         </div>
       </div>
     </>

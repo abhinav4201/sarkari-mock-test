@@ -1,7 +1,3 @@
-// components/results/TimeAnalysis.js
-
-// --- UPDATED & MORE ROBUST FUNCTION ---
-// This now explicitly checks if 'seconds' is null or undefined before processing.
 const formatTime = (seconds) => {
   // If seconds is not a valid number (null, undefined, etc.), return '0s'.
   if (typeof seconds !== "number" || isNaN(seconds)) {

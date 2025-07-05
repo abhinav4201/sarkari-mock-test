@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import toast from "react-hot-toast"; // Import toast
+import toast from "react-hot-toast";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 export default function DailyContentUploader({ uploadType }) {
   const [svgCodes, setSvgCodes] = useState({});
   const [category, setCategory] = useState("");
-  const [isUploading, setIsUploading] = useState(false); // Changed from 'status'
+  const [isUploading, setIsUploading] = useState(false);
   const router = useRouter();
 
   const handleFileChange = (e) => {
@@ -30,25 +30,30 @@ export default function DailyContentUploader({ uploadType }) {
     setIsUploading(true);
     const loadingToast = toast.loading("Uploading content...");
 
-    const payload = {
-      /* ... create payload ... */
-    };
-
     try {
-      // Write directly to the correct collection from the client
+      // THIS IS THE FIX: We build the data object directly from state
+      // instead of using a faulty 'payload' variable.
       const collectionName =
         uploadType === "vocabulary" ? "dailyVocabulary" : "dailyGk";
       let dataToWrite;
+
       if (uploadType === "vocabulary") {
+        if (!svgCodes.wordSvg || !svgCodes.meaningSvg) {
+          throw new Error("Word SVG and Meaning SVG are both required.");
+        }
         dataToWrite = {
-          wordSvgCode: payload.svgCodes.wordSvg,
-          meaningSvgCode: payload.svgCodes.meaningSvg,
+          wordSvgCode: svgCodes.wordSvg,
+          meaningSvgCode: svgCodes.meaningSvg,
           createdAt: serverTimestamp(),
         };
       } else {
+        // GK upload
+        if (!svgCodes.contentSvg || !category) {
+          throw new Error("Content SVG and Category are both required.");
+        }
         dataToWrite = {
-          contentSvgCode: payload.svgCodes.contentSvg,
-          category: payload.category,
+          contentSvgCode: svgCodes.contentSvg,
+          category: category,
           createdAt: serverTimestamp(),
         };
       }
@@ -56,7 +61,10 @@ export default function DailyContentUploader({ uploadType }) {
       await addDoc(collection(db, collectionName), dataToWrite);
 
       toast.success("Content uploaded successfully!", { id: loadingToast });
-      // ... reset form state ...
+      e.target.reset();
+      setSvgCodes({});
+      setCategory("");
+      router.refresh(); // Refresh the page to show the newly added content
     } catch (error) {
       toast.error(`Error: ${error.message}`, { id: loadingToast });
     } finally {

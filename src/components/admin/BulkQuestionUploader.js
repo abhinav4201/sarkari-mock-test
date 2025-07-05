@@ -10,23 +10,7 @@ import {
   runTransaction,
   serverTimestamp,
 } from "firebase/firestore";
-
-// A simple, dependency-free CSV parser function
-const parseCSV = (csvText) => {
-  const lines = csvText.trim().split("\n");
-  const header = lines[0].split(",").map((h) => h.trim());
-  const data = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(",");
-    const row = {};
-    for (let j = 0; j < header.length; j++) {
-      row[header[j]] = values[j] ? values[j].trim().replace(/^"|"$/g, "") : "";
-    }
-    data.push(row);
-  }
-  return data;
-};
+import Papa from "papaparse"; // Import the Papaparse library
 
 export default function BulkQuestionUploader({ testId }) {
   const [csvFile, setCsvFile] = useState(null);
@@ -48,74 +32,98 @@ export default function BulkQuestionUploader({ testId }) {
       "Parsing CSV and uploading questions..."
     );
 
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      try {
-        const csvText = evt.target.result;
-        const parsedData = parseCSV(csvText);
-
-        const questions = parsedData.map((row) => {
-          if (
-            !row.questionSvgCode ||
-            !row.option1 ||
-            !row.option2 ||
-            !row.option3 ||
-            !row.option4 ||
-            !row.correctAnswer
-          ) {
+    // Use Papaparse to correctly read the CSV file
+    Papa.parse(csvFile, {
+      header: true, // Treat the first row as headers
+      skipEmptyLines: true,
+      complete: async (results) => {
+        try {
+          // Check for parsing errors
+          if (results.errors.length > 0) {
+            console.error("CSV Parsing Errors:", results.errors);
             throw new Error(
-              "CSV is missing required columns in one or more rows."
+              "Failed to parse CSV file. Please check the format."
             );
           }
-          return {
-            questionSvgCode: row.questionSvgCode,
-            options: [row.option1, row.option2, row.option3, row.option4],
-            correctAnswer: row.correctAnswer,
-          };
-        });
 
-        const res = await fetch("/api/admin/questions/bulk", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ testId, questions }),
-        });
+          const questions = results.data.map((row) => {
+            // Validate each row to ensure all required columns are present
+            if (
+              !row.questionSvgCode ||
+              !row.option1 ||
+              !row.option2 ||
+              !row.option3 ||
+              !row.option4 ||
+              !row.correctAnswer
+            ) {
+              throw new Error(
+                "CSV is missing required columns in one or more rows. Please check your file against the template."
+              );
+            }
+            return {
+              questionSvgCode: row.questionSvgCode,
+              options: [row.option1, row.option2, row.option3, row.option4],
+              correctAnswer: row.correctAnswer,
+            };
+          });
 
-        if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.message || "Bulk upload failed");
+          // Perform the database transaction directly on the client
+          await runTransaction(db, async (transaction) => {
+            const testRef = doc(db, "mockTests", testId);
+            const testDoc = await transaction.get(testRef);
+            if (!testDoc.exists())
+              throw new Error("Parent test does not exist!");
+
+            const questionsCollection = collection(db, "mockTestQuestions");
+            questions.forEach((q) => {
+              const newQuestionRef = doc(questionsCollection);
+              transaction.set(newQuestionRef, {
+                ...q,
+                testId,
+                createdAt: serverTimestamp(),
+              });
+            });
+
+            const newCount =
+              (testDoc.data().questionCount || 0) + questions.length;
+            transaction.update(testRef, { questionCount: newCount });
+          });
+
+          toast.success(
+            `Successfully uploaded ${questions.length} questions!`,
+            { id: loadingToast }
+          );
+          router.refresh();
+          if (onUploadSuccess) {
+            onUploadSuccess();}
+          
+        } catch (error) {
+          toast.error(`Error: ${error.message}`, { id: loadingToast });
+        } finally {
+          setIsUploading(false);
+          setCsvFile(null);
+          // Reset file input
+          const fileInput = document.getElementById("csv-upload");
+          if (fileInput) fileInput.value = "";
         }
-
-        const responseData = await res.json();
-        toast.success(
-          `Successfully uploaded ${responseData.uploadedCount} questions!`,
-          { id: loadingToast }
-        );
-        router.refresh();
-      } catch (error) {
-        toast.error(`Error: ${error.message}`, { id: loadingToast });
-      } finally {
+      },
+      error: (error) => {
+        toast.error(`CSV Parsing Error: ${error.message}`, {
+          id: loadingToast,
+        });
         setIsUploading(false);
-        setCsvFile(null);
-      }
-    };
-
-    reader.onerror = () => {
-      toast.error("Failed to read the selected file.", { id: loadingToast });
-      setIsUploading(false);
-    };
-
-    reader.readAsText(csvFile);
+      },
+    });
   };
 
   const downloadTemplate = () => {
     const template =
-      'questionSvgCode,option1,option2,option3,option4,correctAnswer\n"<svg>...</svg>","Option A","Option B","Option C","Option D","Option A"';
+      'questionSvgCode,option1,option2,option3,option4,correctAnswer\n"<svg>Your SVG code here...</svg>","Option A","Option B","Option C","Option D","Option A"';
     const blob = new Blob([template], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
     link.setAttribute("download", "question_template.csv");
-    link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
