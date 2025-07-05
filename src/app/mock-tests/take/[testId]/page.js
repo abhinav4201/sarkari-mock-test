@@ -1,33 +1,64 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, notFound } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { db } from "@/lib/firebase";
+import {
+  collection,
+  doc,
+  getDoc,
+  query,
+  where,
+  getDocs,
+  serverTimestamp,
+  addDoc,
+  runTransaction,
+} from "firebase/firestore";
+import toast from "react-hot-toast";
+
+// Helper function to fetch both test details and questions
+async function getTestData(testId) {
+  const testRef = doc(db, "mockTests", testId);
+  const questionsQuery = query(
+    collection(db, "mockTestQuestions"),
+    where("testId", "==", testId)
+  );
+
+  const [testSnap, questionsSnap] = await Promise.all([
+    getDoc(testRef),
+    getDocs(questionsQuery),
+  ]);
+
+  if (!testSnap.exists()) return null;
+
+  const testDetails = testSnap.data();
+  const questions = questionsSnap.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
+
+  return { testDetails, questions };
+}
 
 export default function TestTakingPage() {
+  const [testDetails, setTestDetails] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  // State for selected options remains the same
   const [selectedOptions, setSelectedOptions] = useState({});
   const [timeLeft, setTimeLeft] = useState(0);
-  const [testState, setTestState] = useState("loading"); // loading, in-progress, submitting, completed
-
-  // --- NEW STATE FOR TIME TRACKING ---
-  // 1. Tracks time spent on each question in seconds
+  const [testState, setTestState] = useState("loading");
   const [timePerQuestion, setTimePerQuestion] = useState({});
-  // 2. Stores the timestamp (Date.now()) when the current question was displayed
   const [questionStartTime, setQuestionStartTime] = useState(0);
+  const [loading,setLoading] = useState(false);
 
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const params = useParams();
   const { testId } = params;
 
-  // --- UPDATED SUBMISSION LOGIC ---
   const submitTest = useCallback(async () => {
     setTestState("submitting");
-
-    // 3. Before submitting, record the time spent on the very last question
     const lastQuestionId = questions[currentQuestionIndex]?.id;
     let finalTimePerQuestion = { ...timePerQuestion };
     if (lastQuestionId) {
@@ -36,40 +67,43 @@ export default function TestTakingPage() {
         (finalTimePerQuestion[lastQuestionId] || 0) + timeSpent;
     }
 
-    // 4. Combine the selected answers and the time spent into the final payload
     const finalAnswers = {};
     for (const qId in selectedOptions) {
       finalAnswers[qId] = {
         answer: selectedOptions[qId],
-        timeTaken: finalTimePerQuestion[qId] || 0, // Use recorded time, default to 0
+        timeTaken: finalTimePerQuestion[qId] || 0,
       };
     }
-    // Also include questions that were seen but not answered
     for (const qId in finalTimePerQuestion) {
       if (!finalAnswers[qId]) {
         finalAnswers[qId] = {
-          answer: null, // Mark as not answered
+          answer: null,
           timeTaken: finalTimePerQuestion[qId],
         };
       }
     }
 
     try {
-      const res = await fetch("/api/mock-tests/submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // 5. Send the new, detailed answers object
-        body: JSON.stringify({
-          userId: user.uid,
-          testId,
-          answers: finalAnswers,
-        }),
+      // Write the result directly to Firestore from the client
+      const resultRef = await addDoc(collection(db, "mockTestResults"), {
+        userId: user.uid,
+        testId,
+        answers: finalAnswers,
+        score: Object.values(finalAnswers).filter(
+          (a) =>
+            questions.find(
+              (q) =>
+                q.id ===
+                Object.keys(finalAnswers).find((k) => finalAnswers[k] === a)
+            )?.correctAnswer === a.answer
+        ).length,
+        totalQuestions: questions.length,
+        completedAt: serverTimestamp(),
       });
-      if (!res.ok) throw new Error("Failed to submit test.");
-      const result = await res.json();
-      router.push(`/mock-tests/results/${result.resultId}`);
+      router.push(`/mock-tests/results/${resultRef.id}`);
     } catch (error) {
       console.error(error);
+      toast.error("Failed to submit your test. Please try again.");
       setTestState("in-progress");
     }
   }, [
@@ -83,35 +117,36 @@ export default function TestTakingPage() {
     user,
   ]);
 
-  // Fetch test details and questions
   useEffect(() => {
-    const fetchTest = async () => {
-      try {
-        const testDetailsRes = await fetch(`/api/mock-tests/${testId}`);
-        if (!testDetailsRes.ok)
-          throw new Error("Could not fetch test details.");
-        const testDetails = await testDetailsRes.json();
-        setTimeLeft(testDetails.estimatedTime * 60);
-
-        const questionsRes = await fetch(`/api/mock-tests/${testId}/questions`);
-        if (!questionsRes.ok) throw new Error("Could not fetch questions.");
-        const questionsData = await questionsRes.json();
-
-        setQuestions(questionsData);
-        setTestState("in-progress");
-        // 6. Start the timer for the very first question
-        setQuestionStartTime(Date.now());
-      } catch (error) {
-        console.error("Failed to load test:", error);
-        setTestState("error");
-      }
-    };
-    if (testId) {
-      fetchTest();
+    if (authLoading) return;
+    if (!user) {
+      toast.error("You must be logged in to start a test.");
+      router.push(`/mock-tests/${testId}`);
+      return;
     }
-  }, [testId]);
 
-  // Countdown Timer Logic (no changes needed here)
+    const loadTest = async () => {
+      setLoading(true);
+      const data = await getTestData(testId);
+      if (!data) {
+        setTestState("error");
+        toast.error("Test not found.");
+        router.push("/mock-tests");
+        return;
+      }
+      setTestDetails(data.testDetails);
+      setQuestions(data.questions);
+      setTimeLeft(data.testDetails.estimatedTime * 60);
+      setTestState("in-progress");
+      setQuestionStartTime(Date.now());
+      setLoading(false);
+    };
+
+    if (testId && user) {
+      loadTest();
+    }
+  }, [testId, user, authLoading, router]);
+
   useEffect(() => {
     if (testState !== "in-progress" || timeLeft <= 0) {
       if (timeLeft <= 0 && testState === "in-progress") submitTest();
@@ -124,21 +159,14 @@ export default function TestTakingPage() {
     return () => clearInterval(timerId);
   }, [timeLeft, testState, submitTest]);
 
-  // --- NEW NAVIGATION FUNCTION ---
-  // 7. This function now handles time tracking when moving between questions
   const navigateToQuestion = (newIndex) => {
-    const timeSpent = (Date.now() - questionStartTime) / 1000; // time in seconds
+    const timeSpent = (Date.now() - questionStartTime) / 1000;
     const currentQuestionId = questions[currentQuestionIndex].id;
-
-    // Add the time spent to any existing time for that question (in case user goes back and forth)
-    setTimePerQuestion((prevTimes) => ({
-      ...prevTimes,
-      [currentQuestionId]: (prevTimes[currentQuestionId] || 0) + timeSpent,
+    setTimePerQuestion((prev) => ({
+      ...prev,
+      [currentQuestionId]: (prev[currentQuestionId] || 0) + timeSpent,
     }));
-
-    // Set the new question index
     setCurrentQuestionIndex(newIndex);
-    // Reset the start time for the new question
     setQuestionStartTime(Date.now());
   };
 
@@ -146,18 +174,24 @@ export default function TestTakingPage() {
     setSelectedOptions({ ...selectedOptions, [questionId]: option });
   };
 
-  // --- Rendering Logic (No major changes, just wiring up new functions) ---
-  if (testState === "loading") {
+  if (testState === "loading" || authLoading) {
     return (
       <div className='flex justify-center items-center h-screen bg-slate-100'>
-        <p>Preparing Your Test...</p>
+        <p className='text-lg font-medium text-slate-800'>
+          Preparing Your Test...
+        </p>
       </div>
     );
   }
   if (testState === "error") {
     return (
-      <div className='flex justify-center items-center h-screen bg-slate-100'>
-        <p>Failed to Load Test</p>
+      <div className='flex justify-center items-center h-screen bg-slate-100 text-center p-4'>
+        <div>
+          <p className='text-xl font-bold text-red-600'>Failed to Load Test</p>
+          <p className='text-slate-700 mt-2'>
+            This test may not exist or has no questions.
+          </p>
+        </div>
       </div>
     );
   }
@@ -169,18 +203,15 @@ export default function TestTakingPage() {
   return (
     <div className='bg-slate-100 min-h-screen flex flex-col items-center justify-center p-4'>
       <div className='w-full max-w-4xl'>
-        {/* Header */}
         <div className='bg-white p-4 rounded-t-2xl shadow-xl border-b border-slate-200 flex justify-between items-center sticky top-4 z-10'>
           <h1 className='text-lg md:text-xl font-bold text-slate-900 truncate'>
-            Mock Test in Progress
+            {testDetails?.title || "Mock Test"}
           </h1>
           <div className='text-2xl font-bold text-red-600 bg-red-100 px-4 py-1 rounded-full'>{`${minutes}:${
             seconds < 10 ? "0" : ""
           }${seconds}`}</div>
         </div>
-
         <div className='bg-white p-6 sm:p-8 rounded-b-2xl shadow-xl'>
-          {/* Question Area */}
           {currentQuestion ? (
             <div>
               <h2 className='text-lg font-semibold mb-4 text-slate-900'>
@@ -218,8 +249,6 @@ export default function TestTakingPage() {
               <p className='text-slate-800'>Loading questions...</p>
             </div>
           )}
-
-          {/* Navigation */}
           <div className='flex justify-between mt-10 pt-6 border-t border-slate-200'>
             <button
               onClick={() => navigateToQuestion(currentQuestionIndex - 1)}
