@@ -2,12 +2,11 @@
 import { useState, useEffect } from "react";
 import { X, CheckCircle, AlertTriangle, Info } from "lucide-react";
 
-// --- Reusable Toast Component ---
 const Toast = ({ message, type, onClose }) => {
   useEffect(() => {
     const timer = setTimeout(() => {
       onClose();
-    }, 5000); // Auto-close after 5 seconds
+    }, 5000);
 
     return () => clearTimeout(timer);
   }, [onClose]);
@@ -40,18 +39,17 @@ const Toast = ({ message, type, onClose }) => {
   );
 };
 
-// --- Enhanced Contact Page ---
 export default function ContactPage() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
+    phone: "",
     message: "",
   });
   const [errors, setErrors] = useState({});
-  const [status, setStatus] = useState({ type: "", message: "" }); // { type: 'success' | 'error' | 'loading', message: '...' }
+  const [status, setStatus] = useState({ type: "", message: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // List of disposable email domains to block
   const disposableEmailDomains = [
     "mailinator.com",
     "temp-mail.org",
@@ -61,12 +59,10 @@ export default function ContactPage() {
   const validateForm = () => {
     const newErrors = {};
 
-    // Name validation
     if (!formData.name.trim()) {
       newErrors.name = "Full name is required.";
     }
 
-    // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!formData.email.trim()) {
       newErrors.email = "Email address is required.";
@@ -78,7 +74,13 @@ export default function ContactPage() {
       newErrors.email = "Disposable email addresses are not allowed.";
     }
 
-    // Message validation
+    const phoneRegex = /^\d{10}$/;
+    if (!formData.phone.trim()) {
+      newErrors.phone = "Phone number is required.";
+    } else if (!phoneRegex.test(formData.phone.trim())) {
+      newErrors.phone = "Please enter a valid 10-digit phone number.";
+    }
+
     if (!formData.message.trim()) {
       newErrors.message = "Message is required.";
     } else if (formData.message.trim().length < 10) {
@@ -86,18 +88,25 @@ export default function ContactPage() {
     }
 
     setErrors(newErrors);
-    // Return true if there are no errors
     return Object.keys(newErrors).length === 0;
   };
 
+  // FIX: Updated this function to restrict input for the phone field
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    let { name, value } = e.target;
+
+    if (name === "phone") {
+      // Remove all non-digit characters
+      const numericValue = value.replace(/\D/g, "");
+      // Limit the length to 10 characters
+      value = numericValue.slice(0, 10);
+    }
+
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Clear previous errors and status
     setErrors({});
 
     if (!validateForm()) {
@@ -111,10 +120,10 @@ export default function ContactPage() {
     setIsSubmitting(true);
     setStatus({ type: "loading", message: "Sending your message..." });
 
-    // Sanitize data before sending
     const sanitizedData = {
       name: formData.name.trim(),
       email: formData.email.trim(),
+      phone: formData.phone.trim(),
       message: formData.message.trim(),
     };
 
@@ -130,7 +139,7 @@ export default function ContactPage() {
           type: "success",
           message: "Message sent successfully! We will get back to you soon.",
         });
-        setFormData({ name: "", email: "", message: "" }); // Clear form
+        setFormData({ name: "", email: "", phone: "", message: "" });
       } else {
         const errorData = await res.json();
         throw new Error(errorData.message || "Failed to send message.");
@@ -171,6 +180,7 @@ export default function ContactPage() {
                       id='name'
                       value={formData.name}
                       onChange={handleInputChange}
+                      required
                       className={`w-full p-3 border rounded-lg shadow-sm transition text-slate-900 ${
                         errors.name
                           ? "border-red-500 focus:ring-red-500 focus:border-red-500"
@@ -196,6 +206,7 @@ export default function ContactPage() {
                       id='email'
                       value={formData.email}
                       onChange={handleInputChange}
+                      required
                       className={`w-full p-3 border rounded-lg shadow-sm transition text-slate-900 ${
                         errors.email
                           ? "border-red-500 focus:ring-red-500 focus:border-red-500"
@@ -209,6 +220,37 @@ export default function ContactPage() {
                     )}
                   </div>
                 </div>
+
+                <div>
+                  <label
+                    htmlFor='phone'
+                    className='block text-sm font-medium text-slate-800'
+                  >
+                    Phone Number
+                  </label>
+                  <div className='mt-1'>
+                    <input
+                      type='tel'
+                      name='phone'
+                      id='phone'
+                      value={formData.phone}
+                      onChange={handleInputChange}
+                      required
+                      maxLength='10'
+                      className={`w-full p-3 border rounded-lg shadow-sm transition text-slate-900 ${
+                        errors.phone
+                          ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                          : "border-slate-300 focus:ring-indigo-500 focus:border-indigo-500"
+                      }`}
+                    />
+                    {errors.phone && (
+                      <p className='mt-2 text-sm text-red-600'>
+                        {errors.phone}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
                 <div>
                   <label
                     htmlFor='message'
@@ -223,6 +265,7 @@ export default function ContactPage() {
                       rows='4'
                       value={formData.message}
                       onChange={handleInputChange}
+                      required
                       className={`w-full p-3 border rounded-lg shadow-sm transition text-slate-900 ${
                         errors.message
                           ? "border-red-500 focus:ring-red-500 focus:border-red-500"
