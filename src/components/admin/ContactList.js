@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import toast from "react-hot-toast";
 import ConfirmationModal from "../ui/ConfirmationModal";
 import { db } from "@/lib/firebase";
@@ -13,6 +13,8 @@ import {
   startAfter,
   doc,
   deleteDoc,
+  where,
+  Timestamp,
 } from "firebase/firestore";
 
 const PAGE_SIZE = 10;
@@ -27,8 +29,7 @@ const formatDateForInput = (date) => {
 };
 
 export default function ContactList() {
-  const [allContacts, setAllContacts] = useState([]);
-  const [filteredContacts, setFilteredContacts] = useState([]);
+  const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // State for pagination
@@ -36,53 +37,49 @@ export default function ContactList() {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // State for date filters
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  // State for date filters, now defaulting to today
+  const [startDate, setStartDate] = useState(formatDateForInput(new Date()));
+  const [endDate, setEndDate] = useState(formatDateForInput(new Date()));
 
   // State for delete modal
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [deletingContactId, setDeletingContactId] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Effect to fetch initial data
-  useEffect(() => {
-    loadMoreContacts(true);
-  }, []);
-
-  // Effect to apply filters when dates or the main list change
-  useEffect(() => {
-    let results = allContacts;
-    if (startDate) {
-      const start = new Date(startDate).setHours(0, 0, 0, 0);
-      results = results.filter((contact) => contact.submittedAt >= start);
-    }
-    if (endDate) {
-      const end = new Date(endDate).setHours(23, 59, 59, 999);
-      results = results.filter((contact) => contact.submittedAt <= end);
-    }
-    setFilteredContacts(results);
-  }, [startDate, endDate, allContacts]);
-
-  const loadMoreContacts = async (initialLoad = false) => {
+  // This function now handles all data fetching with filters
+  const fetchContacts = useCallback(async (initialLoad = false) => {
     if (!hasMore && !initialLoad) return;
-    if (initialLoad) setLoading(true);
-    else setLoadingMore(true);
+
+    if (initialLoad) {
+      setLoading(true);
+      setContacts([]); // Clear previous results on new filter search
+    } else {
+      setLoadingMore(true);
+    }
 
     try {
       const contactsRef = collection(db, "contacts");
-      let q;
       const queryConstraints = [
         orderBy("submittedAt", "desc"),
         limit(PAGE_SIZE),
       ];
 
+      // Add date filters to the query
+      if (startDate) {
+        const start = Timestamp.fromDate(new Date(new Date(startDate).setHours(0, 0, 0, 0)));
+        queryConstraints.push(where("submittedAt", ">=", start));
+      }
+      if (endDate) {
+        const end = Timestamp.fromDate(new Date(new Date(endDate).setHours(23, 59, 59, 999)));
+        queryConstraints.push(where("submittedAt", "<=", end));
+      }
+      
+      // Add pagination cursor if it's not an initial load
       if (!initialLoad && lastDoc) {
-        q = query(contactsRef, ...queryConstraints, startAfter(lastDoc));
-      } else {
-        q = query(contactsRef, ...queryConstraints);
+        queryConstraints.push(startAfter(lastDoc));
       }
 
+      const q = query(contactsRef, ...queryConstraints);
       const snapshot = await getDocs(q);
       const newContacts = snapshot.docs.map((doc) => {
         const data = doc.data();
@@ -93,7 +90,7 @@ export default function ContactList() {
         };
       });
 
-      setAllContacts((prev) =>
+      setContacts((prev) =>
         initialLoad ? newContacts : [...prev, ...newContacts]
       );
       setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
@@ -105,10 +102,19 @@ export default function ContactList() {
       setLoading(false);
       setLoadingMore(false);
     }
-  };
+  }, [startDate, endDate, lastDoc, hasMore]);
+
+
+  // Re-fetch when date filters are applied by the user
+  useEffect(() => {
+    setHasMore(true); // Reset pagination state before fetching
+    setLastDoc(null);
+    fetchContacts(true); // Perform an initial load with the new filters
+  }, [startDate, endDate]);
+
 
   const handleDownloadCsv = () => {
-    if (filteredContacts.length === 0) {
+    if (contacts.length === 0) {
       toast.error("No data to download for the selected criteria.");
       return;
     }
@@ -116,7 +122,7 @@ export default function ContactList() {
     const headers = ["Name", "Email", "Message", "Date Submitted"];
     const csvRows = [
       headers.join(","),
-      ...filteredContacts.map((row) =>
+      ...contacts.map((row) =>
         [
           `"${(row.name || "").replace(/"/g, '""')}"`,
           `"${(row.email || "").replace(/"/g, '""')}"`,
@@ -131,10 +137,7 @@ export default function ContactList() {
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `contacts_${formatDateForInput(new Date())}.csv`
-    );
+    link.setAttribute("download", `contacts_${startDate}_to_${endDate}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -150,7 +153,7 @@ export default function ContactList() {
     try {
       await deleteDoc(doc(db, "contacts", deletingContactId));
       toast.success("Contact submission deleted!");
-      setAllContacts((prev) => prev.filter((c) => c.id !== deletingContactId));
+      setContacts((prev) => prev.filter((c) => c.id !== deletingContactId));
     } catch (error) {
       toast.error(`Error: ${error.message}`);
     } finally {
@@ -161,9 +164,8 @@ export default function ContactList() {
   };
 
   if (loading) {
-    return <div className='text-center p-8'>Loading contacts...</div>;
+    return <div className='text-center p-8'>Loading submissions for today...</div>;
   }
-
   return (
     <div>
       <ConfirmationModal
@@ -243,7 +245,7 @@ export default function ContactList() {
               </tr>
             </thead>
             <tbody>
-              {filteredContacts.map((contact) => (
+              {contacts.map((contact) => (
                 <tr key={contact.id} className='border-b border-slate-100'>
                   <td className='p-4 text-slate-800 align-top'>
                     {contact.name}
@@ -271,7 +273,7 @@ export default function ContactList() {
           </table>
         </div>
         <div className='md:hidden space-y-4'>
-          {filteredContacts.map((contact) => (
+          {contacts.map((contact) => (
             <div
               key={contact.id}
               className='p-4 border border-slate-200 rounded-lg bg-slate-50'
@@ -295,7 +297,7 @@ export default function ContactList() {
             </div>
           ))}
         </div>
-        {filteredContacts.length === 0 && (
+        {contacts.length === 0 && !loading && (
           <p className='text-center p-8 text-slate-700'>
             No submissions found for the selected criteria.
           </p>
@@ -304,7 +306,7 @@ export default function ContactList() {
         {hasMore && (
           <div className='text-center pt-6 mt-6 border-t border-slate-200'>
             <button
-              onClick={() => loadMoreContacts(false)}
+              onClick={() => fetchContacts(false)}
               disabled={loadingMore}
               className='px-6 py-2 bg-slate-200 text-slate-800 font-semibold rounded-lg hover:bg-slate-300 disabled:opacity-50'
             >
