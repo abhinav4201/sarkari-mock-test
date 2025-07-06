@@ -1,21 +1,21 @@
 "use client";
 
+import { auth, db } from "@/lib/firebase"; // NEW: Import 'db' from your firebase config
 import {
-  useContext,
-  createContext,
-  useState,
-  useEffect,
-  useMemo,
-  useCallback,
-} from "react";
-import {
+  GoogleAuthProvider,
+  onAuthStateChanged,
   signInWithPopup,
   signOut,
-  onAuthStateChanged,
-  GoogleAuthProvider,
 } from "firebase/auth";
-import { auth, db } from "@/lib/firebase"; // NEW: Import 'db' from your firebase config
-import { doc, setDoc, serverTimestamp } from "firebase/firestore"; // NEW: Import firestore functions
+import { doc, serverTimestamp, setDoc } from "firebase/firestore"; // NEW: Import firestore functions
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 const AuthContext = createContext();
 
@@ -38,6 +38,7 @@ export const AuthContextProvider = ({ children }) => {
         await setDoc(
           userRef,
           {
+            uid: loggedInUser.uid,
             name: loggedInUser.displayName,
             email: loggedInUser.email,
             lastLogin: serverTimestamp(), // Track the last login time
