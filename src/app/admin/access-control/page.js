@@ -147,9 +147,13 @@ const AccessManager = ({ test, onUpdate }) => {
   const handleGrantAccess = async () => {
     try {
       const testRef = doc(db, "mockTests", test.id);
-      await updateDoc(testRef, {
-        allowedUserIds: arrayUnion(foundUser.uid),
-      });
+      const isFirstUser =
+        !test.allowedUserIds || test.allowedUserIds.length === 0;
+      const dataToUpdate = { allowedUserIds: arrayUnion(foundUser.uid) };
+      if (isFirstUser) {
+        dataToUpdate.isRestricted = true;
+      }
+      await updateDoc(testRef, dataToUpdate);
       toast.success(`Access granted to ${foundUser.email}`);
       setFoundUser(null);
       setUserSearch("");
@@ -162,9 +166,13 @@ const AccessManager = ({ test, onUpdate }) => {
   const handleRevokeAccess = async (userToRevoke) => {
     try {
       const testRef = doc(db, "mockTests", test.id);
-      await updateDoc(testRef, {
-        allowedUserIds: arrayRemove(userToRevoke.uid),
-      });
+      const isLastUser =
+        test.allowedUserIds && test.allowedUserIds.length === 1;
+      const dataToUpdate = { allowedUserIds: arrayRemove(userToRevoke.uid) };
+      if (isLastUser) {
+        dataToUpdate.isRestricted = false;
+      }
+      await updateDoc(testRef, dataToUpdate);
       toast.success(`Access revoked for ${userToRevoke.email}`);
       onUpdate();
     } catch (error) {
@@ -282,7 +290,7 @@ export default function AccessControlPage() {
       try {
         setSelectedTest(JSON.parse(savedTestJson));
       } catch (e) {
-        console.error("Failed to parse saved test from cookie", e);
+        // console.error("Failed to parse saved test from cookie", e);
         Cookies.remove("selectedAccessControlTest");
       }
     }

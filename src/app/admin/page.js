@@ -1,24 +1,26 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import RestrictedTestsModal from "@/components/admin/RestrictedTestsModal";
+import StatCard from "@/components/admin/StatCard"; // Import new StatCard
+import TestListModal from "@/components/admin/TestListModal";
+import UserListModal from "@/components/admin/UserListModal"; // Import new Modal
 import { db } from "@/lib/firebase";
 import {
   collection,
   getDocs,
   query,
-  where,
   Timestamp,
+  where,
 } from "firebase/firestore";
 import {
   BarChart,
   FileText,
+  Lock,
   MessageSquare,
-  Users,
   UserCheck,
+  Users,
 } from "lucide-react";
-import StatCard from "@/components/admin/StatCard"; // Import new StatCard
-import UserListModal from "@/components/admin/UserListModal"; // Import new Modal
-import TestListModal from "@/components/admin/TestListModal"; 
+import { useEffect, useState } from "react";
 
 // Helper function to get counts
 const getCollectionCount = (collectionName) => {
@@ -37,6 +39,14 @@ const getTodaySubmissionsCount = () => {
   return getDocs(q).then((snap) => snap.size);
 };
 
+const getRestrictedTestCount = () => {
+  const q = query(
+    collection(db, "mockTests"),
+    where("isRestricted", "==", true)
+  );
+  return getDocs(q).then((snap) => snap.size);
+};
+
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState({
     postCount: 0,
@@ -48,6 +58,7 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false); // State for the modal
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
+  const [isRestrictedModalOpen, setIsRestrictedModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -58,12 +69,14 @@ export default function AdminDashboardPage() {
           contactCount,
           todaySubmissions,
           userCount,
+          restrictedTestCount,
         ] = await Promise.all([
           getCollectionCount("posts"),
           getCollectionCount("mockTests"),
           getCollectionCount("contacts"),
           getTodaySubmissionsCount(),
           getCollectionCount("users"), // Fetch user count
+          getRestrictedTestCount(),
         ]);
 
         setStats({
@@ -72,6 +85,7 @@ export default function AdminDashboardPage() {
           contactCount,
           todaySubmissions,
           userCount,
+          restrictedTestCount,
         });
       } catch (error) {
         console.error("Failed to fetch admin stats:", error);
@@ -94,12 +108,24 @@ export default function AdminDashboardPage() {
         isOpen={isTestModalOpen}
         onClose={() => setIsTestModalOpen(false)}
       />
+      <RestrictedTestsModal
+        isOpen={isRestrictedModalOpen}
+        onClose={() => setIsRestrictedModalOpen(false)}
+      />
 
       <div>
         <h1 className='text-3xl font-bold text-slate-900 mb-6'>
           Admin Dashboard
         </h1>
         <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6'>
+          {/* NEW: Added the new StatCard */}
+          <StatCard
+            title='Restricted Tests'
+            value={stats.restrictedTestCount}
+            icon={<Lock />}
+            isLoading={loading}
+            onClick={() => setIsRestrictedModalOpen(true)}
+          />
           {/* New "Total Users" StatCard */}
           <StatCard
             title='Total Users'
