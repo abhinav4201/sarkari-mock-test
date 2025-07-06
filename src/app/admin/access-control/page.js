@@ -15,8 +15,9 @@ import {
   limit,
 } from "firebase/firestore";
 import toast from "react-hot-toast";
-import { Search, UserPlus, Trash2 } from "lucide-react";
+import { Search, UserPlus, Trash2, StopCircle } from "lucide-react"; // Import new StopCircle icon
 import Cookies from "js-cookie";
+import BulkAccessManager from "@/components/admin/BulkAccessManager";
 
 const TestSelector = ({ onTestSelect }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -95,13 +96,9 @@ const AccessManager = ({ test, onUpdate }) => {
         setLoadingUsers(false);
         return;
       }
-
       try {
         const userIds = test.allowedUserIds;
         const fetchedUsers = [];
-
-        // FIX: Firestore 'in' queries only support 10 items per request.
-        // This logic breaks the user ID array into chunks of 10 to fetch them all.
         for (let i = 0; i < userIds.length; i += 10) {
           const chunk = userIds.slice(i, i + 10);
           const usersQuery = query(
@@ -111,7 +108,6 @@ const AccessManager = ({ test, onUpdate }) => {
           const snapshot = await getDocs(usersQuery);
           snapshot.forEach((doc) => fetchedUsers.push(doc.data()));
         }
-
         setAllowedUsers(fetchedUsers);
       } catch (error) {
         toast.error("Could not fetch allowed users.");
@@ -120,7 +116,6 @@ const AccessManager = ({ test, onUpdate }) => {
         setLoadingUsers(false);
       }
     };
-
     if (test?.id) {
       fetchAllowedUsers();
     }
@@ -204,20 +199,41 @@ const AccessManager = ({ test, onUpdate }) => {
               <Search />
             </button>
           </form>
+
+          {/* --- THIS IS THE UPDATED SECTION --- */}
           {foundUser && (
             <div className='mt-4 p-3 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center'>
               <div>
                 <p className='font-semibold text-slate-900'>{foundUser.name}</p>
                 <p className='text-sm text-slate-600'>{foundUser.email}</p>
               </div>
-              <button
-                onClick={handleGrantAccess}
-                className='p-2 bg-green-600 text-white rounded-lg hover:bg-green-700'
-              >
-                <UserPlus />
-              </button>
+
+              {/* Conditionally render the button */}
+              {allowedUsers.some((user) => user.uid === foundUser.uid) ? (
+                // If user is already in the list, show a disabled "stop" icon with a tooltip
+                <div className='relative group'>
+                  <button
+                    disabled
+                    className='p-2 bg-slate-400 text-white rounded-lg cursor-not-allowed'
+                  >
+                    <StopCircle />
+                  </button>
+                  <span className='absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-max px-2 py-1 bg-slate-700 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none'>
+                    Already Added
+                  </span>
+                </div>
+              ) : (
+                // Otherwise, show the normal "add" button
+                <button
+                  onClick={handleGrantAccess}
+                  className='p-2 bg-green-600 text-white rounded-lg hover:bg-green-700'
+                >
+                  <UserPlus />
+                </button>
+              )}
             </div>
           )}
+          {/* --- END OF UPDATED SECTION --- */}
         </div>
         <div>
           <h3 className='font-bold text-slate-800 mb-3'>
@@ -306,6 +322,7 @@ export default function AccessControlPage() {
       {selectedTest && (
         <AccessManager test={selectedTest} onUpdate={refreshSelectedTest} />
       )}
+      <BulkAccessManager onUpdate={refreshSelectedTest} />
     </div>
   );
 }
