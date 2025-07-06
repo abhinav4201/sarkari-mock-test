@@ -6,10 +6,12 @@ import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import toast from "react-hot-toast";
+import accessRules from "../../../public/access-rules.json";
 
 const PAGE_SIZE = 9;
 
 export default function TestList({ initialTests }) {
+  console.log("Access Rules Loaded:", accessRules);
   const { user } = useAuth();
   const [tests, setTests] = useState(initialTests);
   const [searchTerm, setSearchTerm] = useState("");
@@ -17,9 +19,7 @@ export default function TestList({ initialTests }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [takenTestIds, setTakenTestIds] = useState(new Set());
 
-  // This effect fetches the user's completed tests directly from the browser
   useEffect(() => {
-    // Only run if a user is logged in
     if (user) {
       const fetchTakenTests = async () => {
         try {
@@ -28,11 +28,9 @@ export default function TestList({ initialTests }) {
             where("userId", "==", user.uid)
           );
           const resultsSnapshot = await getDocs(resultsQuery);
-
-          const ids = new Set();
-          resultsSnapshot.forEach((doc) => {
-            ids.add(doc.data().testId);
-          });
+          const ids = new Set(
+            resultsSnapshot.docs.map((doc) => doc.data().testId)
+          );
           setTakenTestIds(ids);
         } catch (error) {
           console.error("Could not fetch user's test history", error);
@@ -40,24 +38,43 @@ export default function TestList({ initialTests }) {
       };
       fetchTakenTests();
     } else {
-      // If the user logs out, clear the list of taken tests
       setTakenTestIds(new Set());
     }
-  }, [user]); // This will re-run whenever the user logs in or out
+  }, [user]);
 
-  // Memoized filtering logic
+  // REFINED: Filtering logic is now in a single, easier-to-read block
   const filteredTests = useMemo(() => {
-    if (!searchTerm) return tests;
-    return tests.filter(
-      (test) =>
-        test.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        test.topic.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        test.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        test.examName.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [searchTerm, tests]);
+    return tests.filter((test) => {
+      // Condition 1: Does the test match the search term?
+      const matchesSearch = searchTerm
+        ? test.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          test.topic.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          test.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          test.examName.toLowerCase().includes(searchTerm.toLowerCase())
+        : true; // If no search term, everything matches
 
-  // Logic to load more public tests
+      if (!matchesSearch) {
+        return false;
+      }
+
+      // Condition 2: Does the user have access based on the rules?
+      const rule = accessRules[test.id];
+      const isPublic = !rule; // If no rule, it's a public test
+
+      if (isPublic) {
+        return true; // Show all public tests
+      }
+
+      // If we're here, the test is restricted. User must be logged in.
+      if (!user) {
+        return false;
+      }
+
+      // Finally, check if the logged-in user is in the allowed list
+      return rule.allowedUsers?.includes(user.uid);
+    });
+  }, [searchTerm, tests, user]);
+
   const loadMoreTests = async () => {
     if (!hasMore || loadingMore) return;
     setLoadingMore(true);
@@ -114,7 +131,8 @@ export default function TestList({ initialTests }) {
               No Matching Tests Found
             </h3>
             <p className='mt-2 text-gray-700'>
-              Try adjusting your search term.
+              Try adjusting your search term or check if tests are available for
+              your account.
             </p>
           </div>
         )
