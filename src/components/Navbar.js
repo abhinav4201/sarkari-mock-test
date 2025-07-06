@@ -75,13 +75,23 @@ export default function Navbar() {
     </Link>
   );
 
+  // FIX: Determine the logo's link based on the user's role
+  let logoHref = "/"; // Default for logged-out users
+  if (user) {
+    logoHref = user.email === adminEmail ? "/admin" : "/dashboard";
+  }
+
   return (
     <nav className='bg-white/95 backdrop-blur-md shadow-sm sticky top-0 z-50 border-b border-slate-200'>
       <div className='container mx-auto px-4 sm:px-6 lg:px-8'>
         <div className='flex justify-between items-center h-16'>
           {/* Logo */}
           <div className='flex-shrink-0'>
-            <Link href='/' className='text-2xl font-bold text-indigo-600'>
+            {/* Use the dynamic logoHref variable here */}
+            <Link
+              href={logoHref}
+              className='text-2xl font-bold text-indigo-600'
+            >
               Sarkari Mock Test
             </Link>
           </div>
