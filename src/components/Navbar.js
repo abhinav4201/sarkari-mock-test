@@ -28,50 +28,37 @@ export default function Navbar() {
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
-  // FIX: New "Home" link for logged-out users
+  // Text and hover colors updated for the new indigo theme
+  const linkClasses =
+    "block md:inline-block py-2 px-4 md:px-3 text-indigo-100 font-medium hover:text-white rounded-md transition-colors";
+  const activeLinkClasses = "bg-indigo-600 text-white";
+
   const homeLink = (
-    <Link
-      href='/'
-      className='block md:inline-block py-2 px-4 md:px-3 text-slate-200 font-medium hover:bg-slate-700 rounded-md'
-      onClick={closeMobileMenu}
-    >
+    <Link href='/' className={linkClasses} onClick={closeMobileMenu}>
       Home
     </Link>
   );
 
-  // Define link sets for different roles with updated text colors
   const publicLinks = (
     <>
-      <Link
-        href='/blog'
-        className='block md:inline-block py-2 px-4 md:px-3 text-slate-200 font-medium hover:bg-slate-700 rounded-md'
-        onClick={closeMobileMenu}
-      >
+      <Link href='/blog' className={linkClasses} onClick={closeMobileMenu}>
         Blog
       </Link>
       <Link
         href='/mock-tests'
-        className='block md:inline-block py-2 px-4 md:px-3 text-slate-200 font-medium hover:bg-slate-700 rounded-md'
+        className={linkClasses}
         onClick={closeMobileMenu}
       >
         Tests
       </Link>
-      <Link
-        href='/contact'
-        className='block md:inline-block py-2 px-4 md:px-3 text-slate-200 font-medium hover:bg-slate-700 rounded-md'
-        onClick={closeMobileMenu}
-      >
+      <Link href='/contact' className={linkClasses} onClick={closeMobileMenu}>
         Contact
       </Link>
     </>
   );
 
   const userLinks = (
-    <Link
-      href='/dashboard'
-      className='block md:inline-block py-2 px-4 md:px-3 text-slate-200 font-medium hover:bg-slate-700 rounded-md'
-      onClick={closeMobileMenu}
-    >
+    <Link href='/dashboard' className={linkClasses} onClick={closeMobileMenu}>
       Dashboard
     </Link>
   );
@@ -79,10 +66,10 @@ export default function Navbar() {
   const adminLinks = (
     <Link
       href='/admin'
-      className='block md:inline-block py-2 px-4 md:px-3 font-bold text-red-400 hover:bg-slate-700 rounded-md'
+      className='block md:inline-block py-2 px-4 md:px-3 font-bold text-red-400 hover:text-red-300 rounded-md'
       onClick={closeMobileMenu}
     >
-      Admin Dashboard
+      Admin Panel
     </Link>
   );
 
@@ -91,24 +78,18 @@ export default function Navbar() {
     logoHref = user.email === adminEmail ? "/admin" : "/dashboard";
   }
 
-  // FIX: Updated navbar color scheme to a dark theme
+  // FIX: Updated navbar color scheme to a vibrant indigo gradient
   return (
-    <nav className='bg-slate-800/95 backdrop-blur-md shadow-lg sticky top-0 z-50 border-b border-slate-700'>
+    <nav className='bg-gradient-to-r from-red-600 to-red-700 shadow-lg sticky top-0 z-50 border-b border-indigo-900/50'>
       <div className='container mx-auto px-4 sm:px-6 lg:px-8'>
         <div className='flex justify-between items-center h-16'>
-          {/* Logo */}
           <div className='flex-shrink-0'>
-            <Link
-              href={logoHref}
-              className='text-2xl font-bold text-indigo-400' // Lighter logo text
-            >
+            <Link href={logoHref} className='text-2xl font-bold text-white'>
               Sarkari Mock Test
             </Link>
           </div>
 
-          {/* Desktop Navigation */}
-          <div className='hidden md:flex md:items-center md:space-x-2 lg:space-x-4'>
-            {/* FIX: Conditionally render home link */}
+          <div className='hidden md:flex md:items-center md:space-x-1 lg:space-x-2'>
             {!user && homeLink}
             {publicLinks}
             {!loading &&
@@ -116,32 +97,30 @@ export default function Navbar() {
               (user.email === adminEmail ? adminLinks : userLinks)}
           </div>
 
-          {/* Desktop Auth Buttons */}
           <div className='hidden md:flex items-center space-x-4'>
             {loading ? (
-              <div className='h-8 w-24 bg-slate-700 rounded-lg animate-pulse'></div>
+              <div className='h-9 w-28 bg-indigo-600 rounded-lg animate-pulse'></div>
             ) : !user ? (
               <button
                 onClick={handleSignIn}
-                className='px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-500 transition-colors shadow-sm'
+                className='px-5 py-2 bg-white text-indigo-700 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition-colors shadow-sm'
               >
                 Login / Sign Up
               </button>
             ) : (
               <button
                 onClick={handleSignOut}
-                className='px-4 py-2 bg-slate-700 text-slate-100 rounded-lg text-sm font-semibold hover:bg-slate-600 transition-colors'
+                className='px-4 py-2 bg-indigo-600 text-indigo-50 rounded-lg text-sm font-semibold hover:bg-indigo-500 transition-colors'
               >
                 Logout
               </button>
             )}
           </div>
 
-          {/* Mobile Menu Button */}
           <div className='md:hidden flex items-center'>
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className='inline-flex items-center justify-center p-2 rounded-md text-slate-300 hover:text-white hover:bg-slate-700'
+              className='inline-flex items-center justify-center p-2 rounded-md text-indigo-200 hover:text-white hover:bg-indigo-700'
             >
               {isMobileMenuOpen ? (
                 <X className='h-6 w-6' />
@@ -153,19 +132,17 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Menu */}
       {isMobileMenuOpen && (
         <div className='md:hidden'>
           <div className='px-2 pt-2 pb-3 space-y-1 sm:px-3'>
-            {/* FIX: Conditionally render home link */}
             {!user && homeLink}
             {publicLinks}
-            <div className='border-t border-slate-700 my-2'></div>
+            <div className='border-t border-indigo-700 my-2'></div>
             {loading ? null : !user ? (
               <div className='p-2'>
                 <button
                   onClick={handleSignIn}
-                  className='w-full px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-500 transition-colors'
+                  className='w-full px-4 py-2 bg-white text-indigo-700 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition-colors'
                 >
                   Login / Sign Up
                 </button>
@@ -175,7 +152,7 @@ export default function Navbar() {
                 {user.email === adminEmail ? adminLinks : userLinks}
                 <button
                   onClick={handleSignOut}
-                  className='w-full px-4 py-2 bg-slate-700 text-slate-100 rounded-lg text-sm font-semibold hover:bg-slate-600 transition-colors'
+                  className='w-full px-4 py-2 bg-indigo-600 text-indigo-50 rounded-lg text-sm font-semibold hover:bg-indigo-500 transition-colors'
                 >
                   Logout
                 </button>
