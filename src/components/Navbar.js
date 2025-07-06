@@ -32,13 +32,6 @@ export default function Navbar() {
   const publicLinks = (
     <>
       <Link
-        href='/'
-        className='block md:inline-block py-2 px-4 md:px-3 text-slate-900 font-medium hover:bg-slate-100 rounded-md'
-        onClick={closeMobileMenu}
-      >
-        Home
-      </Link>
-      <Link
         href='/blog'
         className='block md:inline-block py-2 px-4 md:px-3 text-slate-900 font-medium hover:bg-slate-100 rounded-md'
         onClick={closeMobileMenu}
