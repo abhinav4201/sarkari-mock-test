@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import StatCard from "@/components/admin/StatCard"; // Import new StatCard
 import UserListModal from "@/components/admin/UserListModal"; // Import new Modal
+import TestListModal from "@/components/admin/TestListModal"; 
 
 // Helper function to get counts
 const getCollectionCount = (collectionName) => {
@@ -46,6 +47,7 @@ export default function AdminDashboardPage() {
   });
   const [loading, setLoading] = useState(true);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false); // State for the modal
+  const [isTestModalOpen, setIsTestModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -88,6 +90,10 @@ export default function AdminDashboardPage() {
         isOpen={isUserModalOpen}
         onClose={() => setIsUserModalOpen(false)}
       />
+      <TestListModal
+        isOpen={isTestModalOpen}
+        onClose={() => setIsTestModalOpen(false)}
+      />
 
       <div>
         <h1 className='text-3xl font-bold text-slate-900 mb-6'>
@@ -107,6 +113,7 @@ export default function AdminDashboardPage() {
             value={stats.testCount}
             icon={<BarChart />}
             isLoading={loading}
+            onClick={() => setIsTestModalOpen(true)}
           />
           <StatCard
             title='Total Blog Posts'
