@@ -16,6 +16,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import Cookies from "js-cookie";
 
 const AuthContext = createContext();
 
@@ -59,6 +60,7 @@ export const AuthContextProvider = ({ children }) => {
   );
 
   const logOut = useCallback(async () => {
+    Cookies.remove("selectedAccessControlTest");
     await signOut(auth);
     window.location.href = "/";
   }, []);

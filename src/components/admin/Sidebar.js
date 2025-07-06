@@ -10,6 +10,7 @@ const adminLinks = [
   { name: "Mock Tests", href: "/admin/mock-tests" },
   { name: "Daily Content", href: "/admin/daily-content" },
   { name: "Contact Submissions", href: "/admin/contacts" },
+  { name: "Access Control", href: "/admin/access-control" },
 ];
 
 export default function Sidebar() {
