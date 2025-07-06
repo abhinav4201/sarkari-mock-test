@@ -59,6 +59,7 @@ export default function QuestionUploader({ testId, onUploadSuccess }) {
   const [questionSvgFile, setQuestionSvgFile] = useState(null);
   const [options, setOptions] = useState(["", "", "", ""]);
   const [correctAnswer, setCorrectAnswer] = useState("");
+  const [explanation, setExplanation] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleTextChange = (e) => {
@@ -118,6 +119,7 @@ export default function QuestionUploader({ testId, onUploadSuccess }) {
           questionSvgCode: finalSvgCode,
           options,
           correctAnswer,
+          explanation: explanation || "",
           createdAt: serverTimestamp(),
         });
 
@@ -132,6 +134,7 @@ export default function QuestionUploader({ testId, onUploadSuccess }) {
       setOptions(["", "", "", ""]);
       setCorrectAnswer("");
       if (onUploadSuccess) onUploadSuccess();
+      setExplanation("");
     } catch (error) {
       toast.error(`Error: ${error.message}`, { id: loadingToast });
     } finally {
@@ -225,6 +228,22 @@ export default function QuestionUploader({ testId, onUploadSuccess }) {
               )
           )}
         </select>
+      </div>
+      <div>
+        <label
+          htmlFor='explanation'
+          className='block text-sm font-medium text-slate-900 mb-1'
+        >
+          Explanation (Optional)
+        </label>
+        <textarea
+          id='explanation'
+          value={explanation}
+          onChange={(e) => setExplanation(e.target.value)}
+          placeholder='Explain why the correct answer is right...'
+          className='w-full p-3 border border-slate-300 rounded-lg text-slate-900'
+          rows={3}
+        />
       </div>
       <button
         type='submit'

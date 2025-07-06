@@ -65,6 +65,7 @@ export default function EditQuestionForm({ question, onFormSubmit }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [previewingSvg, setPreviewingSvg] = useState("");
+  const [explanation, setExplanation] = useState("");
 
   useEffect(() => {
     if (question) {
@@ -80,6 +81,7 @@ export default function EditQuestionForm({ question, onFormSubmit }) {
       }
       setOptions(question.options || ["", "", "", ""]);
       setCorrectAnswer(question.correctAnswer || "");
+      setExplanation(question.explanation || "");
     }
   }, [question]);
 
@@ -142,6 +144,7 @@ export default function EditQuestionForm({ question, onFormSubmit }) {
         questionSvgCode: finalSvgCode,
         options,
         correctAnswer,
+        explanation: explanation,
       });
 
       toast.success("Question updated successfully!", { id: loadingToast });
@@ -272,6 +275,22 @@ export default function EditQuestionForm({ question, onFormSubmit }) {
                 )
             )}
           </select>
+        </div>
+        <div>
+          <label
+            htmlFor='edit-explanation'
+            className='block text-sm font-medium text-slate-900 mb-1'
+          >
+            Explanation (Optional)
+          </label>
+          <textarea
+            id='edit-explanation'
+            value={explanation}
+            onChange={(e) => setExplanation(e.target.value)}
+            placeholder='Explain why the correct answer is right...'
+            className='w-full p-3 border border-slate-300 rounded-lg text-slate-900'
+            rows={3}
+          />
         </div>
         <div className='flex justify-end pt-2'>
           <button

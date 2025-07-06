@@ -17,6 +17,7 @@ import toast from "react-hot-toast";
 import BackButton from "@/components/BackButton";
 import AdvancedAnalysis from "@/components/results/AdvancedAnalysis";
 import SvgDisplayer from "@/components/ui/SvgDisplayer"; 
+import Explanation from "@/components/results/Explanation"; 
 
 // Helper function to fetch all necessary data
 async function getResultData(resultId, userId) {
@@ -170,6 +171,7 @@ export default function ResultPage() {
                         </span>
                       </p>
                     )}
+                    <Explanation text={question.explanation} />
                   </div>
                 );
               })}

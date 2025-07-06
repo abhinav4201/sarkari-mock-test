@@ -14,11 +14,11 @@ import {
   getDocs,
   serverTimestamp,
   addDoc,
-  runTransaction,
 } from "firebase/firestore";
 import toast from "react-hot-toast";
+import QuestionPalette from "@/components/mock-tests/QuestionPalette";
+import FinalWarningModal from "@/components/ui/FinalWarningModal";
 
-// Helper function to fetch both test details and questions
 async function getTestData(testId) {
   const testRef = doc(db, "mockTests", testId);
   const questionsQuery = query(
@@ -51,14 +51,18 @@ export default function TestTakingPage() {
   const [testState, setTestState] = useState("loading");
   const [timePerQuestion, setTimePerQuestion] = useState({});
   const [questionStartTime, setQuestionStartTime] = useState(0);
-  const [loading,setLoading] = useState(false);
+  const [markedForReview, setMarkedForReview] = useState(new Set());
+  const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
+  const [unansweredCount, setUnansweredCount] = useState(0);
 
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const params = useParams();
   const { testId } = params;
 
-  const submitTest = useCallback(async () => {
+  const forceSubmit = useCallback(async () => {
+    if (testState === "submitting") return;
+
     setTestState("submitting");
     const lastQuestionId = questions[currentQuestionIndex]?.id;
     let finalTimePerQuestion = { ...timePerQuestion };
@@ -75,29 +79,24 @@ export default function TestTakingPage() {
         timeTaken: finalTimePerQuestion[qId] || 0,
       };
     }
-    for (const qId in finalTimePerQuestion) {
-      if (!finalAnswers[qId]) {
-        finalAnswers[qId] = {
+    for (const q of questions) {
+      if (!finalAnswers[q.id]) {
+        finalAnswers[q.id] = {
           answer: null,
-          timeTaken: finalTimePerQuestion[qId],
+          timeTaken: finalTimePerQuestion[q.id] || 0,
         };
       }
     }
 
     try {
-      // Write the result directly to Firestore from the client
       const resultRef = await addDoc(collection(db, "mockTestResults"), {
         userId: user.uid,
         testId,
         answers: finalAnswers,
-        score: Object.values(finalAnswers).filter(
-          (a) =>
-            questions.find(
-              (q) =>
-                q.id ===
-                Object.keys(finalAnswers).find((k) => finalAnswers[k] === a)
-            )?.correctAnswer === a.answer
-        ).length,
+        score: Object.keys(finalAnswers).filter((qId) => {
+          const question = questions.find((q) => q.id === qId);
+          return question?.correctAnswer === finalAnswers[qId].answer;
+        }).length,
         totalQuestions: questions.length,
         completedAt: serverTimestamp(),
       });
@@ -116,7 +115,28 @@ export default function TestTakingPage() {
     router,
     testId,
     user,
+    testState,
   ]);
+
+  const handleFinalSubmit = () => {
+    const unanswered = questions.filter((q) => !selectedOptions[q.id]);
+    if (unanswered.length > 0) {
+      setUnansweredCount(unanswered.length);
+      setIsWarningModalOpen(true);
+    } else {
+      forceSubmit();
+    }
+  };
+
+  const goToFirstUnanswered = () => {
+    const firstUnansweredIndex = questions.findIndex(
+      (q) => !selectedOptions[q.id]
+    );
+    if (firstUnansweredIndex !== -1) {
+      navigateToQuestion(firstUnansweredIndex);
+    }
+    setIsWarningModalOpen(false);
+  };
 
   useEffect(() => {
     if (authLoading) return;
@@ -127,11 +147,10 @@ export default function TestTakingPage() {
     }
 
     const loadTest = async () => {
-      setLoading(true);
       const data = await getTestData(testId);
-      if (!data) {
+      if (!data || data.questions.length === 0) {
         setTestState("error");
-        toast.error("Test not found.");
+        toast.error("Test not found or has no questions.");
         router.push("/mock-tests");
         return;
       }
@@ -140,7 +159,6 @@ export default function TestTakingPage() {
       setTimeLeft(data.testDetails.estimatedTime * 60);
       setTestState("in-progress");
       setQuestionStartTime(Date.now());
-      setLoading(false);
     };
 
     if (testId && user) {
@@ -150,7 +168,7 @@ export default function TestTakingPage() {
 
   useEffect(() => {
     if (testState !== "in-progress" || timeLeft <= 0) {
-      if (timeLeft <= 0 && testState === "in-progress") submitTest();
+      if (timeLeft <= 0 && testState === "in-progress") forceSubmit();
       return;
     }
     const timerId = setInterval(
@@ -158,7 +176,23 @@ export default function TestTakingPage() {
       1000
     );
     return () => clearInterval(timerId);
-  }, [timeLeft, testState, submitTest]);
+  }, [timeLeft, testState, forceSubmit]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && testState === "in-progress") {
+        toast.error(
+          "You switched tabs. The test will be submitted automatically.",
+          { duration: 5000 }
+        );
+        forceSubmit();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [testState, forceSubmit]);
 
   const navigateToQuestion = (newIndex) => {
     const timeSpent = (Date.now() - questionStartTime) / 1000;
@@ -175,6 +209,19 @@ export default function TestTakingPage() {
     setSelectedOptions({ ...selectedOptions, [questionId]: option });
   };
 
+  const handleMarkForReview = () => {
+    const currentQuestionId = questions[currentQuestionIndex]?.id;
+    if (!currentQuestionId) return;
+
+    const newMarkedSet = new Set(markedForReview);
+    if (newMarkedSet.has(currentQuestionId)) {
+      newMarkedSet.delete(currentQuestionId);
+    } else {
+      newMarkedSet.add(currentQuestionId);
+    }
+    setMarkedForReview(newMarkedSet);
+  };
+
   if (testState === "loading" || authLoading) {
     return (
       <div className='flex justify-center items-center h-screen bg-slate-100'>
@@ -184,6 +231,7 @@ export default function TestTakingPage() {
       </div>
     );
   }
+
   if (testState === "error") {
     return (
       <div className='flex justify-center items-center h-screen bg-slate-100 text-center p-4'>
@@ -200,82 +248,120 @@ export default function TestTakingPage() {
   const currentQuestion = questions[currentQuestionIndex];
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
+  const isCurrentMarked = markedForReview.has(currentQuestion?.id);
 
   return (
-    <div className='bg-slate-100 min-h-screen flex flex-col items-center justify-center p-4'>
-      <div className='w-full max-w-4xl'>
-        <div className='bg-white p-4 rounded-t-2xl shadow-xl border-b border-slate-200 flex justify-between items-center sticky top-4 z-10'>
-          <h1 className='text-lg md:text-xl font-bold text-slate-900 truncate'>
-            {testDetails?.title || "Mock Test"}
-          </h1>
-          <div className='text-2xl font-bold text-red-600 bg-red-100 px-4 py-1 rounded-full'>{`${minutes}:${
-            seconds < 10 ? "0" : ""
-          }${seconds}`}</div>
-        </div>
-        <div className='bg-white p-6 sm:p-8 rounded-b-2xl shadow-xl'>
-          {currentQuestion ? (
-            <div>
-              <h2 className='text-lg font-semibold mb-4 text-slate-900'>
-                Question {currentQuestionIndex + 1}{" "}
-                <span className='font-medium text-slate-600'>
-                  of {questions.length}
-                </span>
-              </h2>
-              <SvgDisplayer
-                svgCode={currentQuestion.questionSvgCode}
-                className='w-full h-auto min-h-[12rem] border-2 border-slate-200 rounded-lg p-4 bg-slate-50 mb-6 flex items-center'
-              />
-              <div className='space-y-4'>
-                {currentQuestion.options.map((option, index) => (
+    <>
+      <FinalWarningModal
+        isOpen={isWarningModalOpen}
+        onClose={() => setIsWarningModalOpen(false)}
+        onConfirmSubmit={forceSubmit}
+        onGoToQuestion={goToFirstUnanswered}
+        unansweredCount={unansweredCount}
+      />
+      <div className='bg-slate-100 min-h-screen p-4'>
+        <div className='container mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8'>
+          <div className='lg:col-span-8'>
+            <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-xl'>
+              {currentQuestion ? (
+                <div>
+                  <div className='flex justify-between items-start mb-4'>
+                    <h2 className='text-lg font-semibold text-slate-900'>
+                      Question {currentQuestionIndex + 1}{" "}
+                      <span className='font-medium text-slate-600'>
+                        of {questions.length}
+                      </span>
+                    </h2>
+                    <div
+                      className={`text-xl font-bold px-4 py-1 rounded-full ${
+                        timeLeft < 60
+                          ? "text-red-600 bg-red-100"
+                          : "text-slate-800"
+                      }`}
+                    >
+                      {`${minutes}:${seconds < 10 ? "0" : ""}${seconds}`}
+                    </div>
+                  </div>
+                  <SvgDisplayer
+                    svgCode={currentQuestion.questionSvgCode}
+                    className='w-full h-auto min-h-[12rem] border-2 border-slate-200 rounded-lg p-4 bg-slate-50 mb-6 flex items-center'
+                  />
+                  <div className='space-y-4'>
+                    {currentQuestion.options.map((option, index) => (
+                      <button
+                        key={index}
+                        onClick={() =>
+                          handleAnswerSelect(currentQuestion.id, option)
+                        }
+                        className={`block w-full text-left p-4 border-2 rounded-lg transition-all duration-200 text-base md:text-lg font-medium ${
+                          selectedOptions[currentQuestion.id] === option
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-md"
+                            : "bg-white text-slate-900 border-slate-300 hover:border-indigo-500 hover:bg-indigo-50"
+                        }`}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className='text-center p-8'>
+                  <p className='text-slate-800'>Loading questions...</p>
+                </div>
+              )}
+              <div className='flex flex-col sm:flex-row justify-between items-center mt-10 pt-6 border-t border-slate-200 gap-4'>
+                <button
+                  onClick={() => navigateToQuestion(currentQuestionIndex - 1)}
+                  disabled={currentQuestionIndex === 0}
+                  className='w-full sm:w-auto px-8 py-3 bg-slate-200 text-slate-800 font-semibold rounded-lg disabled:opacity-50 hover:bg-slate-300'
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={handleMarkForReview}
+                  className={`w-full sm:w-auto px-8 py-3 font-semibold rounded-lg transition-colors ${
+                    isCurrentMarked
+                      ? "bg-purple-600 text-white hover:bg-purple-700"
+                      : "bg-slate-200 text-slate-800 hover:bg-slate-300"
+                  }`}
+                >
+                  {isCurrentMarked ? "Unmark Review" : "Mark for Review"}
+                </button>
+                {currentQuestionIndex === questions.length - 1 ? (
                   <button
-                    key={index}
-                    onClick={() =>
-                      handleAnswerSelect(currentQuestion.id, option)
-                    }
-                    className={`block w-full text-left p-4 border-2 rounded-lg transition-all duration-200 text-base md:text-lg font-medium ${
-                      selectedOptions[currentQuestion.id] === option
-                        ? "bg-indigo-600 text-white border-indigo-600 shadow-md"
-                        : "bg-white text-slate-900 border-slate-300 hover:border-indigo-500 hover:bg-indigo-50"
-                    }`}
+                    onClick={handleFinalSubmit}
+                    disabled={testState === "submitting"}
+                    className='w-full sm:w-auto px-8 py-3 bg-green-600 text-white font-semibold rounded-lg'
                   >
-                    {option}
+                    {testState === "submitting"
+                      ? "Submitting..."
+                      : "Submit Test"}
                   </button>
-                ))}
+                ) : (
+                  <button
+                    onClick={() => navigateToQuestion(currentQuestionIndex + 1)}
+                    disabled={currentQuestionIndex === questions.length - 1}
+                    className='w-full sm:w-auto px-8 py-3 bg-indigo-600 text-white font-semibold rounded-lg disabled:opacity-50 hover:bg-indigo-700'
+                  >
+                    Next
+                  </button>
+                )}
               </div>
             </div>
-          ) : (
-            <div className='text-center p-8'>
-              <p className='text-slate-800'>Loading questions...</p>
+          </div>
+          <div className='lg:col-span-4'>
+            <div className='sticky top-4'>
+              <QuestionPalette
+                questions={questions}
+                currentQuestionIndex={currentQuestionIndex}
+                selectedOptions={selectedOptions}
+                markedForReview={markedForReview}
+                onQuestionSelect={navigateToQuestion}
+              />
             </div>
-          )}
-          <div className='flex justify-between mt-10 pt-6 border-t border-slate-200'>
-            <button
-              onClick={() => navigateToQuestion(currentQuestionIndex - 1)}
-              disabled={currentQuestionIndex === 0}
-              className='px-8 py-3 bg-slate-200 text-slate-800 font-semibold rounded-lg disabled:opacity-50 hover:bg-slate-300 transition-colors'
-            >
-              Previous
-            </button>
-            {currentQuestionIndex === questions.length - 1 ? (
-              <button
-                onClick={submitTest}
-                disabled={testState === "submitting"}
-                className='px-8 py-3 bg-green-600 text-white font-semibold rounded-lg disabled:bg-green-400 hover:bg-green-700 transition-colors'
-              >
-                {testState === "submitting" ? "Submitting..." : "Submit Test"}
-              </button>
-            ) : (
-              <button
-                onClick={() => navigateToQuestion(currentQuestionIndex + 1)}
-                disabled={currentQuestionIndex === questions.length - 1}
-                className='px-8 py-3 bg-indigo-600 text-white font-semibold rounded-lg disabled:opacity-50 hover:bg-indigo-700 transition-colors'
-              >
-                Next
-              </button>
-            )}
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

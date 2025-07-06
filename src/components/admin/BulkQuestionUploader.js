@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-import toast from "react-hot-toast";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -10,6 +8,8 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import Papa from "papaparse";
+import { useState } from "react";
+import toast from "react-hot-toast";
 
 /**
  * Converts a string of text into a multi-line, responsive SVG image.
@@ -46,8 +46,12 @@ const textToSvg = (text) => {
   // The SVG structure with a foreignObject containing a div
   return `
     <svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}">
-      <foreignObject x="15" y="15" width="${svgWidth - 30}" height="${svgHeight - 30}">
-        <div xmlns="http://www.w3.org/1999/xhtml" style="${style.replace(/\s\s+/g, ' ').trim()}">
+      <foreignObject x="15" y="15" width="${svgWidth - 30}" height="${
+    svgHeight - 30
+  }">
+        <div xmlns="http://www.w3.org/1999/xhtml" style="${style
+          .replace(/\s\s+/g, " ")
+          .trim()}">
           <div>${sanitizedText}</div>
         </div>
       </foreignObject>
@@ -89,6 +93,7 @@ export default function BulkQuestionUploader({ testId, onUploadSuccess }) {
               questionSvgCode: finalSvgCode,
               options: [row.option1, row.option2, row.option3, row.option4],
               correctAnswer: row.correctAnswer,
+              explanation: row.explanation || "",
             };
           });
 
@@ -136,7 +141,7 @@ export default function BulkQuestionUploader({ testId, onUploadSuccess }) {
 
   const downloadTemplate = () => {
     const template =
-      'questionText,questionSvgCode,option1,option2,option3,option4,correctAnswer\n"Fill this column OR the SVG code column","","Option A","Option B","Option C","Option D","Option A"\n"","<svg>Fill this column OR the text column</svg>","Option 1","Option 2","Option 3","Option 4","Option 2"';
+      'questionText,questionSvgCode,option1,option2,option3,option4,correctAnswer,explanation\n"Fill this column OR the SVG code column","","Option A","Option B","Option C","Option D","Option A","Type optional explanation here"\n"","<svg>Fill this column OR the text column</svg>","Option 1","Option 2","Option 3","Option 4","Option 2","Type optional explanation here"';
     const blob = new Blob([template], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
