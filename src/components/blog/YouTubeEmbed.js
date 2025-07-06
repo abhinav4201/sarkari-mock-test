@@ -1,47 +1,55 @@
 "use client";
 
-export default function YouTubeEmbed({ url }) {
-  // This function is now more robust and handles multiple YouTube URL formats.
-  const getEmbedUrl = (youtubeUrl) => {
-    if (!youtubeUrl) return null;
+import React from "react";
 
-    let videoId;
-
-    // Handle standard "watch" URLs: https://www.youtube.com/watch?v=VIDEO_ID
-    if (youtubeUrl.includes("watch?v=")) {
-      videoId = youtubeUrl.split("watch?v=")[1].split("&")[0];
-    }
-    // Handle shortened "youtu.be" URLs: https://youtu.be/VIDEO_ID
-    else if (youtubeUrl.includes("youtu.be/")) {
-      videoId = youtubeUrl.split("youtu.be/")[1].split("?")[0];
-    }
-    // Handle embed URLs just in case
-    else if (youtubeUrl.includes("/embed/")) {
-      videoId = youtubeUrl.split("/embed/")[1].split("?")[0];
-    } else {
-      // If the URL format is not recognized, we can't create an embed
+const YouTubeEmbed = ({ url }) => {
+  /**
+   * Extracts the YouTube video ID from various URL formats.
+   * @param {string} youtubeUrl The full YouTube URL.
+   * @returns {string|null} The 11-character video ID or null if not found.
+   */
+  const getVideoId = (youtubeUrl) => {
+    if (!youtubeUrl) {
       return null;
     }
+    // This regex handles youtube.com/watch, youtu.be/, and youtube.com/embed/ links
+    const regExp =
+      /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = youtubeUrl.match(regExp);
 
-    return `https://www.youtube.com/embed/${videoId}`;
+    if (match && match[2].length === 11) {
+      return match[2];
+    } else {
+      console.error(
+        "Could not extract a valid YouTube video ID from the URL:",
+        youtubeUrl
+      );
+      return null;
+    }
   };
 
-  const embedUrl = getEmbedUrl(url);
+  const videoId = getVideoId(url);
 
-  // If no valid embed URL could be created, don't render anything
-  if (!embedUrl) {
+  // If no valid video ID could be extracted, don't render anything.
+  if (!videoId) {
     return null;
   }
 
   return (
-    <div className='aspect-w-16 aspect-h-9 my-8 md:my-12'>
-      <iframe
-        src={embedUrl}
-        title='YouTube video player'
-        allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'
-        allowFullScreen
-        className='w-full h-full rounded-2xl shadow-2xl border-4 border-white'
-      ></iframe>
+    <div className='my-12'>
+      {/* This container creates a responsive 16:9 aspect ratio box */}
+      <div className='relative w-full aspect-video overflow-hidden rounded-2xl shadow-xl border border-slate-200'>
+        <iframe
+          className='absolute top-0 left-0 w-full h-full'
+          src={`https://www.youtube.com/embed/${videoId}`}
+          title='YouTube video player'
+          frameBorder='0'
+          allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'
+          allowFullScreen
+        ></iframe>
+      </div>
     </div>
   );
-}
+};
+
+export default YouTubeEmbed;

@@ -17,13 +17,31 @@ import {
   getDocs,
   doc,
   deleteDoc,
+  Timestamp,
 } from "firebase/firestore";
 
 const PAGE_SIZE = 5;
 
 export default function BlogHistoryList({ initialPosts }) {
-  const [posts, setPosts] = useState(initialPosts);
-  // The 'lastDoc' state has been removed as it was unused.
+  const [posts, setPosts] = useState(
+    initialPosts.map((post) => {
+      if (typeof post.createdAt === "number") {
+        return {
+          ...post,
+          createdAt: new Date(post.createdAt),
+        };
+      } else if (post.createdAt && typeof post.createdAt.seconds === "number") {
+        return {
+          ...post,
+          createdAt: new Timestamp(
+            post.createdAt.seconds,
+            post.createdAt.nanoseconds
+          ),
+        };
+      }
+      return post;
+    })
+  );
   const [hasMore, setHasMore] = useState(initialPosts.length === PAGE_SIZE);
   const [loadingMore, setLoadingMore] = useState(false);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -40,11 +58,15 @@ export default function BlogHistoryList({ initialPosts }) {
 
     try {
       const postsRef = collection(db, "posts");
-      // The query correctly uses the 'createdAt' field from the last post object for pagination.
+      const lastPost = posts[posts.length - 1];
       const q = query(
         postsRef,
         orderBy("createdAt", "desc"),
-        startAfter(posts[posts.length - 1].createdAt),
+        startAfter(
+          lastPost.createdAt instanceof Date
+            ? Timestamp.fromDate(lastPost.createdAt)
+            : lastPost.createdAt
+        ),
         limit(PAGE_SIZE)
       );
 
@@ -55,7 +77,16 @@ export default function BlogHistoryList({ initialPosts }) {
       }));
 
       if (newPosts.length > 0) {
-        setPosts((prev) => [...prev, ...newPosts]);
+        setPosts((prev) => [
+          ...prev,
+          ...newPosts.map((post) => ({
+            ...post,
+            createdAt:
+              post.createdAt instanceof Timestamp
+                ? post.createdAt
+                : new Date(post.createdAt),
+          })),
+        ]);
       }
       if (newPosts.length < PAGE_SIZE) {
         setHasMore(false);
@@ -135,8 +166,7 @@ export default function BlogHistoryList({ initialPosts }) {
                     {post.title}
                   </h3>
                   <p className='text-sm text-slate-900'>
-                    Published on:{" "}
-                    {new Date(post.createdAt.toDate()).toLocaleDateString()}
+                    Published on: {post.createdAt.toLocaleDateString()}
                   </p>
                   <Link
                     href={`/blog/${post.slug}`}
