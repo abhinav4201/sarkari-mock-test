@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
 import { db } from "@/lib/firebase";
@@ -10,92 +10,112 @@ import {
   where,
   getDocs,
   orderBy,
-  limit,
-  startAfter,
-  doc,
-  getDoc,
+  documentId,
 } from "firebase/firestore";
 import toast from "react-hot-toast";
-
-const PAGE_SIZE = 5;
+import UserAttemptDetailsModal from "./UserAttemptDetailsModal";
 
 export default function TestHistory() {
   const { user } = useAuth();
-  const [history, setHistory] = useState([]);
+  const [aggregatedHistory, setAggregatedHistory] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [lastDoc, setLastDoc] = useState(null);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [selectedDetails, setSelectedDetails] = useState(null);
 
-  const fetchHistoryPage = useCallback(
-    async (cursorDoc = null) => {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
+  // This useEffect now correctly fetches both results and their corresponding test titles.
+  useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
+    const fetchAndProcessHistory = async () => {
+      setLoading(true);
       try {
-        const resultsRef = collection(db, "mockTestResults");
-        const queryConstraints = [
+        // 1. Fetch all of the user's test results, ordered by most recent first.
+        const resultsQuery = query(
+          collection(db, "mockTestResults"),
           where("userId", "==", user.uid),
-          orderBy("completedAt", "desc"),
-          limit(PAGE_SIZE),
-        ];
+          orderBy("completedAt", "desc")
+        );
+        const resultsSnapshot = await getDocs(resultsQuery);
+        const allResults = resultsSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
 
-        const q = cursorDoc
-          ? query(resultsRef, ...queryConstraints, startAfter(cursorDoc))
-          : query(resultsRef, ...queryConstraints);
+        if (allResults.length === 0) {
+          setAggregatedHistory([]);
+          setLoading(false);
+          return;
+        }
 
-        const querySnapshot = await getDocs(q);
-
-        const newHistory = [];
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          newHistory.push({
-            id: doc.id,
-            ...data,
-            completedAt: data.completedAt.toDate().toISOString(),
+        // 2. Group the results by testId to count attempts.
+        const summary = new Map();
+        allResults.forEach((res) => {
+          const key = res.testId;
+          if (!summary.has(key)) {
+            summary.set(key, {
+              testId: res.testId,
+              attemptCount: 0,
+              mostRecentAttempt: res,
+              allAttemptsForTest: [],
+            });
+          }
+          const entry = summary.get(key);
+          entry.attemptCount += 1;
+          entry.allAttemptsForTest.push({
+            ...res,
+            completedAt: res.completedAt.toDate().toISOString(),
           });
         });
 
-        if (newHistory.length > 0) {
-          const testIds = [...new Set(newHistory.map((res) => res.testId))];
+        // 3. FIX: Efficiently fetch all required test titles.
+        const testIds = [...summary.keys()];
+        const fetchedTests = [];
+        // Handle Firestore's 10-item limit for 'in' queries by chunking
+        for (let i = 0; i < testIds.length; i += 10) {
+          const chunk = testIds.slice(i, i + 10);
           const testsQuery = query(
             collection(db, "mockTests"),
-            where("__name__", "in", testIds)
+            where(documentId(), "in", chunk)
           );
           const testsSnapshot = await getDocs(testsQuery);
-          const testsMap = new Map();
-          testsSnapshot.forEach((doc) => testsMap.set(doc.id, doc.data()));
-
-          newHistory.forEach((res) => {
-            res.testTitle = testsMap.get(res.testId)?.title || "Unknown Test";
-          });
+          testsSnapshot.forEach((doc) =>
+            fetchedTests.push({ id: doc.id, ...doc.data() })
+          );
         }
+        const testsMap = new Map(fetchedTests.map((test) => [test.id, test]));
 
-        setHistory((prev) =>
-          cursorDoc ? [...prev, ...newHistory] : newHistory
-        );
-        setLastDoc(querySnapshot.docs[querySnapshot.docs.length - 1]);
-        setHasMore(querySnapshot.docs.length === PAGE_SIZE);
+        // 4. Combine all the data into the final list for display.
+        const finalData = [...summary.values()].map((item) => ({
+          ...item,
+          testTitle: testsMap.get(item.testId)?.title || "Unknown Test",
+        }));
+
+        setAggregatedHistory(finalData);
       } catch (error) {
         toast.error("Could not load your test history.");
-        console.error("Failed to fetch test history", error);
+        console.error(error);
+      } finally {
+        setLoading(false);
       }
-    },
-    [user]
-  );
+    };
 
-  useEffect(() => {
-    setLoading(true);
-    fetchHistoryPage(null).finally(() => setLoading(false));
-  }, [fetchHistoryPage]);
+    fetchAndProcessHistory();
+  }, [user]);
 
-  const handleLoadMore = async () => {
-    if (loadingMore || !hasMore) return;
-    setLoadingMore(true);
-    await fetchHistoryPage(lastDoc);
-    setLoadingMore(false);
+  const handleItemClick = (item) => {
+    if (item.attemptCount > 1) {
+      setSelectedDetails({
+        testTitle: item.testTitle,
+        allAttempts: item.allAttemptsForTest.map((att) => ({
+          ...att,
+          completedAt: new Date(att.completedAt),
+        })),
+      });
+      setIsDetailsModalOpen(true);
+    }
   };
 
   if (loading) {
@@ -107,63 +127,86 @@ export default function TestHistory() {
   }
 
   return (
-    <div className='space-y-4'>
-      {history.length === 0 ? (
-        <div className='text-center py-10 px-4 border-2 border-dashed rounded-xl border-slate-300'>
-          <h3 className='text-lg font-semibold text-slate-900'>
-            No Tests Taken Yet
-          </h3>
-          <p className='mt-1 text-slate-800'>
-            Your completed test results will appear here.
-          </p>
-          <Link
-            href='/mock-tests'
-            className='mt-4 inline-block px-5 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700'
-          >
-            Browse Tests
-          </Link>
-        </div>
-      ) : (
-        history.map((item) => (
-          <div
-            key={item.id}
-            className='p-4 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:justify-between sm:items-center bg-white hover:bg-slate-50 transition-colors'
-          >
-            <div className='mb-4 sm:mb-0'>
-              <h3 className='font-bold text-lg text-slate-900'>
-                {item.testTitle}
-              </h3>
-              <p className='text-sm text-slate-700 mt-1'>
-                Completed on: {new Date(item.completedAt).toLocaleDateString()}
-              </p>
-              <p className='text-slate-800 mt-2'>
-                Score:{" "}
-                <span className='font-extrabold text-lg text-indigo-600'>
-                  {item.score}
-                </span>{" "}
-                / {item.totalQuestions}
-              </p>
-            </div>
+    <>
+      <UserAttemptDetailsModal
+        isOpen={isDetailsModalOpen}
+        onClose={() => setIsDetailsModalOpen(false)}
+        details={selectedDetails}
+      />
+      <div className='space-y-4'>
+        {aggregatedHistory.length === 0 ? (
+          <div className='text-center py-10 px-4 border-2 border-dashed rounded-xl border-slate-300'>
+            <h3 className='text-lg font-semibold text-slate-900'>
+              No Tests Taken Yet
+            </h3>
+            <p className='mt-1 text-slate-800'>
+              Your completed test results will appear here.
+            </p>
             <Link
-              href={`/mock-tests/results/${item.id}`}
-              className='flex-shrink-0 px-4 py-2 bg-indigo-100 text-indigo-700 text-sm font-semibold rounded-lg hover:bg-indigo-200 text-center'
+              href='/mock-tests'
+              className='mt-4 inline-block px-5 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700'
             >
-              View Result
+              Browse Tests
             </Link>
           </div>
-        ))
-      )}
-      {hasMore && (
-        <div className='text-center mt-6'>
-          <button
-            onClick={handleLoadMore}
-            disabled={loadingMore}
-            className='px-6 py-2 bg-slate-200 text-slate-800 font-semibold rounded-lg hover:bg-slate-300 disabled:opacity-50'
-          >
-            {loadingMore ? "Loading..." : "Load More"}
-          </button>
-        </div>
-      )}
-    </div>
+        ) : (
+          aggregatedHistory.map((item) => {
+            const content = (
+              <div className='flex flex-col sm:flex-row justify-between items-center w-full gap-4'>
+                {/* Left side: Test details */}
+                <div className='text-left'>
+                  <h3 className='font-bold text-lg text-slate-900'>
+                    {item.testTitle}
+                  </h3>
+                  <p className='text-sm text-slate-700 mt-1'>
+                    Last attempt:{" "}
+                    {new Date(
+                      item.mostRecentAttempt.completedAt.toDate()
+                    ).toLocaleDateString()}
+                  </p>
+                  <p className='text-slate-800 mt-2'>
+                    Most Recent Score:{" "}
+                    <span className='font-extrabold text-lg text-indigo-600'>
+                      {item.mostRecentAttempt.score}
+                    </span>{" "}
+                    / {item.mostRecentAttempt.totalQuestions}
+                  </p>
+                </div>
+
+                {/* Right side: The action button */}
+                <div className='flex-shrink-0 px-4 py-3 bg-indigo-100 text-indigo-700 text-sm font-semibold rounded-lg hover:bg-indigo-200 text-center'>
+                  {item.attemptCount > 1
+                    ? `View ${item.attemptCount} Attempts`
+                    : "View Result"}
+                </div>
+              </div>
+            );
+
+            // FIX: Use the unique testId as the key for each item
+            if (item.attemptCount > 1) {
+              return (
+                <button
+                  key={item.testId}
+                  onClick={() => handleItemClick(item)}
+                  className='w-full p-4 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 transition-colors'
+                >
+                  {content}
+                </button>
+              );
+            } else {
+              return (
+                <Link
+                  key={item.testId}
+                  href={`/mock-tests/results/${item.mostRecentAttempt.id}`}
+                  className='block p-4 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 transition-colors'
+                >
+                  {content}
+                </Link>
+              );
+            }
+          })
+        )}
+      </div>
+    </>
   );
 }

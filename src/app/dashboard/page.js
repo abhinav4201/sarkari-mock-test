@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import DailyDose from "@/components/dashboard/DailyDose";
 import WelcomeHeader from "@/components/dashboard/WelcomeHeader";
 import TestHistory from "@/components/dashboard/TestHistory";
+import UserStats from "@/components/dashboard/UserStats"; // NEW: Import UserStats
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 
@@ -15,9 +16,7 @@ async function getDailyVocabulary() {
   );
   const snapshot = await getDocs(q);
   if (snapshot.empty) return null;
-  const data = snapshot.docs[0].data();
-  // We don't need to serialize timestamps here as this function is now only called on the client
-  return data;
+  return snapshot.docs[0].data();
 }
 
 async function getDailyGk() {
@@ -28,8 +27,7 @@ async function getDailyGk() {
   );
   const snapshot = await getDocs(q);
   if (snapshot.empty) return null;
-  const data = snapshot.docs[0].data();
-  return data;
+  return snapshot.docs[0].data();
 }
 
 export default function DashboardPage() {
@@ -60,8 +58,13 @@ export default function DashboardPage() {
     <div className='bg-slate-100 min-h-screen'>
       <div className='container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12'>
         <WelcomeHeader />
+
+        {/* NEW: Added the UserStats component */}
+        <div className='mt-8'>
+          <UserStats />
+        </div>
+
         <div className='mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8 items-start'>
-          {/* Main Column */}
           <div className='lg:col-span-2 space-y-8'>
             <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-slate-200'>
               <h2 className='text-2xl font-bold text-slate-900 mb-6'>
@@ -71,10 +74,8 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Side Column */}
           <div className='lg:col-span-1'>
             <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-slate-200'>
-              {/* The DailyDose component now handles the loading state */}
               <DailyDose vocabulary={vocabulary} gk={gk} isLoading={loading} />
             </div>
           </div>
