@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter, notFound } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import {
   collection,
   doc,
@@ -16,6 +15,7 @@ import {
   addDoc,
 } from "firebase/firestore";
 import toast from "react-hot-toast";
+import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import QuestionPalette from "@/components/mock-tests/QuestionPalette";
 import FinalWarningModal from "@/components/ui/FinalWarningModal";
 
@@ -53,7 +53,9 @@ export default function TestTakingPage() {
   const [questionStartTime, setQuestionStartTime] = useState(0);
   const [markedForReview, setMarkedForReview] = useState(new Set());
   const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
-  const [unansweredCount, setUnansweredCount] = useState(0);
+  const [warningInfo, setWarningInfo] = useState({ type: null, count: 0 });
+  const [lastQuestionWarningShown, setLastQuestionWarningShown] =
+    useState(false); // NEW: State to track the warning
 
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -120,20 +122,30 @@ export default function TestTakingPage() {
 
   const handleFinalSubmit = () => {
     const unanswered = questions.filter((q) => !selectedOptions[q.id]);
+    const marked = [...markedForReview];
+
     if (unanswered.length > 0) {
-      setUnansweredCount(unanswered.length);
+      setWarningInfo({ type: "unanswered", count: unanswered.length });
+      setIsWarningModalOpen(true);
+    } else if (marked.length > 0) {
+      setWarningInfo({ type: "review", count: marked.length });
       setIsWarningModalOpen(true);
     } else {
       forceSubmit();
     }
   };
 
-  const goToFirstUnanswered = () => {
-    const firstUnansweredIndex = questions.findIndex(
-      (q) => !selectedOptions[q.id]
-    );
-    if (firstUnansweredIndex !== -1) {
-      navigateToQuestion(firstUnansweredIndex);
+  const goToFirstRelevantQuestion = () => {
+    let firstIndex = -1;
+    if (warningInfo.type === "unanswered") {
+      firstIndex = questions.findIndex((q) => !selectedOptions[q.id]);
+    } else if (warningInfo.type === "review") {
+      const firstMarkedId = [...markedForReview][0];
+      firstIndex = questions.findIndex((q) => q.id === firstMarkedId);
+    }
+
+    if (firstIndex !== -1) {
+      navigateToQuestion(firstIndex);
     }
     setIsWarningModalOpen(false);
   };
@@ -201,12 +213,32 @@ export default function TestTakingPage() {
       ...prev,
       [currentQuestionId]: (prev[currentQuestionId] || 0) + timeSpent,
     }));
+
+    // NEW: Logic to show a warning on the last question
+    if (newIndex === questions.length - 1 && !lastQuestionWarningShown) {
+      toast.success(
+        "This is the last question. Review your answers before submitting."
+      );
+      setLastQuestionWarningShown(true);
+    }
+
     setCurrentQuestionIndex(newIndex);
     setQuestionStartTime(Date.now());
   };
 
+  // FIX: This function now allows deselecting an answer.
   const handleAnswerSelect = (questionId, option) => {
-    setSelectedOptions({ ...selectedOptions, [questionId]: option });
+    setSelectedOptions((prev) => {
+      const newSelected = { ...prev };
+      // If the user clicks the same option again, deselect it.
+      if (newSelected[questionId] === option) {
+        delete newSelected[questionId];
+      } else {
+        // Otherwise, select the new option.
+        newSelected[questionId] = option;
+      }
+      return newSelected;
+    });
   };
 
   const handleMarkForReview = () => {
@@ -256,8 +288,9 @@ export default function TestTakingPage() {
         isOpen={isWarningModalOpen}
         onClose={() => setIsWarningModalOpen(false)}
         onConfirmSubmit={forceSubmit}
-        onGoToQuestion={goToFirstUnanswered}
-        unansweredCount={unansweredCount}
+        onGoToQuestion={goToFirstRelevantQuestion}
+        warningType={warningInfo.type}
+        count={warningInfo.count}
       />
       <div className='bg-slate-100 min-h-screen p-4'>
         <div className='container mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8'>
