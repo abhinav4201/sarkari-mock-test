@@ -1,9 +1,6 @@
 "use client";
 
-import RestrictedTestsModal from "@/components/admin/RestrictedTestsModal";
-import StatCard from "@/components/admin/StatCard"; // Import new StatCard
-import TestListModal from "@/components/admin/TestListModal";
-import UserListModal from "@/components/admin/UserListModal"; // Import new Modal
+import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -19,15 +16,19 @@ import {
   MessageSquare,
   UserCheck,
   Users,
+  ClipboardCheck,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import StatCard from "@/components/admin/StatCard";
+import UserListModal from "@/components/admin/UserListModal";
+import TestListModal from "@/components/admin/TestListModal";
+import RestrictedTestsModal from "@/components/admin/RestrictedTestsModal";
+import TestAttemptsModal from "@/components/admin/TestAttemptsModal";
+import AttemptDetailsModal from "@/components/admin/AttemptDetailsModal";
 
-// Helper function to get counts
 const getCollectionCount = (collectionName) => {
   return getDocs(collection(db, collectionName)).then((snap) => snap.size);
 };
 
-// Helper function to get submissions from today
 const getTodaySubmissionsCount = () => {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
@@ -53,12 +54,19 @@ export default function AdminDashboardPage() {
     testCount: 0,
     contactCount: 0,
     todaySubmissions: 0,
-    userCount: 0, // New stat
+    userCount: 0,
+    restrictedTestCount: 0,
+    testAttemptsCount: 0,
   });
   const [loading, setLoading] = useState(true);
-  const [isUserModalOpen, setIsUserModalOpen] = useState(false); // State for the modal
+
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [isRestrictedModalOpen, setIsRestrictedModalOpen] = useState(false);
+  const [isAttemptsModalOpen, setIsAttemptsModalOpen] = useState(false);
+
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [selectedAttemptDetails, setSelectedAttemptDetails] = useState(null);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -70,13 +78,15 @@ export default function AdminDashboardPage() {
           todaySubmissions,
           userCount,
           restrictedTestCount,
+          testAttemptsCount,
         ] = await Promise.all([
           getCollectionCount("posts"),
           getCollectionCount("mockTests"),
           getCollectionCount("contacts"),
           getTodaySubmissionsCount(),
-          getCollectionCount("users"), // Fetch user count
+          getCollectionCount("users"),
           getRestrictedTestCount(),
+          getCollectionCount("mockTestResults"),
         ]);
 
         setStats({
@@ -86,6 +96,7 @@ export default function AdminDashboardPage() {
           todaySubmissions,
           userCount,
           restrictedTestCount,
+          testAttemptsCount,
         });
       } catch (error) {
         console.error("Failed to fetch admin stats:", error);
@@ -97,9 +108,20 @@ export default function AdminDashboardPage() {
     fetchStats();
   }, []);
 
+  const handleAttemptRowClick = (details) => {
+    setSelectedAttemptDetails(details);
+    setIsAttemptsModalOpen(false);
+    setIsDetailsModalOpen(true);
+  };
+
+  const handleDetailsModalClose = () => {
+    setIsDetailsModalOpen(false);
+    setSelectedAttemptDetails(null);
+    setIsAttemptsModalOpen(true);
+  };
+
   return (
     <>
-      {/* Add the modal to the page, controlled by state */}
       <UserListModal
         isOpen={isUserModalOpen}
         onClose={() => setIsUserModalOpen(false)}
@@ -113,26 +135,36 @@ export default function AdminDashboardPage() {
         onClose={() => setIsRestrictedModalOpen(false)}
       />
 
+      {/* FIX: The onRowClick prop is now correctly passed to the component. */}
+      <TestAttemptsModal
+        isOpen={isAttemptsModalOpen}
+        onClose={() => setIsAttemptsModalOpen(false)}
+        onRowClick={handleAttemptRowClick}
+      />
+      <AttemptDetailsModal
+        isOpen={isDetailsModalOpen}
+        onClose={handleDetailsModalClose}
+        details={selectedAttemptDetails}
+      />
+
       <div>
         <h1 className='text-3xl font-bold text-slate-900 mb-6'>
           Admin Dashboard
         </h1>
-        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6'>
-          {/* NEW: Added the new StatCard */}
+        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
           <StatCard
-            title='Restricted Tests'
-            value={stats.restrictedTestCount}
-            icon={<Lock />}
+            title='Total Test Attempts'
+            value={stats.testAttemptsCount}
+            icon={<ClipboardCheck />}
             isLoading={loading}
-            onClick={() => setIsRestrictedModalOpen(true)}
+            onClick={() => setIsAttemptsModalOpen(true)}
           />
-          {/* New "Total Users" StatCard */}
           <StatCard
             title='Total Users'
             value={stats.userCount}
             icon={<UserCheck />}
             isLoading={loading}
-            onClick={() => setIsUserModalOpen(true)} // Make it clickable
+            onClick={() => setIsUserModalOpen(true)}
           />
           <StatCard
             title='Total Mock Tests'
@@ -140,6 +172,13 @@ export default function AdminDashboardPage() {
             icon={<BarChart />}
             isLoading={loading}
             onClick={() => setIsTestModalOpen(true)}
+          />
+          <StatCard
+            title='Restricted Tests'
+            value={stats.restrictedTestCount}
+            icon={<Lock />}
+            isLoading={loading}
+            onClick={() => setIsRestrictedModalOpen(true)}
           />
           <StatCard
             title='Total Blog Posts'
