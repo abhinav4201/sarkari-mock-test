@@ -48,11 +48,9 @@ export default function BulkAccessManager({ onUpdate }) {
             throw new Error("Invalid CSV format. Please use the template.");
           }
 
-          // Step 1: Find all unique user emails and test titles from the CSV
           const userEmails = [...new Set(rows.map((row) => row.userEmail))];
           const testTitles = [...new Set(rows.map((row) => row.testTitle))];
 
-          // Step 2: Fetch all required user and test documents in two efficient queries
           const userQuery = query(
             collection(db, "users"),
             where("email", "in", userEmails)
@@ -70,21 +68,41 @@ export default function BulkAccessManager({ onUpdate }) {
           const usersMap = new Map(
             userSnap.docs.map((d) => [d.data().email, d.data().uid])
           );
+
+          // FIX: Store the entire test object (ID and data) to check its current state.
           const testsMap = new Map(
-            testSnap.docs.map((d) => [d.data().title, d.id])
+            testSnap.docs.map((d) => [
+              d.data().title,
+              { id: d.id, data: d.data() },
+            ])
           );
 
-          // Step 3: Prepare a batch write to update all documents at once
           const batch = writeBatch(db);
           let updatesCount = 0;
 
           rows.forEach((row) => {
             const userId = usersMap.get(row.userEmail);
-            const testId = testsMap.get(row.testTitle);
+            const testInfo = testsMap.get(row.testTitle);
 
-            if (userId && testId) {
-              const testRef = doc(db, "mockTests", testId);
-              batch.update(testRef, { allowedUserIds: arrayUnion(userId) });
+            if (userId && testInfo) {
+              const testRef = doc(db, "mockTests", testInfo.id);
+
+              // FIX: Build the update payload dynamically.
+              const updatePayload = {
+                allowedUserIds: arrayUnion(userId),
+              };
+
+              // Check if the test is currently public (has no allowed users).
+              const isCurrentlyPublic =
+                !testInfo.data.allowedUserIds ||
+                testInfo.data.allowedUserIds.length === 0;
+
+              // If it's public, also set the isRestricted flag to true.
+              if (isCurrentlyPublic) {
+                updatePayload.isRestricted = true;
+              }
+
+              batch.update(testRef, updatePayload);
               updatesCount++;
             }
           });
@@ -98,7 +116,7 @@ export default function BulkAccessManager({ onUpdate }) {
             `Successfully granted access for ${updatesCount} entries.`,
             { id: loadingToast }
           );
-          if (onUpdate) onUpdate(); // Trigger a refresh on the parent page
+          if (onUpdate) onUpdate();
         } catch (error) {
           toast.error(`Error: ${error.message}`, { id: loadingToast });
         } finally {
