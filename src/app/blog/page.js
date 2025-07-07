@@ -1,54 +1,146 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
 import { db } from "@/lib/firebase";
-import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
-import BlogList from "@/components/blog/BlogList";
+import {
+  collection,
+  getDocs,
+  query,
+  orderBy,
+  limit,
+  where,
+  Timestamp,
+} from "firebase/firestore";
+import BlogPostCard from "@/components/blog/BlogPostCard";
+import ArchiveSidebar from "@/components/blog/ArchiveSidebar";
+import { Newspaper, ArchiveRestore } from "lucide-react";
 
-// This function now only fetches the FIRST page of posts on the server
-async function getInitialPosts() {
-  const postsCollection = collection(db, "posts");
-  const q = query(postsCollection, orderBy("createdAt", "desc"), limit(6));
-  const postsSnapshot = await getDocs(q);
+// This is a simple display component for the posts list
+const PostListDisplay = ({ posts }) => (
+  <div className='grid grid-cols-1 md:grid-cols-2 gap-8'>
+    {posts.map((post) => (
+      <BlogPostCard key={post.id} post={post} />
+    ))}
+  </div>
+);
 
-  const posts = postsSnapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-    // Convert timestamp to a serializable format for the client component
-    createdAt: doc.data().createdAt.toMillis(),
-  }));
-  return posts;
-}
+export default function BlogPage() {
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState({
+    type: "recent",
+    title: "Recent Posts",
+    icon: <Newspaper />,
+  });
 
-export default async function BlogPage() {
-  const initialPosts = await getInitialPosts();
+  const fetchRecentPosts = useCallback(async () => {
+    setLoading(true);
+    setView({ type: "recent", title: "Recent Posts", icon: <Newspaper /> });
+    try {
+      const postsRef = collection(db, "posts");
+      const q = query(postsRef, orderBy("createdAt", "desc"), limit(10));
+      const snapshot = await getDocs(q);
+      const recentPosts = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt.toMillis(),
+      }));
+      setPosts(recentPosts);
+    } catch (error) {
+      console.error("Failed to fetch recent posts:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchArchivedPosts = useCallback(async ({ year, monthName }) => {
+    setLoading(true);
+    const monthIndex = new Date(`${monthName} 1, ${year}`).getMonth();
+    setView({
+      type: "archive",
+      title: `${monthName} ${year}`,
+      icon: <ArchiveRestore />,
+    });
+
+    try {
+      const startDate = new Date(year, monthIndex, 1);
+      const endDate = new Date(year, monthIndex + 1, 0, 23, 59, 59);
+
+      const postsRef = collection(db, "posts");
+      const q = query(
+        postsRef,
+        where("createdAt", ">=", Timestamp.fromDate(startDate)),
+        where("createdAt", "<=", Timestamp.fromDate(endDate)),
+        orderBy("createdAt", "desc")
+      );
+      const snapshot = await getDocs(q);
+      const archivedPosts = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt.toMillis(),
+      }));
+      setPosts(archivedPosts);
+    } catch (error) {
+      console.error("Failed to fetch archived posts:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Fetch recent posts on initial load
+  useEffect(() => {
+    fetchRecentPosts();
+  }, [fetchRecentPosts]);
 
   return (
-    <div className='bg-white min-h-screen'>
-      <div className='bg-gradient-to-b from-purple-50 via-white to-white'>
-        <div className='container mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24'>
-          <div className='text-center max-w-3xl mx-auto'>
-            <h1 className='text-4xl md:text-5xl font-extrabold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-indigo-600'>
-              Insights & Updates
-            </h1>
-            <p className='mt-4 text-lg text-slate-800'>
-              Stay ahead with our latest articles, notes, and exam strategies
-              curated by experts.
-            </p>
-          </div>
+    <div className='bg-slate-50 min-h-screen'>
+      <div className='container mx-auto px-4 sm:px-6 lg:px-8 py-16'>
+        <div className='text-center mb-16'>
+          <h1 className='text-4xl md:text-5xl font-extrabold text-slate-900'>
+            Blog & Articles
+          </h1>
+          <p className='mt-4 text-lg text-slate-600'>
+            Stay ahead with our latest insights, notes, and exam strategies.
+          </p>
         </div>
-      </div>
-      <div className='container mx-auto px-4 sm:px-6 lg:px-8 pb-16 md:pb-24'>
-        <div className='-mt-16'>
-          {initialPosts.length > 0 ? (
-            <BlogList initialPosts={initialPosts} />
-          ) : (
-            <div className='text-center py-16 px-6 bg-white rounded-2xl shadow-xl border border-slate-100'>
-              <h3 className='text-2xl font-bold text-slate-900'>
-                Our Library is Growing!
-              </h3>
-              <p className='mt-2 text-slate-700'>
-                New articles are being written. Please check back soon.
-              </p>
+
+        <div className='grid grid-cols-1 lg:grid-cols-12 gap-12'>
+          {/* Main Content Area */}
+          <div className='lg:col-span-8'>
+            <div className='flex justify-between items-center mb-6'>
+              <h2 className='flex items-center text-2xl font-bold text-slate-800'>
+                <div className='mr-3 p-2 bg-indigo-100 text-indigo-600 rounded-lg'>
+                  {view.icon}
+                </div>
+                {view.title}
+              </h2>
+              {view.type === "archive" && (
+                <button
+                  onClick={fetchRecentPosts}
+                  className='text-sm font-semibold text-indigo-600 hover:underline'
+                >
+                  View Recent Posts
+                </button>
+              )}
             </div>
-          )}
+
+            {loading ? (
+              <p>Loading posts...</p>
+            ) : posts.length > 0 ? (
+              <PostListDisplay posts={posts} />
+            ) : (
+              <p className='text-center p-12 bg-white rounded-lg shadow-md'>
+                No posts found for this period.
+              </p>
+            )}
+          </div>
+
+          {/* Sidebar */}
+          <div className='lg:col-span-4'>
+            <div className='sticky top-24'>
+              <ArchiveSidebar onMonthSelect={fetchArchivedPosts} />
+            </div>
+          </div>
         </div>
       </div>
     </div>

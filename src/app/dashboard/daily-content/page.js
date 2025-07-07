@@ -19,7 +19,7 @@ const PAGE_SIZE = 10;
 
 function DailyContent() {
   const searchParams = useSearchParams();
-  const contentType = searchParams.get("type") || "gk"; // Default to 'gk' if no type is specified
+  const contentType = searchParams.get("type") || "gk";
 
   const [content, setContent] = useState([]);
   const [lastDoc, setLastDoc] = useState(null);
@@ -103,6 +103,23 @@ function DailyContent() {
                   key={item.id}
                   className='bg-white p-6 rounded-2xl shadow-lg border border-slate-200'
                 >
+                  {/* NEW: Date display added here */}
+                  <div className='border-b border-slate-200 pb-3 mb-4'>
+                    <p className='text-sm font-semibold text-indigo-600'>
+                      Posted on:{" "}
+                      {item.createdAt
+                        ? new Date(item.createdAt.toDate()).toLocaleDateString(
+                            "en-US",
+                            {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                            }
+                          )
+                        : "N/A"}
+                    </p>
+                  </div>
+
                   {contentType === "vocabulary" ? (
                     <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
                       <div>
@@ -162,10 +179,9 @@ function DailyContent() {
   );
 }
 
-// Wrap the component in Suspense because useSearchParams() requires it
 export default function DailyContentPage() {
   return (
-    <Suspense fallback={<div>Loading Page...</div>}>
+    <Suspense fallback={<div className='text-center p-8'>Loading Page...</div>}>
       <DailyContent />
     </Suspense>
   );

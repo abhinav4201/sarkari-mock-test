@@ -1,7 +1,7 @@
 "use client";
 
 import SvgDisplayer from "@/components/ui/SvgDisplayer"; // Import the smart displayer
-import { Book, Globe, ChevronsRight } from "lucide-react";
+import { Book, ChevronsRight, Globe } from "lucide-react";
 import Link from "next/link";
 
 export default function DailyDose({ vocabulary, gk, isLoading }) {
@@ -78,8 +78,15 @@ export default function DailyDose({ vocabulary, gk, isLoading }) {
             </div>
           </div>
         ) : (
+          // FIX: Updated fallback message
           <div className='text-center text-slate-600 text-sm p-6 border-2 border-dashed rounded-xl bg-slate-50'>
-            No vocabulary has been updated for today.
+            <p className='font-semibold mb-1'>No vocabulary for today.</p>
+            <Link
+              href='/dashboard/daily-content?type=vocabulary'
+              className='font-medium text-indigo-600 hover:underline'
+            >
+              Explore previous entries
+            </Link>
           </div>
         )}
       </div>
@@ -115,8 +122,15 @@ export default function DailyDose({ vocabulary, gk, isLoading }) {
             />
           </div>
         ) : (
+          // FIX: Updated fallback message
           <div className='text-center text-slate-600 text-sm p-6 border-2 border-dashed rounded-xl bg-slate-50'>
-            No General Knowledge has been updated for today.
+            <p className='font-semibold mb-1'>No GK content for today.</p>
+            <Link
+              href='/dashboard/daily-content?type=gk'
+              className='font-medium text-indigo-600 hover:underline'
+            >
+              Explore previous entries
+            </Link>
           </div>
         )}
       </div>

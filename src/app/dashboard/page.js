@@ -4,10 +4,11 @@ import { useState, useEffect } from "react";
 import DailyDose from "@/components/dashboard/DailyDose";
 import WelcomeHeader from "@/components/dashboard/WelcomeHeader";
 import TestHistory from "@/components/dashboard/TestHistory";
-import UserStats from "@/components/dashboard/UserStats"; // NEW: Import UserStats
+import UserStats from "@/components/dashboard/UserStats";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 
+// FIX: This function now checks if the latest post is from today
 async function getDailyVocabulary() {
   const q = query(
     collection(db, "dailyVocabulary"),
@@ -16,9 +17,21 @@ async function getDailyVocabulary() {
   );
   const snapshot = await getDocs(q);
   if (snapshot.empty) return null;
-  return snapshot.docs[0].data();
+
+  const data = snapshot.docs[0].data();
+  const docDate = data.createdAt.toDate();
+  const today = new Date();
+
+  // Compare year, month, and day to see if the post is from today
+  if (docDate.toDateString() === today.toDateString()) {
+    return data;
+  }
+
+  // If the latest post is not from today, return null
+  return null;
 }
 
+// FIX: This function now also checks if the latest post is from today
 async function getDailyGk() {
   const q = query(
     collection(db, "dailyGk"),
@@ -27,7 +40,16 @@ async function getDailyGk() {
   );
   const snapshot = await getDocs(q);
   if (snapshot.empty) return null;
-  return snapshot.docs[0].data();
+
+  const data = snapshot.docs[0].data();
+  const docDate = data.createdAt.toDate();
+  const today = new Date();
+
+  if (docDate.toDateString() === today.toDateString()) {
+    return data;
+  }
+
+  return null;
 }
 
 export default function DashboardPage() {
@@ -59,7 +81,6 @@ export default function DashboardPage() {
       <div className='container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12'>
         <WelcomeHeader />
 
-        {/* NEW: Added the UserStats component */}
         <div className='mt-8'>
           <UserStats />
         </div>
