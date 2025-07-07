@@ -15,11 +15,12 @@ import {
   limit,
 } from "firebase/firestore";
 import toast from "react-hot-toast";
-import { Search, UserPlus, Trash2, StopCircle } from "lucide-react"; // Import new StopCircle icon
+import { Search, UserPlus, Trash2, StopCircle } from "lucide-react";
 import Cookies from "js-cookie";
 import BulkAccessManager from "@/components/admin/BulkAccessManager";
 
-const TestSelector = ({ onTestSelect }) => {
+// This component is now generic to handle any content type
+const ContentSelector = ({ contentType, onContentSelect }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -30,7 +31,7 @@ const TestSelector = ({ onTestSelect }) => {
     setIsLoading(true);
     try {
       const q = query(
-        collection(db, "mockTests"),
+        collection(db, contentType),
         where("title", ">=", searchTerm),
         where("title", "<=", searchTerm + "\uf8ff"),
         limit(10)
@@ -38,7 +39,7 @@ const TestSelector = ({ onTestSelect }) => {
       const snapshot = await getDocs(q);
       setResults(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
     } catch (error) {
-      toast.error("Failed to search tests.");
+      toast.error(`Failed to search ${contentType}.`);
     } finally {
       setIsLoading(false);
     }
@@ -47,14 +48,16 @@ const TestSelector = ({ onTestSelect }) => {
   return (
     <div className='bg-white p-6 rounded-2xl shadow-lg border'>
       <h2 className='text-xl font-bold text-slate-900 mb-4'>
-        1. Select a Test
+        1. Select Content
       </h2>
       <form onSubmit={handleSearch} className='flex gap-2'>
         <input
           type='text'
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder='Search for a test by title...'
+          placeholder={`Search for a ${
+            contentType === "mockTests" ? "Test" : "Blog Post"
+          } by title...`}
           className='w-full p-3 border text-slate-900 border-slate-300 rounded-lg'
         />
         <button
@@ -66,14 +69,16 @@ const TestSelector = ({ onTestSelect }) => {
         </button>
       </form>
       <div className='mt-4 space-y-2 max-h-60 overflow-y-auto'>
-        {results.map((test) => (
+        {results.map((item) => (
           <button
-            key={test.id}
-            onClick={() => onTestSelect(test)}
+            key={item.id}
+            onClick={() => onContentSelect(item)}
             className='w-full text-left p-3 rounded-lg hover:bg-slate-100'
           >
-            <p className='font-semibold text-slate-900'>{test.title}</p>
-            <p className='text-sm text-slate-600'>{test.subject}</p>
+            <p className='font-semibold text-slate-900'>{item.title}</p>
+            <p className='text-sm text-slate-600'>
+              {item.subject || item.slug}
+            </p>
           </button>
         ))}
       </div>
@@ -81,7 +86,8 @@ const TestSelector = ({ onTestSelect }) => {
   );
 };
 
-const AccessManager = ({ test, onUpdate }) => {
+// This component is also now generic
+const AccessManager = ({ content, contentType, onUpdate }) => {
   const [allowedUsers, setAllowedUsers] = useState([]);
   const [userSearch, setUserSearch] = useState("");
   const [foundUser, setFoundUser] = useState(null);
@@ -91,13 +97,13 @@ const AccessManager = ({ test, onUpdate }) => {
   useEffect(() => {
     const fetchAllowedUsers = async () => {
       setLoadingUsers(true);
-      setAllowedUsers([]);
-      if (!test?.allowedUserIds || test.allowedUserIds.length === 0) {
+      if (!content?.allowedUserIds || content.allowedUserIds.length === 0) {
+        setAllowedUsers([]);
         setLoadingUsers(false);
         return;
       }
       try {
-        const userIds = test.allowedUserIds;
+        const userIds = content.allowedUserIds;
         const fetchedUsers = [];
         for (let i = 0; i < userIds.length; i += 10) {
           const chunk = userIds.slice(i, i + 10);
@@ -111,15 +117,14 @@ const AccessManager = ({ test, onUpdate }) => {
         setAllowedUsers(fetchedUsers);
       } catch (error) {
         toast.error("Could not fetch allowed users.");
-        console.error("Error fetching allowed users:", error);
       } finally {
         setLoadingUsers(false);
       }
     };
-    if (test?.id) {
+    if (content?.id) {
       fetchAllowedUsers();
     }
-  }, [test]);
+  }, [content]);
 
   const handleUserSearch = async (e) => {
     e.preventDefault();
@@ -145,15 +150,15 @@ const AccessManager = ({ test, onUpdate }) => {
   };
 
   const handleGrantAccess = async () => {
+    const contentRef = doc(db, contentType, content.id);
     try {
-      const testRef = doc(db, "mockTests", test.id);
       const isFirstUser =
-        !test.allowedUserIds || test.allowedUserIds.length === 0;
+        !content.allowedUserIds || content.allowedUserIds.length === 0;
       const dataToUpdate = { allowedUserIds: arrayUnion(foundUser.uid) };
       if (isFirstUser) {
         dataToUpdate.isRestricted = true;
       }
-      await updateDoc(testRef, dataToUpdate);
+      await updateDoc(contentRef, dataToUpdate);
       toast.success(`Access granted to ${foundUser.email}`);
       setFoundUser(null);
       setUserSearch("");
@@ -164,15 +169,15 @@ const AccessManager = ({ test, onUpdate }) => {
   };
 
   const handleRevokeAccess = async (userToRevoke) => {
+    const contentRef = doc(db, contentType, content.id);
     try {
-      const testRef = doc(db, "mockTests", test.id);
       const isLastUser =
-        test.allowedUserIds && test.allowedUserIds.length === 1;
+        content.allowedUserIds && content.allowedUserIds.length === 1;
       const dataToUpdate = { allowedUserIds: arrayRemove(userToRevoke.uid) };
       if (isLastUser) {
         dataToUpdate.isRestricted = false;
       }
-      await updateDoc(testRef, dataToUpdate);
+      await updateDoc(contentRef, dataToUpdate);
       toast.success(`Access revoked for ${userToRevoke.email}`);
       onUpdate();
     } catch (error) {
@@ -185,7 +190,9 @@ const AccessManager = ({ test, onUpdate }) => {
       <h2 className='text-xl font-bold text-slate-900 mb-1'>
         2. Manage Access for:
       </h2>
-      <p className='text-indigo-600 font-semibold text-lg mb-6'>{test.title}</p>
+      <p className='text-indigo-600 font-semibold text-lg mb-6'>
+        {content.title}
+      </p>
       <div className='grid grid-cols-1 md:grid-cols-2 gap-8'>
         <div>
           <h3 className='font-bold text-slate-800 mb-3'>
@@ -197,7 +204,7 @@ const AccessManager = ({ test, onUpdate }) => {
               value={userSearch}
               onChange={(e) => setUserSearch(e.target.value)}
               placeholder='Search user by email...'
-              className='w-full p-3 border text-slate-900 border-slate-300 rounded-lg'
+              className='w-full text-slate-900 p-3 border border-slate-300 rounded-lg'
             />
             <button
               type='submit'
@@ -207,18 +214,13 @@ const AccessManager = ({ test, onUpdate }) => {
               <Search />
             </button>
           </form>
-
-          {/* --- THIS IS THE UPDATED SECTION --- */}
           {foundUser && (
             <div className='mt-4 p-3 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center'>
               <div>
                 <p className='font-semibold text-slate-900'>{foundUser.name}</p>
                 <p className='text-sm text-slate-600'>{foundUser.email}</p>
               </div>
-
-              {/* Conditionally render the button */}
               {allowedUsers.some((user) => user.uid === foundUser.uid) ? (
-                // If user is already in the list, show a disabled "stop" icon with a tooltip
                 <div className='relative group'>
                   <button
                     disabled
@@ -231,7 +233,6 @@ const AccessManager = ({ test, onUpdate }) => {
                   </span>
                 </div>
               ) : (
-                // Otherwise, show the normal "add" button
                 <button
                   onClick={handleGrantAccess}
                   className='p-2 bg-green-600 text-white rounded-lg hover:bg-green-700'
@@ -241,7 +242,6 @@ const AccessManager = ({ test, onUpdate }) => {
               )}
             </div>
           )}
-          {/* --- END OF UPDATED SECTION --- */}
         </div>
         <div>
           <h3 className='font-bold text-slate-800 mb-3'>
@@ -249,15 +249,15 @@ const AccessManager = ({ test, onUpdate }) => {
           </h3>
           <div className='space-y-2 max-h-60 overflow-y-auto'>
             {loadingUsers ? (
-              <p className='text-sm text-slate-500 p-3'>Loading...</p>
+              <p className='text-sm text-slate-500'>Loading...</p>
             ) : allowedUsers.length > 0 ? (
               allowedUsers.map((user) => (
                 <div
                   key={user.uid}
-                  className='p-3 bg-slate-50 text-slate-900 border rounded-lg flex justify-between items-center'
+                  className='p-3 bg-slate-50 border rounded-lg flex justify-between items-center'
                 >
                   <div>
-                    <p className='font-semibold'>{user.name}</p>
+                    <p className='font-semibold text-slate-900'>{user.name}</p>
                     <p className='text-sm text-slate-600'>{user.email}</p>
                   </div>
                   <button
@@ -270,8 +270,7 @@ const AccessManager = ({ test, onUpdate }) => {
               ))
             ) : (
               <p className='text-sm text-slate-500 p-3 bg-slate-50 border rounded-lg'>
-                This test is currently public. Grant access to make it
-                restricted.
+                This content is public. Grant access to make it restricted.
               </p>
             )}
           </div>
@@ -282,55 +281,95 @@ const AccessManager = ({ test, onUpdate }) => {
 };
 
 export default function AccessControlPage() {
-  const [selectedTest, setSelectedTest] = useState(null);
+  const [contentType, setContentType] = useState("mockTests");
+  const [selectedContent, setSelectedContent] = useState(null);
 
   useEffect(() => {
-    const savedTestJson = Cookies.get("selectedAccessControlTest");
-    if (savedTestJson) {
+    const savedContentJson = Cookies.get(
+      `selectedAccessControl_${contentType}`
+    );
+    if (savedContentJson) {
       try {
-        setSelectedTest(JSON.parse(savedTestJson));
+        setSelectedContent(JSON.parse(savedContentJson));
       } catch (e) {
-        // console.error("Failed to parse saved test from cookie", e);
-        Cookies.remove("selectedAccessControlTest");
+        Cookies.remove(`selectedAccessControl_${contentType}`);
       }
     }
-  }, []);
+  }, [contentType]);
 
-  const handleTestSelect = (test) => {
-    setSelectedTest(test);
-    Cookies.set("selectedAccessControlTest", JSON.stringify(test), {
+  const handleContentTypeChange = (type) => {
+    setContentType(type);
+    setSelectedContent(null);
+  };
+
+  const handleContentSelect = (item) => {
+    setSelectedContent(item);
+    Cookies.set(`selectedAccessControl_${contentType}`, JSON.stringify(item), {
       expires: 1,
     });
   };
 
-  const refreshSelectedTest = async () => {
-    if (!selectedTest) return;
+  const refreshSelectedContent = async () => {
+    if (!selectedContent) return;
     try {
-      const testRef = doc(db, "mockTests", selectedTest.id);
-      const freshTestSnap = await getDoc(testRef);
-      if (freshTestSnap.exists()) {
-        const updatedTest = { id: freshTestSnap.id, ...freshTestSnap.data() };
-        setSelectedTest(updatedTest);
-        Cookies.set("selectedAccessControlTest", JSON.stringify(updatedTest), {
-          expires: 1,
-        });
+      const contentRef = doc(db, contentType, selectedContent.id);
+      const freshSnap = await getDoc(contentRef);
+      if (freshSnap.exists()) {
+        const updatedContent = { id: freshSnap.id, ...freshSnap.data() };
+        setSelectedContent(updatedContent);
+        Cookies.set(
+          `selectedAccessControl_${contentType}`,
+          JSON.stringify(updatedContent),
+          { expires: 1 }
+        );
       } else {
-        toast.error("Test no longer exists.");
-        setSelectedTest(null);
+        setSelectedContent(null);
       }
     } catch {
-      toast.error("Failed to refresh test data.");
+      toast.error("Failed to refresh content data.");
     }
   };
 
   return (
     <div>
       <h1 className='text-3xl font-bold text-slate-900 mb-6'>Access Control</h1>
-      <TestSelector onTestSelect={handleTestSelect} />
-      {selectedTest && (
-        <AccessManager test={selectedTest} onUpdate={refreshSelectedTest} />
+      <div className='mb-6 flex space-x-2 p-1 bg-slate-200 rounded-lg'>
+        <button
+          onClick={() => handleContentTypeChange("mockTests")}
+          className={`w-full p-2 rounded-md font-semibold ${
+            contentType === "mockTests"
+              ? "bg-white text-indigo-600 shadow"
+              : "text-slate-700"
+          }`}
+        >
+          Mock Tests
+        </button>
+        <button
+          onClick={() => handleContentTypeChange("posts")}
+          className={`w-full p-2 rounded-md font-semibold ${
+            contentType === "posts"
+              ? "bg-white text-indigo-600 shadow"
+              : "text-slate-700"
+          }`}
+        >
+          Blog Posts
+        </button>
+      </div>
+      <ContentSelector
+        contentType={contentType}
+        onContentSelect={handleContentSelect}
+      />
+      {selectedContent && (
+        <AccessManager
+          content={selectedContent}
+          contentType={contentType}
+          onUpdate={refreshSelectedContent}
+        />
       )}
-      <BulkAccessManager onUpdate={refreshSelectedTest} />
+      <BulkAccessManager
+        contentType={contentType}
+        onUpdate={refreshSelectedContent}
+      />
     </div>
   );
 }

@@ -15,19 +15,26 @@ import {
 import Papa from "papaparse";
 import { Upload, FileDown } from "lucide-react";
 
-export default function BulkAccessManager({ onUpdate }) {
+// The component now accepts a 'contentType' prop ('mockTests' or 'posts')
+export default function BulkAccessManager({ contentType, onUpdate }) {
   const [csvFile, setCsvFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
 
   const handleFileChange = (e) => setCsvFile(e.target.files[0]);
 
   const downloadTemplate = () => {
-    const template =
-      "userEmail,testTitle\njohn.doe@example.com,Sample Test Title 1\njane.doe@example.com,Another Test Title";
+    // FIX: The template now dynamically changes based on the selected content type.
+    const isTests = contentType === "mockTests";
+    const titleHeader = isTests ? "testTitle" : "postTitle";
+    const exampleTitle = isTests
+      ? "Sample Test Title 1"
+      : "Sample Blog Post Title";
+
+    const template = `userEmail,${titleHeader}\njohn.doe@example.com,${exampleTitle}`;
     const blob = new Blob([template], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.setAttribute("download", "access_control_template.csv");
+    link.setAttribute("download", `access_control_${contentType}_template.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -44,34 +51,40 @@ export default function BulkAccessManager({ onUpdate }) {
       complete: async (results) => {
         try {
           const rows = results.data;
-          if (!rows.length || !rows[0].userEmail || !rows[0].testTitle) {
-            throw new Error("Invalid CSV format. Please use the template.");
+          const isTests = contentType === "mockTests";
+          const titleHeader = isTests ? "testTitle" : "postTitle";
+
+          if (!rows.length || !rows[0].userEmail || !rows[0][titleHeader]) {
+            throw new Error(
+              "Invalid CSV format. Please use the correct template."
+            );
           }
 
           const userEmails = [...new Set(rows.map((row) => row.userEmail))];
-          const testTitles = [...new Set(rows.map((row) => row.testTitle))];
+          const contentTitles = [
+            ...new Set(rows.map((row) => row[titleHeader])),
+          ];
 
           const userQuery = query(
             collection(db, "users"),
             where("email", "in", userEmails)
           );
-          const testQuery = query(
-            collection(db, "mockTests"),
-            where("title", "in", testTitles)
+          // FIX: The query now uses the dynamic 'contentType' variable.
+          const contentQuery = query(
+            collection(db, contentType),
+            where("title", "in", contentTitles)
           );
 
-          const [userSnap, testSnap] = await Promise.all([
+          const [userSnap, contentSnap] = await Promise.all([
             getDocs(userQuery),
-            getDocs(testQuery),
+            getDocs(contentQuery),
           ]);
 
           const usersMap = new Map(
             userSnap.docs.map((d) => [d.data().email, d.data().uid])
           );
-
-          // FIX: Store the entire test object (ID and data) to check its current state.
-          const testsMap = new Map(
-            testSnap.docs.map((d) => [
+          const contentMap = new Map(
+            contentSnap.docs.map((d) => [
               d.data().title,
               { id: d.id, data: d.data() },
             ])
@@ -82,33 +95,30 @@ export default function BulkAccessManager({ onUpdate }) {
 
           rows.forEach((row) => {
             const userId = usersMap.get(row.userEmail);
-            const testInfo = testsMap.get(row.testTitle);
+            const contentInfo = contentMap.get(row[titleHeader]);
 
-            if (userId && testInfo) {
-              const testRef = doc(db, "mockTests", testInfo.id);
+            if (userId && contentInfo) {
+              const contentRef = doc(db, contentType, contentInfo.id);
 
-              // FIX: Build the update payload dynamically.
               const updatePayload = {
                 allowedUserIds: arrayUnion(userId),
               };
 
-              // Check if the test is currently public (has no allowed users).
               const isCurrentlyPublic =
-                !testInfo.data.allowedUserIds ||
-                testInfo.data.allowedUserIds.length === 0;
+                !contentInfo.data.allowedUserIds ||
+                contentInfo.data.allowedUserIds.length === 0;
 
-              // If it's public, also set the isRestricted flag to true.
               if (isCurrentlyPublic) {
                 updatePayload.isRestricted = true;
               }
 
-              batch.update(testRef, updatePayload);
+              batch.update(contentRef, updatePayload);
               updatesCount++;
             }
           });
 
           if (updatesCount === 0) {
-            throw new Error("No valid user/test pairs found in the CSV.");
+            throw new Error("No valid user/content pairs found in the CSV.");
           }
 
           await batch.commit();
@@ -134,9 +144,11 @@ export default function BulkAccessManager({ onUpdate }) {
       <h2 className='text-xl font-bold text-slate-900 mb-4'>
         3. Bulk Grant Access via CSV
       </h2>
+      {/* FIX: The descriptive text now updates dynamically. */}
       <p className='text-sm text-slate-600 mb-4'>
-        Grant access to multiple users for multiple tests in a single upload.
-        Ensure the user emails and test titles in the CSV are exact matches.
+        Grant access to multiple users for multiple{" "}
+        {contentType === "mockTests" ? "tests" : "posts"} in a single upload.
+        Ensure the user emails and content titles in the CSV are exact matches.
       </p>
       <div>
         <label
@@ -168,7 +180,7 @@ export default function BulkAccessManager({ onUpdate }) {
           className='w-full inline-flex items-center justify-center px-4 py-2 text-sm bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400'
         >
           <Upload className='h-4 w-4 mr-2' />
-          {isUploading ? "Processing...." : "Upload & Grant Access"}
+          {isUploading ? "Processing..." : "Upload & Grant Access"}
         </button>
       </div>
     </div>

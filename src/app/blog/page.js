@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -14,15 +14,33 @@ import {
 import BlogPostCard from "@/components/blog/BlogPostCard";
 import ArchiveSidebar from "@/components/blog/ArchiveSidebar";
 import { Newspaper, ArchiveRestore } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
-// This is a simple display component for the posts list
-const PostListDisplay = ({ posts }) => (
-  <div className='grid grid-cols-1 md:grid-cols-2 gap-8'>
-    {posts.map((post) => (
-      <BlogPostCard key={post.id} post={post} />
-    ))}
-  </div>
-);
+// This component now filters the posts it receives
+const PostListDisplay = ({ posts, user }) => {
+  const filteredPosts = useMemo(() => {
+    return posts.filter((post) => {
+      // If the post is not restricted, show it to everyone.
+      if (!post.isRestricted) {
+        return true;
+      }
+      // If the post is restricted, the user must be logged in.
+      if (!user) {
+        return false;
+      }
+      // If logged in, check if their ID is in the allowed list.
+      return post.allowedUserIds?.includes(user.uid);
+    });
+  }, [posts, user]);
+
+  return (
+    <div className='grid grid-cols-1 md:grid-cols-2 gap-8'>
+      {filteredPosts.map((post) => (
+        <BlogPostCard key={post.id} post={post} />
+      ))}
+    </div>
+  );
+};
 
 export default function BlogPage() {
   const [posts, setPosts] = useState([]);
@@ -32,6 +50,7 @@ export default function BlogPage() {
     title: "Recent Posts",
     icon: <Newspaper />,
   });
+  const { user } = useAuth(); // Get the current user to pass down
 
   const fetchRecentPosts = useCallback(async () => {
     setLoading(true);
@@ -87,7 +106,6 @@ export default function BlogPage() {
     }
   }, []);
 
-  // Fetch recent posts on initial load
   useEffect(() => {
     fetchRecentPosts();
   }, [fetchRecentPosts]);
@@ -105,7 +123,6 @@ export default function BlogPage() {
         </div>
 
         <div className='grid grid-cols-1 lg:grid-cols-12 gap-12'>
-          {/* Main Content Area */}
           <div className='lg:col-span-8'>
             <div className='flex justify-between items-center mb-6'>
               <h2 className='flex items-center text-2xl font-bold text-slate-800'>
@@ -127,7 +144,7 @@ export default function BlogPage() {
             {loading ? (
               <p>Loading posts...</p>
             ) : posts.length > 0 ? (
-              <PostListDisplay posts={posts} />
+              <PostListDisplay posts={posts} user={user} />
             ) : (
               <p className='text-center p-12 bg-white rounded-lg shadow-md'>
                 No posts found for this period.
@@ -135,7 +152,6 @@ export default function BlogPage() {
             )}
           </div>
 
-          {/* Sidebar */}
           <div className='lg:col-span-4'>
             <div className='sticky top-24'>
               <ArchiveSidebar onMonthSelect={fetchArchivedPosts} />
