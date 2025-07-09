@@ -1,11 +1,14 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+// We no longer need useRouter here because the parent page will handle the refresh.
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
 
-export default function MockTestManager() {
+// The component accepts the onTestCreated function as a prop.
+export default function MockTestManager({ onTestCreated }) {
+  // Your original state variables are preserved.
+  const [testType, setTestType] = useState("static");
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
   const [subject, setSubject] = useState("");
@@ -13,25 +16,42 @@ export default function MockTestManager() {
   const [estimatedTime, setEstimatedTime] = useState(0);
   const [isPremium, setIsPremium] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
+  const [questionCount, setQuestionCount] = useState(10);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Your validation logic is preserved.
+    if (Number(estimatedTime) <= 0) {
+      toast.error("Estimated time must be greater than 0.");
+      return;
+    }
+
     setIsLoading(true);
     const loadingToast = toast.loading("Creating new test...");
 
     try {
-      // Write directly to the 'mockTests' collection from the client
-      await addDoc(collection(db, "mockTests"), {
+      const isDynamicTest = testType === "dynamic";
+      const testData = {
         title,
         topic,
         subject,
         examName,
         estimatedTime: Number(estimatedTime),
         isPremium,
-        questionCount: 0,
         createdAt: serverTimestamp(),
-      });
+        isDynamic: isDynamicTest,
+      };
+
+      if (isDynamicTest) {
+        testData.questionCount = Number(questionCount);
+        testData.sourceCriteria = { topic, subject };
+      } else {
+        // Your original logic for static tests is preserved.
+        testData.questionCount = 0;
+      }
+
+      await addDoc(collection(db, "mockTests"), testData);
 
       toast.success("Test created successfully!", { id: loadingToast });
       e.target.reset();
@@ -41,7 +61,13 @@ export default function MockTestManager() {
       setExamName("");
       setEstimatedTime(0);
       setIsPremium(false);
-      router.refresh(); // Refresh the page to show the new test in the list
+      setQuestionCount(10);
+
+      // --- THIS IS THE CORRECTED REFRESH LOGIC ---
+      // This calls the function passed from the parent page to trigger an instant data refresh.
+      if (onTestCreated) {
+        onTestCreated();
+      }
     } catch (error) {
       toast.error(`Error: ${error.message}`, { id: loadingToast });
     } finally {
@@ -49,8 +75,38 @@ export default function MockTestManager() {
     }
   };
 
+  // Your original form structure is preserved, with the addition of the Test Type toggle.
   return (
     <form onSubmit={handleSubmit} className='space-y-6'>
+      <div>
+        <label className='block text-sm font-medium text-slate-900 mb-1'>
+          Test Type
+        </label>
+        <div className='flex gap-4 rounded-lg bg-slate-200 p-1'>
+          <button
+            type='button'
+            onClick={() => setTestType("static")}
+            className={`w-full p-2 rounded-md font-semibold text-sm ${
+              testType === "static"
+                ? "bg-white text-indigo-600 shadow"
+                : "text-slate-600"
+            }`}
+          >
+            Static Test
+          </button>
+          <button
+            type='button'
+            onClick={() => setTestType("dynamic")}
+            className={`w-full p-2 rounded-md font-semibold text-sm ${
+              testType === "dynamic"
+                ? "bg-white text-indigo-600 shadow"
+                : "text-slate-600"
+            }`}
+          >
+            Dynamic Test
+          </button>
+        </div>
+      </div>
       <div>
         <label
           htmlFor='test-title'
@@ -63,7 +119,7 @@ export default function MockTestManager() {
           type='text'
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className='w-full p-3 border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-500'
+          className='w-full p-3 border border-slate-300 rounded-lg text-slate-900'
           required
         />
       </div>
@@ -79,8 +135,12 @@ export default function MockTestManager() {
           type='text'
           value={topic}
           onChange={(e) => setTopic(e.target.value)}
-          placeholder='e.g., Indian History'
-          className='w-full p-3 border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-500'
+          placeholder={
+            testType === "dynamic"
+              ? "Criteria for question bank"
+              : "e.g., Indian History"
+          }
+          className='w-full p-3 border border-slate-300 rounded-lg text-slate-900'
           required
         />
       </div>
@@ -96,8 +156,12 @@ export default function MockTestManager() {
           type='text'
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
-          placeholder='e.g., General Studies'
-          className='w-full p-3 border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-500'
+          placeholder={
+            testType === "dynamic"
+              ? "Criteria for question bank"
+              : "e.g., General Studies"
+          }
+          className='w-full p-3 border border-slate-300 rounded-lg text-slate-900'
           required
         />
       </div>
@@ -114,9 +178,28 @@ export default function MockTestManager() {
           value={examName}
           onChange={(e) => setExamName(e.target.value)}
           placeholder='e.g., SSC CGL'
-          className='w-full p-3 border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-500'
+          className='w-full p-3 border border-slate-300 rounded-lg text-slate-900'
         />
       </div>
+      {testType === "dynamic" && (
+        <div>
+          <label
+            htmlFor='q-count'
+            className='block text-sm font-medium text-slate-900 mb-1'
+          >
+            Number of Questions to Draw
+          </label>
+          <input
+            id='q-count'
+            type='number'
+            value={questionCount}
+            onChange={(e) => setQuestionCount(e.target.value)}
+            className='w-full p-3 border border-slate-300 rounded-lg text-slate-900'
+            required
+            min='1'
+          />
+        </div>
+      )}
       <div>
         <label
           htmlFor='test-time'
@@ -131,6 +214,7 @@ export default function MockTestManager() {
           onChange={(e) => setEstimatedTime(e.target.value)}
           className='w-full p-3 border border-slate-300 rounded-lg text-slate-900'
           required
+          min='1'
         />
       </div>
       <div className='flex items-center'>

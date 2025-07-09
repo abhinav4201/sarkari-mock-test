@@ -183,6 +183,10 @@ export default function TestHistory() {
             );
 
             // FIX: Use the unique testId as the key for each item
+            const resultPath = item.mostRecentAttempt.isDynamic
+              ? `/mock-tests/results/results-dynamic/${item.mostRecentAttempt.id}`
+              : `/mock-tests/results/${item.mostRecentAttempt.id}`;
+
             if (item.attemptCount > 1) {
               return (
                 <button
@@ -197,7 +201,7 @@ export default function TestHistory() {
               return (
                 <Link
                   key={item.testId}
-                  href={`/mock-tests/results/${item.mostRecentAttempt.id}`}
+                  href={resultPath}
                   className='block p-4 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 transition-colors'
                 >
                   {content}

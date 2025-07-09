@@ -1,21 +1,61 @@
+// components/admin/Sidebar.js
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { LogOut } from "lucide-react";
+import {
+  LogOut,
+  LayoutDashboard,
+  PenSquare,
+  TestTube,
+  FileClock,
+  Mail,
+  KeyRound,
+  BookOpenText,
+} from "lucide-react"; // Added relevant icons
 
 const adminLinks = [
-  { name: "Dashboard", href: "/admin" },
-  { name: "Blog Management", href: "/admin/blog" },
-  { name: "Mock Tests", href: "/admin/mock-tests" },
-  { name: "Daily Content", href: "/admin/daily-content" },
-  { name: "Contact Submissions", href: "/admin/contacts" },
-  { name: "Access Control", href: "/admin/access-control" },
+  {
+    name: "Dashboard",
+    href: "/admin",
+    icon: <LayoutDashboard className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Blog Management",
+    href: "/admin/blog",
+    icon: <PenSquare className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Mock Tests",
+    href: "/admin/mock-tests",
+    icon: <TestTube className='mr-3 h-5 w-5' />,
+  },
+  // --- NEW ITEM ADDED FOR QUESTION BANK ---
+  {
+    name: "Question Bank",
+    href: "/admin/question-bank",
+    icon: <BookOpenText className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Daily Content",
+    href: "/admin/daily-content",
+    icon: <FileClock className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Contact Submissions",
+    href: "/admin/contacts",
+    icon: <Mail className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Access Control",
+    href: "/admin/access-control",
+    icon: <KeyRound className='mr-3 h-5 w-5' />,
+  },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user, logOut } = useAuth(); // Get the user object
+  const { user, logOut } = useAuth();
 
   const handleSignOut = async () => {
     try {
@@ -61,14 +101,13 @@ export default function Sidebar() {
                 : "hover:bg-slate-800 hover:text-white"
             }`}
           >
+            {link.icon}
             {link.name}
           </Link>
         ))}
       </nav>
 
-      {/* Logout Button and User Info at the bottom of the sidebar */}
       <div className='mt-6 pt-4 border-t border-slate-700'>
-        {/* THIS IS THE NEW CODE: It displays the logged-in user's email */}
         {user && (
           <div className='px-3 py-2 mb-2 text-center'>
             <p className='text-sm font-medium text-white truncate'>

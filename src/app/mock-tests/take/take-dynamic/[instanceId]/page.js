@@ -4,46 +4,21 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import {
-  collection,
-  doc,
-  getDoc,
-  query,
-  where,
-  getDocs,
-  serverTimestamp,
-  addDoc,
-} from "firebase/firestore";
+import { doc, getDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
 import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import QuestionPalette from "@/components/mock-tests/QuestionPalette";
 import FinalWarningModal from "@/components/ui/FinalWarningModal";
 
-async function getTestData(testId) {
-  const testRef = doc(db, "mockTests", testId);
-  const questionsQuery = query(
-    collection(db, "mockTestQuestions"),
-    where("testId", "==", testId)
-  );
-
-  const [testSnap, questionsSnap] = await Promise.all([
-    getDoc(testRef),
-    getDocs(questionsQuery),
-  ]);
-
-  if (!testSnap.exists()) return null;
-
-  const testDetails = { id: testSnap.id, ...testSnap.data() };
-  const questions = questionsSnap.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  }));
-
-  return { testDetails, questions };
+async function getTestInstance(instanceId, userId) {
+  const instanceRef = doc(db, "dynamicTestInstances", instanceId);
+  const instanceSnap = await getDoc(instanceRef);
+  if (!instanceSnap.exists() || instanceSnap.data().userId !== userId) return null;
+  return instanceSnap.data();
 }
 
-export default function TestTakingPage() {
-  const [testDetails, setTestDetails] = useState(null);
+export default function TakeDynamicTestPage() {
+  const [instanceData, setInstanceData] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedOptions, setSelectedOptions] = useState({});
@@ -54,17 +29,16 @@ export default function TestTakingPage() {
   const [markedForReview, setMarkedForReview] = useState(new Set());
   const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
   const [warningInfo, setWarningInfo] = useState({ type: null, count: 0 });
-  const [lastQuestionWarningShown, setLastQuestionWarningShown] =
-    useState(false); // NEW: State to track the warning
+  const [lastQuestionWarningShown, setLastQuestionWarningShown] = useState(false);
 
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const params = useParams();
-  const { testId } = params;
+  const { instanceId } = params;
 
   const forceSubmit = useCallback(
     async (reason = "user_submitted") => {
-      if (testState === "submitting" || !user) return;
+      if (testState === "submitting" || !user || !instanceData) return;
       setTestState("submitting");
 
       const lastQuestionId = questions[currentQuestionIndex]?.id;
@@ -75,6 +49,7 @@ export default function TestTakingPage() {
           (finalTimePerQuestion[lastQuestionId] || 0) + timeSpent;
       }
 
+      // --- RESTORED: Your original, correct logic for building the answers object ---
       const finalAnswers = {};
       for (const qId in selectedOptions) {
         finalAnswers[qId] = {
@@ -82,6 +57,7 @@ export default function TestTakingPage() {
           timeTaken: finalTimePerQuestion[qId] || 0,
         };
       }
+      // This second loop ensures unanswered questions are also recorded.
       for (const q of questions) {
         if (!finalAnswers[q.id]) {
           finalAnswers[q.id] = {
@@ -104,34 +80,36 @@ export default function TestTakingPage() {
       const incorrectAnswers = totalQuestions - score;
 
       try {
-        const resultRef = await addDoc(collection(db, "mockTestResults"), {
+        const resultDocRef = await addDoc(collection(db, "mockTestResults"), {
           userId: user.uid,
-          testId,
+          testId: instanceData.originalTestId,
+          instanceId: instanceId,
           answers: finalAnswers, // Saving the correctly formatted object
           score,
           totalQuestions,
           incorrectAnswers,
           submissionReason: reason,
-          isDynamic: false,
+          isDynamic: true,
           completedAt: serverTimestamp(),
         });
-        toast.success("Test submitted successfully!");
-        router.push(`/mock-tests/results/${resultRef.id}`);
+        toast.success("Test submitted!");
+        router.push(`/mock-tests/results/results-dynamic/${resultDocRef.id}`);
       } catch (error) {
-        console.error(error);
-        toast.error("Failed to submit your test. Please try again.");
+        console.error("Error writing test results:", error);
+        toast.error("Failed to submit test.");
         setTestState("in-progress");
       }
     },
     [
+      instanceData,
       selectedOptions,
       timePerQuestion,
       questions,
       currentQuestionIndex,
       questionStartTime,
       router,
-      testId,
       user,
+      instanceId,
       testState,
     ]
   );
@@ -139,7 +117,6 @@ export default function TestTakingPage() {
   const handleFinalSubmit = () => {
     const unanswered = questions.filter((q) => !selectedOptions[q.id]);
     const marked = [...markedForReview];
-
     if (unanswered.length > 0) {
       setWarningInfo({ type: "unanswered", count: unanswered.length });
       setIsWarningModalOpen(true);
@@ -147,7 +124,7 @@ export default function TestTakingPage() {
       setWarningInfo({ type: "review", count: marked.length });
       setIsWarningModalOpen(true);
     } else {
-      forceSubmit();
+      forceSubmit("user_submitted");
     }
   };
 
@@ -159,44 +136,34 @@ export default function TestTakingPage() {
       const firstMarkedId = [...markedForReview][0];
       firstIndex = questions.findIndex((q) => q.id === firstMarkedId);
     }
-
-    if (firstIndex !== -1) {
-      navigateToQuestion(firstIndex);
-    }
+    if (firstIndex !== -1) navigateToQuestion(firstIndex);
     setIsWarningModalOpen(false);
   };
 
   useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      toast.error("You must be logged in to start a test.");
-      router.push(`/mock-tests/${testId}`);
-      return;
-    }
+    if (authLoading || !user) return;
 
-    const loadTest = async () => {
-      const data = await getTestData(testId);
-      if (!data || data.questions.length === 0) {
-        setTestState("error");
-        toast.error("Test not found or has no questions.");
+    const loadInstance = async () => {
+      const data = await getTestInstance(instanceId, user.uid);
+      if (data && data.questions) {
+        setInstanceData(data);
+        setQuestions(data.questions);
+        setTimeLeft(data.estimatedTime * 60);
+        setTestState("in-progress");
+        setQuestionStartTime(Date.now());
+      } else {
+        toast.error("Could not load this test instance.");
         router.push("/mock-tests");
-        return;
       }
-      setTestDetails(data.testDetails);
-      setQuestions(data.questions);
-      setTimeLeft(data.testDetails.estimatedTime * 60);
-      setTestState("in-progress");
-      setQuestionStartTime(Date.now());
     };
-
-    if (testId && user) {
-      loadTest();
-    }
-  }, [testId, user, authLoading, router]);
+    loadInstance();
+  }, [instanceId, user, authLoading, router]);
 
   useEffect(() => {
     if (testState !== "in-progress" || timeLeft <= 0) {
-      if (timeLeft <= 0 && testState === "in-progress") forceSubmit();
+      if (timeLeft <= 0 && testState === "in-progress") {
+        forceSubmit("time_up");
+      }
       return;
     }
     const timerId = setInterval(
@@ -213,7 +180,7 @@ export default function TestTakingPage() {
           "You switched tabs. The test will be submitted automatically.",
           { duration: 5000 }
         );
-        forceSubmit();
+        forceSubmit("tab_switched");
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -223,34 +190,29 @@ export default function TestTakingPage() {
   }, [testState, forceSubmit]);
 
   const navigateToQuestion = (newIndex) => {
+    if (newIndex < 0 || newIndex >= questions.length) return;
     const timeSpent = (Date.now() - questionStartTime) / 1000;
     const currentQuestionId = questions[currentQuestionIndex].id;
     setTimePerQuestion((prev) => ({
       ...prev,
       [currentQuestionId]: (prev[currentQuestionId] || 0) + timeSpent,
     }));
-
-    // NEW: Logic to show a warning on the last question
     if (newIndex === questions.length - 1 && !lastQuestionWarningShown) {
       toast.success(
         "This is the last question. Review your answers before submitting."
       );
       setLastQuestionWarningShown(true);
     }
-
     setCurrentQuestionIndex(newIndex);
     setQuestionStartTime(Date.now());
   };
 
-  // FIX: This function now allows deselecting an answer.
   const handleAnswerSelect = (questionId, option) => {
     setSelectedOptions((prev) => {
       const newSelected = { ...prev };
-      // If the user clicks the same option again, deselect it.
       if (newSelected[questionId] === option) {
         delete newSelected[questionId];
       } else {
-        // Otherwise, select the new option.
         newSelected[questionId] = option;
       }
       return newSelected;
@@ -260,7 +222,6 @@ export default function TestTakingPage() {
   const handleMarkForReview = () => {
     const currentQuestionId = questions[currentQuestionIndex]?.id;
     if (!currentQuestionId) return;
-
     const newMarkedSet = new Set(markedForReview);
     if (newMarkedSet.has(currentQuestionId)) {
       newMarkedSet.delete(currentQuestionId);
@@ -285,9 +246,6 @@ export default function TestTakingPage() {
       <div className='flex justify-center items-center h-screen bg-slate-100 text-center p-4'>
         <div>
           <p className='text-xl font-bold text-red-600'>Failed to Load Test</p>
-          <p className='text-slate-700 mt-2'>
-            This test may not exist or has no questions.
-          </p>
         </div>
       </div>
     );
@@ -303,7 +261,7 @@ export default function TestTakingPage() {
       <FinalWarningModal
         isOpen={isWarningModalOpen}
         onClose={() => setIsWarningModalOpen(false)}
-        onConfirmSubmit={forceSubmit}
+        onConfirmSubmit={() => forceSubmit("user_submitted")}
         onGoToQuestion={goToFirstRelevantQuestion}
         warningType={warningInfo.type}
         count={warningInfo.count}
@@ -312,14 +270,11 @@ export default function TestTakingPage() {
         <div className='container mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8'>
           <div className='lg:col-span-8'>
             <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-xl'>
-              {currentQuestion ? (
+              {currentQuestion && (
                 <div>
                   <div className='flex justify-between items-start mb-4'>
                     <h2 className='text-lg font-semibold text-slate-900'>
-                      Question {currentQuestionIndex + 1}{" "}
-                      <span className='font-medium text-slate-600'>
-                        of {questions.length}
-                      </span>
+                      Question {currentQuestionIndex + 1} of {questions.length}
                     </h2>
                     <div
                       className={`text-xl font-bold px-4 py-1 rounded-full ${
@@ -352,10 +307,6 @@ export default function TestTakingPage() {
                       </button>
                     ))}
                   </div>
-                </div>
-              ) : (
-                <div className='text-center p-8'>
-                  <p className='text-slate-800'>Loading questions...</p>
                 </div>
               )}
               <div className='flex flex-col sm:flex-row justify-between items-center mt-10 pt-6 border-t border-slate-200 gap-4'>
