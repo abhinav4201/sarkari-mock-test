@@ -23,25 +23,16 @@ import {
 const PAGE_SIZE = 5;
 
 export default function BlogHistoryList({ initialPosts }) {
+  // This initial state mapping now robustly handles the date format.
   const [posts, setPosts] = useState(
-    initialPosts.map((post) => {
-      if (typeof post.createdAt === "number") {
-        return {
-          ...post,
-          createdAt: new Date(post.createdAt),
-        };
-      } else if (post.createdAt && typeof post.createdAt.seconds === "number") {
-        return {
-          ...post,
-          createdAt: new Timestamp(
-            post.createdAt.seconds,
-            post.createdAt.nanoseconds
-          ),
-        };
-      }
-      return post;
-    })
+    initialPosts.map((post) => ({
+      ...post,
+      // The initial posts from the server have createdAt as a number (milliseconds).
+      // We convert it to a proper JS Date object here.
+      createdAt: new Date(post.createdAt),
+    }))
   );
+
   const [hasMore, setHasMore] = useState(initialPosts.length === PAGE_SIZE);
   const [loadingMore, setLoadingMore] = useState(false);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -59,35 +50,33 @@ export default function BlogHistoryList({ initialPosts }) {
     try {
       const postsRef = collection(db, "posts");
       const lastPost = posts[posts.length - 1];
+
       const q = query(
         postsRef,
         orderBy("createdAt", "desc"),
-        startAfter(
-          lastPost.createdAt instanceof Date
-            ? Timestamp.fromDate(lastPost.createdAt)
-            : lastPost.createdAt
-        ),
+        // Use the Firestore Timestamp from the last post for the query cursor
+        startAfter(Timestamp.fromDate(lastPost.createdAt)),
         limit(PAGE_SIZE)
       );
 
       const snapshot = await getDocs(q);
-      const newPosts = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+
+      // --- THIS IS THE FIX ---
+      // When mapping the new documents, we immediately convert the Firestore
+      // Timestamp to a standard JavaScript Date object using .toDate().
+      const newPosts = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt.toDate(),
+        };
+      });
 
       if (newPosts.length > 0) {
-        setPosts((prev) => [
-          ...prev,
-          ...newPosts.map((post) => ({
-            ...post,
-            createdAt:
-              post.createdAt instanceof Timestamp
-                ? post.createdAt
-                : new Date(post.createdAt),
-          })),
-        ]);
+        setPosts((prev) => [...prev, ...newPosts]);
       }
+
       if (newPosts.length < PAGE_SIZE) {
         setHasMore(false);
       }
@@ -107,8 +96,7 @@ export default function BlogHistoryList({ initialPosts }) {
   const confirmDelete = async () => {
     setIsDeleting(true);
     try {
-      const postRef = doc(db, "posts", deletingPostId);
-      await deleteDoc(postRef);
+      await deleteDoc(doc(db, "posts", deletingPostId));
       toast.success("Post deleted successfully!");
       setPosts((prev) => prev.filter((p) => p.id !== deletingPostId));
     } catch (error) {
@@ -142,7 +130,6 @@ export default function BlogHistoryList({ initialPosts }) {
         confirmText='Delete'
         isLoading={isDeleting}
       />
-
       <Modal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}

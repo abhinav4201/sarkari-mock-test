@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { usePathname, useRouter } from "next/navigation";
-import { Shield, PlayCircle, Loader2 } from "lucide-react";
+import { Shield, PlayCircle, Loader2, Crown } from "lucide-react";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -16,24 +16,19 @@ import {
 import toast from "react-hot-toast";
 
 export default function StartTestButton({ test }) {
-  // --- OLD: Your original hooks (UNCHANGED) ---
-  const { user, googleSignIn } = useAuth();
+  // --- UPDATED: Now gets the isPremium status from the Auth Context ---
+  const { user, googleSignIn, isPremium } = useAuth();
   const pathname = usePathname();
-
-  // --- NEW: Add state for loading and router for navigation ---
   const [isCreating, setIsCreating] = useState(false);
   const router = useRouter();
 
-  // --- OLD: Your original login handler (UNCHANGED) ---
   const handleLogin = () => {
     googleSignIn(pathname);
   };
 
-  // --- NEW: Logic to handle starting a DYNAMIC test ---
   const handleStartDynamicTest = async () => {
     setIsCreating(true);
     const loadingToast = toast.loading("Preparing your unique test...");
-
     try {
       const { sourceCriteria, questionCount } = test;
       const q = query(
@@ -70,7 +65,6 @@ export default function StartTestButton({ test }) {
     }
   };
 
-  // --- NEW: A single handler that decides what to do on click ---
   const handleStartClick = () => {
     if (test.isDynamic) {
       handleStartDynamicTest();
@@ -79,46 +73,45 @@ export default function StartTestButton({ test }) {
     }
   };
 
-  // --- OLD: Your original login check logic (UNCHANGED) ---
   if (!user) {
     return (
       <button
         onClick={handleLogin}
-        className='w-full sm:w-auto inline-flex items-center justify-center px-12 py-4 bg-indigo-600 text-white rounded-lg text-lg font-bold hover:bg-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105'
+        className='w-full sm:w-auto inline-flex items-center justify-center px-12 py-4 bg-indigo-600 text-white rounded-lg text-lg font-bold hover:bg-indigo-700'
       >
         Login to Start Test
       </button>
     );
   }
 
-  // --- OLD: Your original premium check logic (UNCHANGED) ---
-  if (test.isPremium) {
+  // --- NEW: This is the premium check logic ---
+  if (test.isPremium && !isPremium) {
     return (
       <button
-        disabled
-        className='w-full sm:w-auto inline-flex items-center justify-center px-12 py-4 bg-slate-400 text-white rounded-lg text-lg font-bold cursor-not-allowed'
+        // You could link this to the dashboard or open the payment modal directly
+        onClick={() => router.push("/dashboard")}
+        className='w-full sm:w-auto inline-flex items-center justify-center px-12 py-4 bg-amber-500 text-white rounded-lg text-lg font-bold cursor-pointer hover:bg-amber-600'
       >
-        <Shield className='mr-2 h-5 w-5' /> Upgrade to Start
+        <Crown className='mr-2 h-5 w-5' /> Upgrade to Start
       </button>
     );
   }
 
-  // --- UPDATED: The final button now uses the smart click handler ---
   return (
     <button
       onClick={handleStartClick}
       disabled={isCreating}
-      className='w-full sm:w-auto inline-flex items-center justify-center px-12 py-4 text-lg font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all shadow-lg hover:shadow-xl disabled:bg-green-400 disabled:cursor-not-allowed'
+      className='w-full sm:w-auto inline-flex items-center justify-center px-12 py-4 text-lg font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:bg-green-400'
     >
       {isCreating ? (
         <>
           <Loader2 className='animate-spin h-6 w-6 mr-3' />
-          <span>Preparing Test...</span>
+          Preparing Test...
         </>
       ) : (
         <>
           <PlayCircle className='h-6 w-6 mr-3' />
-          <span>Start Test Now</span>
+          Start Test Now
         </>
       )}
     </button>

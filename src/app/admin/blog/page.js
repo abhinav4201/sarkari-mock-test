@@ -6,7 +6,6 @@ import BlogHistoryList from "@/components/admin/BlogHistoryList";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 
-// Helper function to fetch initial posts
 async function getInitialPosts() {
   const postsRef = collection(db, "posts");
   const q = query(postsRef, orderBy("createdAt", "desc"), limit(5));
@@ -17,15 +16,19 @@ async function getInitialPosts() {
     return {
       id: doc.id,
       ...data,
+      // --- THIS IS THE FIX ---
+      // Convert the Firestore Timestamp to a simple number (milliseconds)
+      // This makes the data "plain" and safe to pass to a Client Component.
       createdAt: data.createdAt.toMillis(),
     };
   });
 }
 
 export default function BlogManagementPage() {
-  const [activeTab, setActiveTab] = useState("write"); // 'write' or 'history'
+  const [activeTab, setActiveTab] = useState("write");
   const [initialPosts, setInitialPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [historyKey, setHistoryKey] = useState(1);
 
   useEffect(() => {
     async function loadPosts() {
@@ -35,15 +38,18 @@ export default function BlogManagementPage() {
       setLoading(false);
     }
     loadPosts();
-  }, []);
+  }, [historyKey]);
+
+  const handlePostCreated = () => {
+    setActiveTab("history");
+    setHistoryKey((prevKey) => prevKey + 1);
+  };
 
   return (
     <div>
       <h1 className='text-3xl font-bold text-slate-900 mb-6'>
         Blog Management
       </h1>
-
-      {/* Tab Navigation */}
       <div className='border-b border-slate-200 mb-6'>
         <nav className='-mb-px flex space-x-8' aria-label='Tabs'>
           <button
@@ -68,15 +74,13 @@ export default function BlogManagementPage() {
           </button>
         </nav>
       </div>
-
-      {/* Conditional Content */}
       <div>
         {activeTab === "write" && (
           <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-lg'>
             <h2 className='text-xl font-semibold mb-6 text-slate-900'>
               Create New Post
             </h2>
-            <BlogEditor />
+            <BlogEditor onPostCreated={handlePostCreated} />
           </div>
         )}
         {activeTab === "history" && (
@@ -87,7 +91,7 @@ export default function BlogManagementPage() {
             {loading ? (
               <p>Loading history...</p>
             ) : (
-              <BlogHistoryList initialPosts={initialPosts} />
+              <BlogHistoryList key={historyKey} initialPosts={initialPosts} />
             )}
           </div>
         )}

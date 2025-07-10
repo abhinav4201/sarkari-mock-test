@@ -1,22 +1,15 @@
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, where, limit } from "firebase/firestore";
-import YouTubeEmbed from "@/components/blog/YouTubeEmbed";
-import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import { notFound } from "next/navigation";
+import PostContentGuard from "@/components/blog/PostContentGuard"; // We will update this next
 
 export async function generateMetadata({ params }) {
   const { slug } = await params;
   const post = await getPostBySlug(slug);
-
   if (!post) {
-    return {
-      title: "Post Not Found",
-      description: "The post you are looking for does not exist.",
-    };
+    return { title: "Post Not Found" };
   }
-
   const excerpt = post.content.substring(0, 150).replace(/<[^>]+>/g, "");
-
   return {
     title: `${post.title} | Sarkari Mock Test`,
     description: excerpt,
@@ -33,31 +26,27 @@ async function getPostBySlug(slug) {
   }
 
   const postDoc = postSnapshot.docs[0];
+  const data = postDoc.data();
   return {
     id: postDoc.id,
-    ...postDoc.data(),
+    ...data,
+    createdAt: data.createdAt.toMillis(),
   };
 }
 
 export default async function BlogPost({ params }) {
-  const { slug } = params;
+  const { slug } = await params;
   const post = await getPostBySlug(slug);
 
   if (!post) {
     notFound();
   }
 
-  let formattedDate = "Date not available";
-  if (post.createdAt?.toDate) {
-    formattedDate = new Date(post.createdAt.toDate()).toLocaleDateString(
-      "en-US",
-      {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      }
-    );
-  }
+  const formattedDate = new Date(post.createdAt).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
   return (
     <div className='bg-white py-16 md:py-24'>
@@ -72,21 +61,9 @@ export default async function BlogPost({ params }) {
             </h1>
           </div>
 
-          {post.featuredImageSvgCode && (
-            <div className='mt-12 w-full aspect-video rounded-2xl shadow-xl overflow-hidden'>
-              <SvgDisplayer
-                svgCode={post.featuredImageSvgCode}
-                className='w-full h-full bg-slate-50'
-              />
-            </div>
-          )}
-
-          {post.youtubeUrl && <YouTubeEmbed url={post.youtubeUrl} />}
-
-          {/* FIX: Using a component to safely render the blog content */}
-          <div className='text-slate-900 mt-12 prose prose-lg lg:prose-xl max-w-none prose-h2:font-bold prose-h2:text-slate-800 prose-a:text-indigo-600 prose-img:rounded-xl prose-img:shadow-lg'>
-            <div dangerouslySetInnerHTML={{ __html: post.content }} />
-          </div>
+          {/* --- UPDATED --- */}
+          {/* All content, including the image and video, is now handled by the Guard component */}
+          <PostContentGuard post={post} />
         </article>
       </div>
     </div>

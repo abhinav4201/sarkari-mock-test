@@ -1,20 +1,38 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { useAuth } from "@/context/AuthContext";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
-import toast from "react-hot-toast";
-import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import QuestionPalette from "@/components/mock-tests/QuestionPalette";
 import FinalWarningModal from "@/components/ui/FinalWarningModal";
+import SvgDisplayer from "@/components/ui/SvgDisplayer";
+import { useAuth } from "@/context/AuthContext";
+import { db } from "@/lib/firebase";
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  serverTimestamp,
+} from "firebase/firestore";
+import { Lock } from "lucide-react";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import toast from "react-hot-toast";
 
 async function getTestInstance(instanceId, userId) {
   const instanceRef = doc(db, "dynamicTestInstances", instanceId);
-  const instanceSnap = await getDoc(instanceRef);
-  if (!instanceSnap.exists() || instanceSnap.data().userId !== userId) return null;
-  return instanceSnap.data();
+  const fetchDoc = async () => {
+    const instanceSnap = await getDoc(instanceRef);
+    if (instanceSnap.exists() && instanceSnap.data().userId === userId) {
+      return instanceSnap.data();
+    }
+    return null;
+  };
+  let data = await fetchDoc();
+  if (!data) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    data = await fetchDoc();
+  }
+  return data;
 }
 
 export default function TakeDynamicTestPage() {
@@ -29,9 +47,10 @@ export default function TakeDynamicTestPage() {
   const [markedForReview, setMarkedForReview] = useState(new Set());
   const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
   const [warningInfo, setWarningInfo] = useState({ type: null, count: 0 });
-  const [lastQuestionWarningShown, setLastQuestionWarningShown] = useState(false);
+  const [lastQuestionWarningShown, setLastQuestionWarningShown] =
+    useState(false);
 
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, isPremium } = useAuth();
   const router = useRouter();
   const params = useParams();
   const { instanceId } = params;
@@ -141,23 +160,52 @@ export default function TakeDynamicTestPage() {
   };
 
   useEffect(() => {
-    if (authLoading || !user) return;
+    if (authLoading) return;
+    if (!user) {
+      toast.error("You must be logged in to start a test.");
+      router.push(`/mock-tests/${testId}`);
+      return;
+    }
 
-    const loadInstance = async () => {
-      const data = await getTestInstance(instanceId, user.uid);
-      if (data && data.questions) {
+    const loadInstanceAndCheckPermissions = async () => {
+      setTestState("loading");
+      try {
+        const data = await getTestInstance(instanceId, user.uid);
+        if (!data || !data.questions || data.questions.length === 0) {
+          toast.error(
+            "This test instance could not be loaded or has no questions."
+          );
+          setTestState("access_denied");
+          return;
+        }
+
+        const originalTestRef = doc(db, "mockTests", data.originalTestId);
+        const originalTestSnap = await getDoc(originalTestRef);
+        if (!originalTestSnap.exists()) {
+          throw new Error("Could not find the original test template.");
+        }
+        const isTestPremium = originalTestSnap.data().isPremium;
+
+        if (isTestPremium && !isPremium) {
+          toast.error("This is a premium test. Please upgrade to access.");
+          setTestState("access_denied");
+          return;
+        }
+
         setInstanceData(data);
         setQuestions(data.questions);
         setTimeLeft(data.estimatedTime * 60);
         setTestState("in-progress");
         setQuestionStartTime(Date.now());
-      } else {
-        toast.error("Could not load this test instance.");
+      } catch (error) {
+        setTestState("error");
+        toast.error(error.message);
         router.push("/mock-tests");
       }
     };
-    loadInstance();
-  }, [instanceId, user, authLoading, router]);
+
+    loadInstanceAndCheckPermissions();
+  }, [instanceId, user, authLoading, router, isPremium]);
 
   useEffect(() => {
     if (testState !== "in-progress" || timeLeft <= 0) {
@@ -241,11 +289,35 @@ export default function TakeDynamicTestPage() {
     );
   }
 
+  if (testState === "access_denied") {
+    return (
+      <div className='flex flex-col justify-center items-center h-screen bg-slate-100 text-center p-4'>
+        <div className='mx-auto w-16 h-16 flex items-center justify-center bg-amber-100 rounded-full'>
+          <Lock className='h-8 w-8 text-amber-600' />
+        </div>
+        <h1 className='mt-6 text-2xl font-bold text-slate-900'>
+          Premium Test Locked
+        </h1>
+        <p className='mt-2 text-slate-700'>
+          You need a premium subscription to access this test.
+        </p>
+        <Link
+          href='/dashboard'
+          className='mt-6 inline-block px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700'
+        >
+          Upgrade to Premium
+        </Link>
+      </div>
+    );
+  }
+
   if (testState === "error") {
     return (
       <div className='flex justify-center items-center h-screen bg-slate-100 text-center p-4'>
         <div>
-          <p className='text-xl font-bold text-red-600'>Failed to Load Test</p>
+          <p className='text-xl font-bold text-red-600'>
+            An Error Occurred While Loading the Test
+          </p>
         </div>
       </div>
     );

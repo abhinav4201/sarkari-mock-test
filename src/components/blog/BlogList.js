@@ -1,32 +1,19 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import BlogPostCard from "./BlogPostCard";
-import { useAuth } from "@/context/AuthContext";
+// REMOVED: useAuth and useMemo are no longer needed here as filtering is removed.
 
 const PAGE_SIZE = 6;
 
 export default function BlogList({ initialPosts }) {
-  const { user } = useAuth();
   const [posts, setPosts] = useState(initialPosts);
   const [hasMore, setHasMore] = useState(initialPosts.length === PAGE_SIZE);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // This logic now filters posts based on the user's access rights
-  const filteredPosts = useMemo(() => {
-    return posts.filter((post) => {
-      // If the post is not restricted, show it to everyone.
-      if (!post.isRestricted) {
-        return true;
-      }
-      // If the post is restricted, the user must be logged in.
-      if (!user) {
-        return false;
-      }
-      // If logged in, check if their ID is in the allowed list.
-      return post.allowedUserIds?.includes(user.uid);
-    });
-  }, [posts, user]);
+  // --- REMOVED: The useMemo hook for filtering posts is gone. ---
+  // The component will now render all posts passed to it.
+  // The BlogPostCard component itself will handle the premium lock.
 
   const loadMorePosts = async () => {
     if (!hasMore || loadingMore) return;
@@ -54,7 +41,8 @@ export default function BlogList({ initialPosts }) {
   return (
     <div>
       <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
-        {filteredPosts.map((post) => (
+        {/* Now mapping directly over 'posts' instead of 'filteredPosts' */}
+        {posts.map((post) => (
           <BlogPostCard key={post.id} post={post} />
         ))}
       </div>

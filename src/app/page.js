@@ -5,15 +5,22 @@ import BlogPostCard from "@/components/blog/BlogPostCard";
 import SignUpButton from "@/components/home/SignUpButton";
 import { PenSquare, Target, Timer, ArrowRight } from "lucide-react";
 
-// This data fetching function remains the same
+// This data fetching function is updated to convert the date correctly.
 async function getRecentPosts() {
   const postsCollection = collection(db, "posts");
   const q = query(postsCollection, orderBy("createdAt", "desc"), limit(3));
   const postsSnapshot = await getDocs(q);
-  const posts = postsSnapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  }));
+  const posts = postsSnapshot.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      // --- THIS IS THE FIX ---
+      // We convert the Firestore Timestamp object to a simple number (milliseconds).
+      // This makes the 'post' object "plain" and safe to pass to a Client Component.
+      createdAt: data.createdAt.toMillis(),
+    };
+  });
   return posts;
 }
 
@@ -181,5 +188,4 @@ export default async function HomePage() {
       </section>
     </div>
   );
-
 }

@@ -3,14 +3,13 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import { useState, useEffect } from "react"; // Import useEffect
+import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
 import SvgDisplayer from "@/components/ui/SvgDisplayer";
 
-// A simple toolbar for our editor (no changes needed here)
 const TiptapToolbar = ({ editor }) => {
   if (!editor) {
     return null;
@@ -76,7 +75,8 @@ const TiptapToolbar = ({ editor }) => {
   );
 };
 
-export default function BlogEditor() {
+// Component now accepts the onPostCreated prop
+export default function BlogEditor({ onPostCreated }) {
   const { user } = useAuth();
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -84,17 +84,16 @@ export default function BlogEditor() {
   const [isLoading, setIsLoading] = useState(false);
   const [featuredImageSvgCode, setFeaturedImageSvgCode] = useState("");
   const [isSlugManuallyEdited, setIsSlugManuallyEdited] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
 
-  // --- NEW LOGIC: Auto-generate slug from title ---
   useEffect(() => {
-    // Only generate slug if the user hasn't manually edited it
     if (!isSlugManuallyEdited) {
       const generatedSlug = title
         .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, "") // Remove non-alphanumeric characters except spaces and hyphens
-        .trim() // Trim leading/trailing whitespace
-        .replace(/\s+/g, "-") // Replace spaces with hyphens
-        .replace(/-+/g, "-"); // Replace multiple hyphens with a single one
+        .replace(/[^a-z0-9\s-]/g, "")
+        .trim()
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-");
       setSlug(generatedSlug);
     }
   }, [title, isSlugManuallyEdited]);
@@ -118,10 +117,7 @@ export default function BlogEditor() {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (evt) => {
-        setFeaturedImageSvgCode(evt.target.result);
-        toast.success("Featured image loaded.");
-      };
+      reader.onload = (evt) => setFeaturedImageSvgCode(evt.target.result);
       reader.readAsText(file);
     }
   };
@@ -129,24 +125,40 @@ export default function BlogEditor() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!user) return toast.error("You must be logged in.");
-
     const htmlContent = editor.getHTML();
+    if (htmlContent === "<p></p>")
+      return toast.error("Post content cannot be empty.");
+
     setIsLoading(true);
     const loadingToast = toast.loading("Submitting post...");
 
     try {
-      // Write directly from the client to Firestore
       await addDoc(collection(db, "posts"), {
         title,
         content: htmlContent,
         slug,
         youtubeUrl: youtubeUrl || "",
         featuredImageSvgCode: featuredImageSvgCode || "",
+        isPremium: isPremium,
         createdAt: serverTimestamp(),
       });
 
       toast.success("Post created successfully!", { id: loadingToast });
-      // ... (rest of form clearing logic) ...
+
+      setTitle("");
+      setSlug("");
+      setYoutubeUrl("");
+      editor.commands.clearContent();
+      setFeaturedImageSvgCode("");
+      setIsPremium(false);
+      setIsSlugManuallyEdited(false);
+      const fileInput = document.getElementById("featured-image");
+      if (fileInput) fileInput.value = "";
+
+      // Call the refresh function from the parent page
+      if (onPostCreated) {
+        onPostCreated();
+      }
     } catch (error) {
       console.error("Error creating post:", error);
       toast.error(`Error: ${error.message}`, { id: loadingToast });
@@ -155,9 +167,8 @@ export default function BlogEditor() {
     }
   };
 
-  // --- NEW LOGIC: Handle manual slug input ---
   const handleSlugChange = (e) => {
-    setIsSlugManuallyEdited(true); // Mark slug as manually edited
+    setIsSlugManuallyEdited(true);
     setSlug(e.target.value);
   };
 
@@ -186,12 +197,11 @@ export default function BlogEditor() {
         >
           Post Slug (URL)
         </label>
-        {/* The "Generate" button is now removed */}
         <input
           id='blog-slug'
           type='text'
           value={slug}
-          onChange={handleSlugChange} // Use the new handler
+          onChange={handleSlugChange}
           className='w-full p-3 border border-slate-300 rounded-lg text-slate-900'
           required
         />
@@ -248,6 +258,26 @@ export default function BlogEditor() {
           <EditorContent editor={editor} />
         </div>
       </div>
+
+      {/* --- NEW: Checkbox for setting premium status --- */}
+      <div className='pt-4'>
+        <div className='flex items-center'>
+          <input
+            type='checkbox'
+            id='isPremiumBlog'
+            checked={isPremium}
+            onChange={(e) => setIsPremium(e.target.checked)}
+            className='h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500'
+          />
+          <label
+            htmlFor='isPremiumBlog'
+            className='ml-2 block text-sm font-medium text-slate-900'
+          >
+            Mark this post as Premium?
+          </label>
+        </div>
+      </div>
+
       <div className='pt-2'>
         <button
           type='submit'

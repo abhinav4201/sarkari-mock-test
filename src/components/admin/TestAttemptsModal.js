@@ -13,7 +13,18 @@ import {
 import toast from "react-hot-toast";
 import Modal from "../ui/Modal";
 
-// This component no longer needs to manage or render the details modal.
+// --- NEW: Helper function to format the submission reason nicely ---
+// const formatReason = (reason) => {
+//   switch (reason) {
+//     case "tab_switched":
+//       return "Tab Switched";
+//     case "time_up":
+//       return "Time Up";
+//     case "user_submitted":
+//     default:
+//       return "Completed";
+//   }
+// };
 
 export default function TestAttemptsModal({ isOpen, onClose, onRowClick }) {
   const [aggregatedAttempts, setAggregatedAttempts] = useState([]);
@@ -24,13 +35,16 @@ export default function TestAttemptsModal({ isOpen, onClose, onRowClick }) {
       const fetchAndProcessAllAttempts = async () => {
         setLoading(true);
         try {
-          // This logic remains the same: fetch all results and process them
           const resultsQuery = query(
             collection(db, "mockTestResults"),
             orderBy("completedAt", "desc")
           );
           const resultsSnapshot = await getDocs(resultsQuery);
-          const allResults = resultsSnapshot.docs.map((doc) => doc.data());
+          // Use doc.id and doc.data() to get all fields
+          const allResults = resultsSnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
 
           if (allResults.length === 0) {
             setAggregatedAttempts([]);
@@ -57,27 +71,34 @@ export default function TestAttemptsModal({ isOpen, onClose, onRowClick }) {
 
           const userIds = [
             ...new Set([...summary.values()].map((item) => item.userId)),
-          ];
+          ].filter(Boolean);
           const testIds = [
             ...new Set([...summary.values()].map((item) => item.testId)),
-          ];
+          ].filter(Boolean);
 
-          const userQuery = query(
-            collection(db, "users"),
-            where("uid", "in", userIds)
-          );
-          const testQuery = query(
-            collection(db, "mockTests"),
-            where(documentId(), "in", testIds)
-          );
+          let usersMap = new Map();
+          if (userIds.length > 0) {
+            const userQuery = query(
+              collection(db, "users"),
+              where("uid", "in", userIds)
+            );
+            const userSnap = await getDocs(userQuery);
+            usersMap = new Map(
+              userSnap.docs.map((d) => [d.data().uid, d.data()])
+            );
+          }
 
-          const [userSnap, testSnap] = await Promise.all([
-            getDocs(userQuery),
-            getDocs(testQuery),
-          ]);
-          const usersMap = new Map(userSnap.docs.map((d) => [d.id, d.data()]));
-          const testsMap = new Map(testSnap.docs.map((d) => [d.id, d.data()]));
+          let testsMap = new Map();
+          if (testIds.length > 0) {
+            const testQuery = query(
+              collection(db, "mockTests"),
+              where(documentId(), "in", testIds)
+            );
+            const testSnap = await getDocs(testQuery);
+            testsMap = new Map(testSnap.docs.map((d) => [d.id, d.data()]));
+          }
 
+          // --- UPDATED: Data processing now includes the new fields ---
           const finalData = [...summary.values()].map((item) => ({
             key: `${item.userId}_${item.testId}`,
             userName: usersMap.get(item.userId)?.name || "Unknown User",
@@ -86,6 +107,8 @@ export default function TestAttemptsModal({ isOpen, onClose, onRowClick }) {
             recentScore: item.mostRecentAttempt.score,
             totalQuestions: item.mostRecentAttempt.totalQuestions,
             recentDate: item.mostRecentAttempt.completedAt,
+            isDynamic: item.mostRecentAttempt.isDynamic || false, // Add isDynamic field
+            submissionReason: item.mostRecentAttempt.submissionReason, // Add submissionReason
             allAttempts: item.allAttemptsForPair,
           }));
 
@@ -108,7 +131,7 @@ export default function TestAttemptsModal({ isOpen, onClose, onRowClick }) {
       onClose={onClose}
       title='User Test Attempts (Summary)'
     >
-      <div className='space-y-4'>
+      <div className='p-1'>
         {loading ? (
           <p className='text-center p-8'>Generating summary...</p>
         ) : aggregatedAttempts.length > 0 ? (
@@ -128,16 +151,20 @@ export default function TestAttemptsModal({ isOpen, onClose, onRowClick }) {
                   <th className='p-4 text-sm font-semibold text-slate-800'>
                     Most Recent Score
                   </th>
+                  {/* --- NEW: Table Header for Test Type --- */}
                   <th className='p-4 text-sm font-semibold text-slate-800'>
-                    Last Attempt
+                    Test Type
                   </th>
+                  {/* --- NEW: Table Header for Submission Reason --- */}
+                  {/* <th className='p-4 text-sm font-semibold text-slate-800'>
+                    Submission
+                  </th> */}
                 </tr>
               </thead>
               <tbody>
                 {aggregatedAttempts.map((item) => (
                   <tr
                     key={item.key}
-                    // FIX: The onClick now calls the onRowClick prop passed from the parent page.
                     onClick={() => onRowClick(item)}
                     className='border-b border-slate-100 hover:bg-slate-200 cursor-pointer'
                   >
@@ -153,13 +180,22 @@ export default function TestAttemptsModal({ isOpen, onClose, onRowClick }) {
                     <td className='p-4 text-slate-700 font-semibold align-top'>
                       {item.recentScore} / {item.totalQuestions}
                     </td>
-                    <td className='p-4 text-slate-600 text-sm align-top'>
-                      {item.recentDate?.toDate
-                        ? new Date(
-                            item.recentDate.toDate()
-                          ).toLocaleDateString()
-                        : "N/A"}
+                    {/* --- NEW: Table Cell for Test Type --- */}
+                    <td className='p-4 text-sm align-top'>
+                      {item.isDynamic ? (
+                        <span className='px-2 py-1 font-semibold text-xs rounded-full bg-blue-800 text-white'>
+                          Dynamic
+                        </span>
+                      ) : (
+                        <span className='px-2 py-1 font-semibold text-xs rounded-full bg-green-800 text-white'>
+                          Static
+                        </span>
+                      )}
                     </td>
+                    {/* --- NEW: Table Cell for Submission Reason --- */}
+                    {/* <td className='p-4 text-sm text-slate-600 align-top'>
+                      {formatReason(item.submissionReason)}
+                    </td> */}
                   </tr>
                 ))}
               </tbody>

@@ -1,23 +1,25 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import QuestionPalette from "@/components/mock-tests/QuestionPalette";
+import FinalWarningModal from "@/components/ui/FinalWarningModal";
+import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import {
+  addDoc,
   collection,
   doc,
   getDoc,
-  query,
-  where,
   getDocs,
+  query,
   serverTimestamp,
-  addDoc,
+  where,
 } from "firebase/firestore";
+import { Lock } from "lucide-react";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import SvgDisplayer from "@/components/ui/SvgDisplayer";
-import QuestionPalette from "@/components/mock-tests/QuestionPalette";
-import FinalWarningModal from "@/components/ui/FinalWarningModal";
 
 async function getTestData(testId) {
   const testRef = doc(db, "mockTests", testId);
@@ -25,20 +27,16 @@ async function getTestData(testId) {
     collection(db, "mockTestQuestions"),
     where("testId", "==", testId)
   );
-
   const [testSnap, questionsSnap] = await Promise.all([
     getDoc(testRef),
     getDocs(questionsQuery),
   ]);
-
   if (!testSnap.exists()) return null;
-
   const testDetails = { id: testSnap.id, ...testSnap.data() };
   const questions = questionsSnap.docs.map((doc) => ({
     id: doc.id,
     ...doc.data(),
   }));
-
   return { testDetails, questions };
 }
 
@@ -57,7 +55,7 @@ export default function TestTakingPage() {
   const [lastQuestionWarningShown, setLastQuestionWarningShown] =
     useState(false); // NEW: State to track the warning
 
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, isPremium } = useAuth();
   const router = useRouter();
   const params = useParams();
   const { testId } = params;
@@ -174,25 +172,38 @@ export default function TestTakingPage() {
       return;
     }
 
-    const loadTest = async () => {
-      const data = await getTestData(testId);
-      if (!data || data.questions.length === 0) {
+    const loadTestAndCheckPermissions = async () => {
+      setTestState("loading");
+      try {
+        const data = await getTestData(testId);
+        if (!data || !data.questions || data.questions.length === 0) {
+          toast.error("This test could not be loaded or has no questions.");
+          setTestState("access_denied"); // Use the access denied screen
+          return;
+        }
+
+        if (data.testDetails.isPremium && !isPremium) {
+          toast.error("This is a premium test. Please upgrade to access.");
+          setTestState("access_denied");
+          return;
+        }
+
+        setTestDetails(data.testDetails);
+        setQuestions(data.questions);
+        setTimeLeft(data.testDetails.estimatedTime * 60);
+        setTestState("in-progress");
+        setQuestionStartTime(Date.now());
+      } catch (error) {
         setTestState("error");
-        toast.error("Test not found or has no questions.");
+        toast.error(error.message);
         router.push("/mock-tests");
-        return;
       }
-      setTestDetails(data.testDetails);
-      setQuestions(data.questions);
-      setTimeLeft(data.testDetails.estimatedTime * 60);
-      setTestState("in-progress");
-      setQuestionStartTime(Date.now());
     };
 
     if (testId && user) {
-      loadTest();
+      loadTestAndCheckPermissions();
     }
-  }, [testId, user, authLoading, router]);
+  }, [testId, user, authLoading, router, isPremium]);
 
   useEffect(() => {
     if (testState !== "in-progress" || timeLeft <= 0) {
@@ -276,6 +287,27 @@ export default function TestTakingPage() {
         <p className='text-lg font-medium text-slate-800'>
           Preparing Your Test...
         </p>
+      </div>
+    );
+  }
+  if (testState === "access_denied") {
+    return (
+      <div className='flex flex-col justify-center items-center h-screen bg-slate-100 text-center p-4'>
+        <div className='mx-auto w-16 h-16 flex items-center justify-center bg-amber-100 rounded-full'>
+          <Lock className='h-8 w-8 text-amber-600' />
+        </div>
+        <h1 className='mt-6 text-2xl font-bold text-slate-900'>
+          Premium Test Locked
+        </h1>
+        <p className='mt-2 text-slate-700'>
+          You need a premium subscription to access this test.
+        </p>
+        <Link
+          href='/dashboard'
+          className='mt-6 inline-block px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700'
+        >
+          Upgrade to Premium
+        </Link>
       </div>
     );
   }
