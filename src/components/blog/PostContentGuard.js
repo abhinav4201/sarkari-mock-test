@@ -1,9 +1,9 @@
 "use client";
 
-import { useAuth } from "@/context/AuthContext";
-import LockedContent from "./LockedContent";
 import YouTubeEmbed from "@/components/blog/YouTubeEmbed";
 import SvgDisplayer from "@/components/ui/SvgDisplayer";
+import { useAuth } from "@/context/AuthContext";
+import LockedContent from "./LockedContent";
 
 export default function PostContentGuard({ post }) {
   const { user, isPremium, loading } = useAuth();
@@ -48,7 +48,7 @@ export default function PostContentGuard({ post }) {
       {post.youtubeUrl && <YouTubeEmbed url={post.youtubeUrl} />}
 
       <div
-        className='text-slate-900 mt-12 prose prose-lg lg:prose-xl max-w-none prose-h2:font-bold prose-h2:text-slate-800 prose-a:text-indigo-600 prose-img:rounded-xl prose-img:shadow-lg'
+        className='text-slate-900 mt-12 prose prose-lg lg:prose-xl max-w-none prose-h2:font-bold prose-h2:text-slate-800 prose-a:text-indigo-600 hover:prose-a:text-indigo-800 prose-a:transition-colors prose-img:rounded-xl prose-img:shadow-lg'
         dangerouslySetInnerHTML={{ __html: post.content }}
       />
     </>

@@ -1,81 +1,85 @@
 "use client";
 
-import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Placeholder from "@tiptap/extension-placeholder";
-import { useState, useEffect } from "react";
-import toast from "react-hot-toast";
-import { db } from "@/lib/firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { useAuth } from "@/context/AuthContext";
 import SvgDisplayer from "@/components/ui/SvgDisplayer";
+import { useAuth } from "@/context/AuthContext";
+import { db } from "@/lib/firebase";
+import Link from "@tiptap/extension-link";
+import Placeholder from "@tiptap/extension-placeholder";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
+import TiptapToolbar from "./TiptapToolbar";
 
-const TiptapToolbar = ({ editor }) => {
-  if (!editor) {
-    return null;
-  }
-  return (
-    <div className='border border-slate-300 rounded-t-lg p-2 flex items-center flex-wrap gap-2 bg-slate-50'>
-      <button
-        type='button'
-        onClick={() => editor.chain().focus().toggleBold().run()}
-        className={`px-2 py-1 rounded font-medium text-sm ${
-          editor.isActive("bold")
-            ? "bg-indigo-600 text-white"
-            : "text-slate-700 hover:bg-slate-200"
-        }`}
-      >
-        Bold
-      </button>
-      <button
-        type='button'
-        onClick={() => editor.chain().focus().toggleItalic().run()}
-        className={`px-2 py-1 rounded font-medium text-sm ${
-          editor.isActive("italic")
-            ? "bg-indigo-600 text-white"
-            : "text-slate-700 hover:bg-slate-200"
-        }`}
-      >
-        Italic
-      </button>
-      <button
-        type='button'
-        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-        className={`px-2 py-1 rounded font-medium text-sm ${
-          editor.isActive("heading", { level: 2 })
-            ? "bg-indigo-600 text-white"
-            : "text-slate-700 hover:bg-slate-200"
-        }`}
-      >
-        H2
-      </button>
-      <button
-        type='button'
-        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-        className={`px-2 py-1 rounded font-medium text-sm ${
-          editor.isActive("heading", { level: 3 })
-            ? "bg-indigo-600 text-white"
-            : "text-slate-700 hover:bg-slate-200"
-        }`}
-      >
-        H3
-      </button>
-      <button
-        type='button'
-        onClick={() => editor.chain().focus().toggleBulletList().run()}
-        className={`px-2 py-1 rounded font-medium text-sm ${
-          editor.isActive("bulletList")
-            ? "bg-indigo-600 text-white"
-            : "text-slate-700 hover:bg-slate-200"
-        }`}
-      >
-        List
-      </button>
-    </div>
-  );
-};
+
+// const TiptapToolbar = ({ editor }) => {
+//   if (!editor) {
+//     return null;
+//   }
+//   return (
+//     <div className='border border-slate-300 rounded-t-lg p-2 flex items-center flex-wrap gap-2 bg-slate-50'>
+//       <button
+//         type='button'
+//         onClick={() => editor.chain().focus().toggleBold().run()}
+//         className={`px-2 py-1 rounded font-medium text-sm ${
+//           editor.isActive("bold")
+//             ? "bg-indigo-600 text-white"
+//             : "text-slate-700 hover:bg-slate-200"
+//         }`}
+//       >
+//         Bold
+//       </button>
+//       <button
+//         type='button'
+//         onClick={() => editor.chain().focus().toggleItalic().run()}
+//         className={`px-2 py-1 rounded font-medium text-sm ${
+//           editor.isActive("italic")
+//             ? "bg-indigo-600 text-white"
+//             : "text-slate-700 hover:bg-slate-200"
+//         }`}
+//       >
+//         Italic
+//       </button>
+//       <button
+//         type='button'
+//         onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+//         className={`px-2 py-1 rounded font-medium text-sm ${
+//           editor.isActive("heading", { level: 2 })
+//             ? "bg-indigo-600 text-white"
+//             : "text-slate-700 hover:bg-slate-200"
+//         }`}
+//       >
+//         H2
+//       </button>
+//       <button
+//         type='button'
+//         onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+//         className={`px-2 py-1 rounded font-medium text-sm ${
+//           editor.isActive("heading", { level: 3 })
+//             ? "bg-indigo-600 text-white"
+//             : "text-slate-700 hover:bg-slate-200"
+//         }`}
+//       >
+//         H3
+//       </button>
+//       <button
+//         type='button'
+//         onClick={() => editor.chain().focus().toggleBulletList().run()}
+//         className={`px-2 py-1 rounded font-medium text-sm ${
+//           editor.isActive("bulletList")
+//             ? "bg-indigo-600 text-white"
+//             : "text-slate-700 hover:bg-slate-200"
+//         }`}
+//       >
+//         List
+//       </button>
+//     </div>
+//   );
+// };
 
 // Component now accepts the onPostCreated prop
+
 export default function BlogEditor({ onPostCreated }) {
   const { user } = useAuth();
   const [title, setTitle] = useState("");
@@ -102,7 +106,13 @@ export default function BlogEditor({ onPostCreated }) {
     extensions: [
       StarterKit,
       Placeholder.configure({
-        placeholder: "Start writing your amazing blog post here...",
+        placeholder: "Start writing your amazing content here...",
+      }),
+      // --- NEW: Configure the Link extension ---
+      Link.configure({
+        openOnClick: false,
+        autolink: true,
+        defaultProtocol: "https",
       }),
     ],
     editorProps: {

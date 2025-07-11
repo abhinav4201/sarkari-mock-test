@@ -23,8 +23,11 @@ const BlogPostCard = ({ post }) => {
       })
     : "No date";
 
-  const excerpt =
-    post.content?.substring(0, 150).replace(/<[^>]+>/g, "") + "..." || "";
+    const textContent = post.content?.replace(/<[^>]+>/g, "") || "";
+    const excerpt =
+      textContent.length > 120
+        ? textContent.substring(0, 120) + "..."
+        : textContent;
 
   let isLocked = false;
   let lockType = null;
@@ -90,7 +93,8 @@ const BlogPostCard = ({ post }) => {
                 className='flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-100 px-2 py-1 rounded-full'
                 title='Premium Post'
               >
-                <Star className='h-3.5 w-3.5' />Premium
+                <Star className='h-3.5 w-3.5' />
+                Premium
               </div>
             )}
             {/* --- THIS IS THE ICON FOR RESTRICTED POSTS --- */}
@@ -99,7 +103,8 @@ const BlogPostCard = ({ post }) => {
                 className='flex items-center gap-1.5 text-xs font-bold text-cyan-700 bg-cyan-100 px-2 py-1 rounded-full'
                 title='Restricted Access'
               >
-                <UserCheck className='h-3.5 w-3.5' />Restricted
+                <UserCheck className='h-3.5 w-3.5' />
+                Restricted
               </div>
             )}
           </div>
@@ -108,7 +113,7 @@ const BlogPostCard = ({ post }) => {
         <h2 className='mt-1 text-xl font-bold text-slate-900 group-hover:text-indigo-700 transition-colors duration-300'>
           {post.title}
         </h2>
-        <p className='mt-3 text-slate-700 text-base leading-relaxed flex-grow'>
+        <p className='mt-3 text-slate-700 text-base leading-relaxed flex-grow line-clamp-3'>
           {excerpt}
         </p>
 

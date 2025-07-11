@@ -9,70 +9,72 @@ import { db } from "@/lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import { XCircle } from "lucide-react";
+import TiptapToolbar from "./TiptapToolbar";
+import Link from "@tiptap/extension-link";
 
 // TiptapToolbar component remains unchanged
-const TiptapToolbar = ({ editor }) => {
-  if (!editor) return null;
-  return (
-    <div className='border border-slate-300 rounded-t-lg p-2 flex items-center flex-wrap gap-2 bg-slate-50'>
-      <button
-        type='button'
-        onClick={() => editor.chain().focus().toggleBold().run()}
-        className={`px-2 py-1 rounded font-medium text-sm ${
-          editor.isActive("bold")
-            ? "bg-indigo-600 text-white"
-            : "text-slate-700 hover:bg-slate-200"
-        }`}
-      >
-        Bold
-      </button>
-      <button
-        type='button'
-        onClick={() => editor.chain().focus().toggleItalic().run()}
-        className={`px-2 py-1 rounded font-medium text-sm ${
-          editor.isActive("italic")
-            ? "bg-indigo-600 text-white"
-            : "text-slate-700 hover:bg-slate-200"
-        }`}
-      >
-        Italic
-      </button>
-      <button
-        type='button'
-        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-        className={`px-2 py-1 rounded font-medium text-sm ${
-          editor.isActive("heading", { level: 2 })
-            ? "bg-indigo-600 text-white"
-            : "text-slate-700 hover:bg-slate-200"
-        }`}
-      >
-        H2
-      </button>
-      <button
-        type='button'
-        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-        className={`px-2 py-1 rounded font-medium text-sm ${
-          editor.isActive("heading", { level: 3 })
-            ? "bg-indigo-600 text-white"
-            : "text-slate-700 hover:bg-slate-200"
-        }`}
-      >
-        H3
-      </button>
-      <button
-        type='button'
-        onClick={() => editor.chain().focus().toggleBulletList().run()}
-        className={`px-2 py-1 rounded font-medium text-sm ${
-          editor.isActive("bulletList")
-            ? "bg-indigo-600 text-white"
-            : "text-slate-700 hover:bg-slate-200"
-        }`}
-      >
-        List
-      </button>
-    </div>
-  );
-};
+// const TiptapToolbar = ({ editor }) => {
+//   if (!editor) return null;
+//   return (
+//     <div className='border border-slate-300 rounded-t-lg p-2 flex items-center flex-wrap gap-2 bg-slate-50'>
+//       <button
+//         type='button'
+//         onClick={() => editor.chain().focus().toggleBold().run()}
+//         className={`px-2 py-1 rounded font-medium text-sm ${
+//           editor.isActive("bold")
+//             ? "bg-indigo-600 text-white"
+//             : "text-slate-700 hover:bg-slate-200"
+//         }`}
+//       >
+//         Bold
+//       </button>
+//       <button
+//         type='button'
+//         onClick={() => editor.chain().focus().toggleItalic().run()}
+//         className={`px-2 py-1 rounded font-medium text-sm ${
+//           editor.isActive("italic")
+//             ? "bg-indigo-600 text-white"
+//             : "text-slate-700 hover:bg-slate-200"
+//         }`}
+//       >
+//         Italic
+//       </button>
+//       <button
+//         type='button'
+//         onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+//         className={`px-2 py-1 rounded font-medium text-sm ${
+//           editor.isActive("heading", { level: 2 })
+//             ? "bg-indigo-600 text-white"
+//             : "text-slate-700 hover:bg-slate-200"
+//         }`}
+//       >
+//         H2
+//       </button>
+//       <button
+//         type='button'
+//         onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+//         className={`px-2 py-1 rounded font-medium text-sm ${
+//           editor.isActive("heading", { level: 3 })
+//             ? "bg-indigo-600 text-white"
+//             : "text-slate-700 hover:bg-slate-200"
+//         }`}
+//       >
+//         H3
+//       </button>
+//       <button
+//         type='button'
+//         onClick={() => editor.chain().focus().toggleBulletList().run()}
+//         className={`px-2 py-1 rounded font-medium text-sm ${
+//           editor.isActive("bulletList")
+//             ? "bg-indigo-600 text-white"
+//             : "text-slate-700 hover:bg-slate-200"
+//         }`}
+//       >
+//         List
+//       </button>
+//     </div>
+//   );
+// };
 
 export default function EditPostForm({ post, onFormSubmit }) {
   const [title, setTitle] = useState("");
@@ -80,16 +82,21 @@ export default function EditPostForm({ post, onFormSubmit }) {
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [featuredImageSvgCode, setFeaturedImageSvgCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-
-  // --- NEW: State for the premium toggle ---
   const [isPremium, setIsPremium] = useState(false);
 
   const editor = useEditor({
     extensions: [
       StarterKit,
-      Placeholder.configure({ placeholder: "Your content here..." }),
+      Placeholder.configure({
+        placeholder: "Start writing your amazing content here...",
+      }),
+      // --- NEW: Configure the Link extension ---
+      Link.configure({
+        openOnClick: false,
+        autolink: true,
+        defaultProtocol: "https",
+      }),
     ],
-    content: "",
     editorProps: {
       attributes: {
         class:
@@ -104,10 +111,10 @@ export default function EditPostForm({ post, onFormSubmit }) {
       setSlug(post.slug || "");
       setYoutubeUrl(post.youtubeUrl || "");
       setFeaturedImageSvgCode(post.featuredImageSvgCode || "");
-      editor.commands.setContent(post.content || "");
-
-      // --- NEW: Set the premium state from the post data ---
       setIsPremium(post.isPremium || false);
+      if (editor.getHTML() !== post.content) {
+        editor.commands.setContent(post.content || "", false);
+      }
     }
   }, [post, editor]);
 
