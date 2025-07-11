@@ -30,10 +30,11 @@ const ContentSelector = ({ contentType, onContentSelect }) => {
     if (!searchTerm) return;
     setIsLoading(true);
     try {
+      const lowercasedSearchTerm = searchTerm.toLowerCase();
       const q = query(
         collection(db, contentType),
-        where("title", ">=", searchTerm),
-        where("title", "<=", searchTerm + "\uf8ff"),
+        where("title_lowercase", ">=", lowercasedSearchTerm),
+        where("title_lowercase", "<=", lowercasedSearchTerm + "\uf8ff"),
         limit(10)
       );
       const snapshot = await getDocs(q);

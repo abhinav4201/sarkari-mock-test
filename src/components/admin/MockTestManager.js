@@ -34,6 +34,7 @@ export default function MockTestManager({ onTestCreated }) {
       const isDynamicTest = testType === "dynamic";
       const testData = {
         title,
+        title_lowercase: title.toLowerCase(),
         topic,
         subject,
         examName,

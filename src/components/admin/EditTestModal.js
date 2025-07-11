@@ -12,7 +12,6 @@ export default function EditTestModal({
   test,
   onTestUpdated,
 }) {
-  // --- NEW: State for all editable fields ---
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
   const [subject, setSubject] = useState("");
@@ -22,14 +21,12 @@ export default function EditTestModal({
   const [isPremium, setIsPremium] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // --- UPDATED: Populates all form fields when the modal opens ---
   useEffect(() => {
     if (test) {
       setTitle(test.title || "");
       setExamName(test.examName || "");
       setEstimatedTime(test.estimatedTime || 0);
       setIsPremium(test.isPremium || false);
-
       if (test.isDynamic) {
         setTopic(test.sourceCriteria?.topic || "");
         setSubject(test.sourceCriteria?.subject || "");
@@ -44,7 +41,6 @@ export default function EditTestModal({
   const handleUpdate = async (e) => {
     e.preventDefault();
     if (!test) return;
-
     if (Number(estimatedTime) <= 0) {
       return toast.error("Estimated time must be greater than 0.");
     }
@@ -55,9 +51,9 @@ export default function EditTestModal({
     try {
       const testRef = doc(db, "mockTests", test.id);
 
-      // --- UPDATED: Prepare the complete data object for update ---
       const updatedData = {
         title,
+        title_lowercase: title.toLowerCase(), // --- THIS IS THE FIX ---
         examName,
         estimatedTime: Number(estimatedTime),
         isPremium,
@@ -89,7 +85,6 @@ export default function EditTestModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Edit Test: ${test.title}`}>
-      {/* --- UPDATED: The form now includes all editable fields --- */}
       <form onSubmit={handleUpdate} className='p-6 space-y-6'>
         <div>
           <label
@@ -171,7 +166,6 @@ export default function EditTestModal({
             min='1'
           />
         </div>
-
         {test.isDynamic && (
           <div>
             <label
@@ -191,7 +185,6 @@ export default function EditTestModal({
             />
           </div>
         )}
-
         <div className='flex items-center'>
           <input
             type='checkbox'
@@ -209,11 +202,11 @@ export default function EditTestModal({
         </div>
         <div>
           <p className='text-sm font-medium text-slate-900'>Test Type</p>
-          <p className='p-3 bg-red-500 text-white rounded-lg mt-1 font-semibold'>
-            {test.isDynamic ? "Dynamic" : "Static"} Test (Cannot be changed)
+          <p className='p-3 bg-blue-900 text-white rounded-lg mt-1 font-semibold'>
+            {test.isDynamic ? "Dynamic" : "Static"} Test Cannot be changed to{" "}
+            {test.isDynamic ? "Static" : "Dynamic"} Test
           </p>
         </div>
-
         <div className='flex justify-end gap-4 pt-4'>
           <button
             type='button'

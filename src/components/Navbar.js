@@ -28,10 +28,9 @@ export default function Navbar() {
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
-  // Text and hover colors updated for the new indigo theme
   const linkClasses =
     "block md:inline-block py-2 px-4 md:px-3 text-indigo-100 font-medium hover:text-white rounded-md transition-colors";
-  const activeLinkClasses = "bg-indigo-600 text-white";
+  const activeLinkClasses = "bg-indigo-600 text-white"; // This can remain for active links
 
   const homeLink = (
     <Link href='/' className={linkClasses} onClick={closeMobileMenu}>
@@ -63,10 +62,11 @@ export default function Navbar() {
     </Link>
   );
 
+  // --- UPDATED: Admin link style for better contrast ---
   const adminLinks = (
     <Link
       href='/admin'
-      className='block md:inline-block py-2 px-4 md:px-3 font-bold text-red-400 hover:text-red-300 rounded-md'
+      className='block md:inline-block py-2 px-4 md:px-3 font-bold text-yellow-300 hover:text-white rounded-md'
       onClick={closeMobileMenu}
     >
       Admin Panel
@@ -78,9 +78,9 @@ export default function Navbar() {
     logoHref = user.email === adminEmail ? "/admin" : "/dashboard";
   }
 
-  // FIX: Updated navbar color scheme to a vibrant indigo gradient
+  // --- UPDATED: Changed from red to a blue/indigo gradient ---
   return (
-    <nav className='bg-gradient-to-r from-red-600 to-red-700 shadow-lg sticky top-0 z-50 border-b border-indigo-900/50'>
+    <nav className='bg-slate-900 shadow-lg sticky top-0 z-50'>
       <div className='container mx-auto px-4 sm:px-6 lg:px-8'>
         <div className='flex justify-between items-center h-16'>
           <div className='flex-shrink-0'>
@@ -99,7 +99,7 @@ export default function Navbar() {
 
           <div className='hidden md:flex items-center space-x-4'>
             {loading ? (
-              <div className='h-9 w-28 bg-indigo-600 rounded-lg animate-pulse'></div>
+              <div className='h-9 w-28 bg-blue-500 rounded-lg animate-pulse'></div>
             ) : !user ? (
               <button
                 onClick={handleSignIn}
@@ -110,7 +110,7 @@ export default function Navbar() {
             ) : (
               <button
                 onClick={handleSignOut}
-                className='px-4 py-2 bg-indigo-600 text-indigo-50 rounded-lg text-sm font-semibold hover:bg-indigo-500 transition-colors'
+                className='px-4 py-2 bg-blue-500/50 text-white rounded-lg text-sm font-semibold hover:bg-blue-500 transition-colors'
               >
                 Logout
               </button>
@@ -120,7 +120,7 @@ export default function Navbar() {
           <div className='md:hidden flex items-center'>
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className='inline-flex items-center justify-center p-2 rounded-md text-indigo-200 hover:text-white hover:bg-indigo-700'
+              className='inline-flex items-center justify-center p-2 rounded-md text-indigo-200 hover:text-white hover:bg-indigo-600'
             >
               {isMobileMenuOpen ? (
                 <X className='h-6 w-6' />
@@ -152,7 +152,7 @@ export default function Navbar() {
                 {user.email === adminEmail ? adminLinks : userLinks}
                 <button
                   onClick={handleSignOut}
-                  className='w-full px-4 py-2 bg-indigo-600 text-indigo-50 rounded-lg text-sm font-semibold hover:bg-indigo-500 transition-colors'
+                  className='w-full px-4 py-2 bg-indigo-500 text-white rounded-lg text-sm font-semibold hover:bg-indigo-600 transition-colors'
                 >
                   Logout
                 </button>

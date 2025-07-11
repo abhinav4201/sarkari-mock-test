@@ -135,6 +135,7 @@ export default function BlogEditor({ onPostCreated }) {
     try {
       await addDoc(collection(db, "posts"), {
         title,
+        title_lowercase: title.toLowerCase(),
         content: htmlContent,
         slug,
         youtubeUrl: youtubeUrl || "",

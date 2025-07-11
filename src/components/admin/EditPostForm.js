@@ -7,10 +7,10 @@ import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { db } from "@/lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
-import SvgDisplayer from "@/components/ui/SvgDisplayer"; // NEW: Import SvgDisplayer
-import { XCircle } from "lucide-react"; // NEW: Import icon
+import SvgDisplayer from "@/components/ui/SvgDisplayer";
+import { XCircle } from "lucide-react";
 
-// TiptapToolbar can be reused here
+// TiptapToolbar component remains unchanged
 const TiptapToolbar = ({ editor }) => {
   if (!editor) return null;
   return (
@@ -75,12 +75,14 @@ const TiptapToolbar = ({ editor }) => {
 };
 
 export default function EditPostForm({ post, onFormSubmit }) {
-  // State for every field in a blog post
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [featuredImageSvgCode, setFeaturedImageSvgCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // --- NEW: State for the premium toggle ---
+  const [isPremium, setIsPremium] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -96,7 +98,6 @@ export default function EditPostForm({ post, onFormSubmit }) {
     },
   });
 
-  // Pre-fill the form and editor when the 'post' prop is available
   useEffect(() => {
     if (post && editor) {
       setTitle(post.title || "");
@@ -104,6 +105,9 @@ export default function EditPostForm({ post, onFormSubmit }) {
       setYoutubeUrl(post.youtubeUrl || "");
       setFeaturedImageSvgCode(post.featuredImageSvgCode || "");
       editor.commands.setContent(post.content || "");
+
+      // --- NEW: Set the premium state from the post data ---
+      setIsPremium(post.isPremium || false);
     }
   }, [post, editor]);
 
@@ -115,6 +119,7 @@ export default function EditPostForm({ post, onFormSubmit }) {
       reader.readAsText(file);
     }
   };
+
   const handleRemoveImage = () => {
     setFeaturedImageSvgCode("");
   };
@@ -126,20 +131,20 @@ export default function EditPostForm({ post, onFormSubmit }) {
     const loadingToast = toast.loading("Updating post...");
 
     try {
-      // Create a reference to the specific post document
       const postRef = doc(db, "posts", post.id);
 
-      // Update the document directly from the client
       await updateDoc(postRef, {
         title,
+        title_lowercase: title.toLowerCase(),
         content: htmlContent,
         slug,
         youtubeUrl: youtubeUrl || "",
         featuredImageSvgCode: featuredImageSvgCode || "",
+        isPremium: isPremium, // --- NEW: Save the premium status ---
       });
 
       toast.success("Post updated successfully!", { id: loadingToast });
-      onFormSubmit(); // Close modal and refresh list
+      onFormSubmit();
     } catch (error) {
       toast.error(`Error: ${error.message}`, { id: loadingToast });
     } finally {
@@ -186,9 +191,8 @@ export default function EditPostForm({ post, onFormSubmit }) {
       </div>
       <div className='flex justify-between items-center'>
         <label className='block text-sm font-medium text-slate-900 mb-1'>
-          Featured Image SVG (Optional)
+          Featured Image SVG
         </label>
-        {/* NEW: Remove button appears when there's an image */}
         {featuredImageSvgCode && (
           <button
             type='button'
@@ -198,13 +202,13 @@ export default function EditPostForm({ post, onFormSubmit }) {
             <XCircle className='h-4 w-4 mr-1' /> Remove Image
           </button>
         )}
-        <input
-          type='file'
-          accept='image/svg+xml'
-          onChange={handleFileChange}
-          className='w-full text-sm text-slate-900 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100'
-        />
       </div>
+      <input
+        type='file'
+        accept='image/svg+xml'
+        onChange={handleFileChange}
+        className='w-full text-sm text-slate-900 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100'
+      />
       {featuredImageSvgCode && (
         <div>
           <label className='block text-sm font-medium text-slate-900'>
@@ -227,6 +231,26 @@ export default function EditPostForm({ post, onFormSubmit }) {
           <EditorContent editor={editor} />
         </div>
       </div>
+
+      {/* --- NEW: Checkbox to toggle the premium status --- */}
+      <div className='pt-2'>
+        <div className='flex items-center'>
+          <input
+            type='checkbox'
+            id='edit-isPremiumBlog'
+            checked={isPremium}
+            onChange={(e) => setIsPremium(e.target.checked)}
+            className='h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500'
+          />
+          <label
+            htmlFor='edit-isPremiumBlog'
+            className='ml-2 block text-sm font-medium text-slate-900'
+          >
+            Mark this post as Premium?
+          </label>
+        </div>
+      </div>
+
       <div className='flex justify-end pt-2'>
         <button
           type='submit'

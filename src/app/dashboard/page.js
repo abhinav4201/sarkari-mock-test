@@ -9,6 +9,8 @@ import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 import PaymentModal from "@/components/dashboard/PaymentModal"; // Import the new modal
 import { Crown } from "lucide-react";
+import toast from "react-hot-toast";
+import SubscriptionStatusCard from "@/components/dashboard/SubscriptionStatusCard"; 
 
 async function getDailyVocabulary() {
   const q = query(
@@ -48,8 +50,6 @@ export default function DashboardPage() {
   const [vocabulary, setVocabulary] = useState(null);
   const [gk, setGk] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  // --- NEW: State to control the payment modal ---
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
   useEffect(() => {
@@ -63,7 +63,7 @@ export default function DashboardPage() {
         setVocabulary(vocabData);
         setGk(gkData);
       } catch (error) {
-        console.error("Failed to load dashboard data:", error);
+        toast.error("Failed to load dashboard data:", error);
       } finally {
         setLoading(false);
       }
@@ -88,22 +88,9 @@ export default function DashboardPage() {
           </div>
 
           {/* --- NEW: The "Go Premium" card --- */}
-          <div className='mt-8 bg-gradient-to-r from-indigo-600 to-purple-600 p-8 rounded-2xl shadow-lg text-white flex flex-col md:flex-row justify-between items-center'>
-            <div>
-              <h2 className='text-2xl font-bold flex items-center gap-2'>
-                <Crown /> Unlock Premium Access
-              </h2>
-              <p className='mt-1 opacity-80'>
-                Get access to all exclusive premium mock tests.
-              </p>
-            </div>
-            <button
-              onClick={() => setIsPaymentModalOpen(true)}
-              className='mt-4 md:mt-0 px-8 py-3 bg-white text-indigo-600 font-bold rounded-lg hover:bg-slate-100 transition-all'
-            >
-              Go Premium
-            </button>
-          </div>
+          <SubscriptionStatusCard
+            onUpgradeClick={() => setIsPaymentModalOpen(true)}
+          />
 
           <div className='mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8 items-start'>
             <div className='lg:col-span-2 space-y-8'>
