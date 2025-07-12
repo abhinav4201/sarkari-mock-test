@@ -12,6 +12,7 @@ import {
   Mail,
   KeyRound,
   BookOpenText,
+  Image,
 } from "lucide-react"; // Added relevant icons
 
 const adminLinks = [
@@ -50,6 +51,11 @@ const adminLinks = [
     name: "Access Control",
     href: "/admin/access-control",
     icon: <KeyRound className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "SVG : Converter",
+    href: "/admin/svg-converter",
+    icon: <Image className='mr-3 h-5 w-5' />,
   },
 ];
 
