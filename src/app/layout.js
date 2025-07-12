@@ -7,6 +7,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Toaster } from "react-hot-toast";
 import { usePathname } from "next/navigation"; // Import the hook
+import LoginPromptModal from "@/components/ui/LoginPromptModal";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -21,7 +22,8 @@ export default function RootLayout({ children }) {
     <html lang='en'>
       <body className={inter.className}>
         <AuthContextProvider>
-          <Toaster position='bottom-center' />
+          <Toaster position='top-center' reverseOrder={false} />
+          <LoginPromptModal />
 
           {/* THE FIX: Only show the Navbar if it's NOT an admin page */}
           {!isAdminPage && <Navbar />}

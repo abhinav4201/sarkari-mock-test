@@ -27,10 +27,16 @@ export const AuthContextProvider = ({ children }) => {
   const [isPremium, setIsPremium] = useState(false);
   const [premiumExpires, setPremiumExpires] = useState(null);
   const [freeTrialCount, setFreeTrialCount] = useState(0);
+
+  const [isLoginPromptOpen, setIsLoginPromptOpen] = useState(false);
+  const openLoginPrompt = () => setIsLoginPromptOpen(true);
+  const closeLoginPrompt = () => setIsLoginPromptOpen(false);
+
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
   const googleSignIn = useCallback(
     async (redirectUrl = "/dashboard") => {
+      closeLoginPrompt();
       const provider = new GoogleAuthProvider();
       try {
         const result = await signInWithPopup(auth, provider);
@@ -118,6 +124,9 @@ export const AuthContextProvider = ({ children }) => {
       isPremium,
       freeTrialCount,
       premiumExpires,
+      isLoginPromptOpen,
+      openLoginPrompt,
+      closeLoginPrompt,
     }),
     [
       user,
@@ -127,6 +136,7 @@ export const AuthContextProvider = ({ children }) => {
       isPremium,
       freeTrialCount,
       premiumExpires,
+      isLoginPromptOpen,
     ]
   );
 

@@ -1,6 +1,5 @@
 "use client";
 import { useState } from "react";
-// We no longer need useRouter here because the parent page will handle the refresh.
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
@@ -31,6 +30,8 @@ export default function MockTestManager({ onTestCreated }) {
     const loadingToast = toast.loading("Creating new test...");
 
     try {
+      const initialLikeCount = Math.floor(10000 + Math.random() * 90000);
+
       const isDynamicTest = testType === "dynamic";
       const testData = {
         title,
@@ -42,13 +43,13 @@ export default function MockTestManager({ onTestCreated }) {
         isPremium,
         createdAt: serverTimestamp(),
         isDynamic: isDynamicTest,
+        likeCount: initialLikeCount,
       };
 
       if (isDynamicTest) {
         testData.questionCount = Number(questionCount);
         testData.sourceCriteria = { topic, subject };
       } else {
-        // Your original logic for static tests is preserved.
         testData.questionCount = 0;
       }
 
