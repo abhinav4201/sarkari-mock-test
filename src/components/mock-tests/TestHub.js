@@ -56,8 +56,6 @@ export default function TestHub({ initialTests }) {
       const queryConstraints = [orderBy("createdAt", "desc"), limit(PAGE_SIZE)];
 
       if (tab === "all") {
-        // For "All Tests", we don't need a `where` clause for the creator.
-        // The filtering for status will be done on the client-side to include admin tests.
         if (loadMore && lastDoc) queryConstraints.push(startAfter(lastDoc));
         q = query(collectionRef, ...queryConstraints);
       } else if (tab === "created" && user) {
@@ -76,6 +74,7 @@ export default function TestHub({ initialTests }) {
         );
       } else {
         setLoading(false);
+        setLoadingMore(false);
         return;
       }
 
@@ -104,13 +103,15 @@ export default function TestHub({ initialTests }) {
     [user, lastDoc, hasMore, favoriteTests]
   );
 
-  const handleTabClick = (tab) => {
-    setActiveTab(tab);
+  // --- THE useEffect FIX ---
+  // This effect runs when the component first mounts and whenever the active tab changes.
+  useEffect(() => {
+    // We clear the tests and reset pagination state for a clean fetch.
     setTests([]);
     setLastDoc(null);
     setHasMore(true);
-    fetchTests(tab, false);
-  };
+    fetchTests(activeTab, false);
+  }, [activeTab]);
 
   const handleLoadMore = () => {
     fetchTests(activeTab, true);
@@ -118,20 +119,15 @@ export default function TestHub({ initialTests }) {
 
   const filteredTests = useMemo(() => {
     return tests.filter((test) => {
-      // --- THIS IS THE CORRECTED LOGIC FROM YOUR TestList.js ---
-      // A test is visible if it's approved OR if it's an older admin test without a status field.
       const isVisible =
         test.status === "approved" || typeof test.status === "undefined";
       if (!isVisible) return false;
-
-      // Search filter
       const matchesSearch = searchTerm
         ? (test.title?.toLowerCase() || "").includes(
             searchTerm.toLowerCase()
           ) ||
           (test.topic?.toLowerCase() || "").includes(searchTerm.toLowerCase())
         : true;
-
       return matchesSearch;
     });
   }, [tests, searchTerm]);
@@ -159,7 +155,7 @@ export default function TestHub({ initialTests }) {
             placeholder='Search tests by title or topic...'
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className='w-full p-4 pl-12 text-slate-900 bg-white border-2 border-slate-200 rounded-full shadow-inner focus:ring-2 focus:ring-indigo-500 transition text-lg'
+            className='w-full p-4 pl-12 text-slate-950 bg-white border-2 border-slate-200 rounded-full shadow-inner focus:ring-2 focus:ring-indigo-500 transition text-lg'
           />
         </div>
       </div>
@@ -169,7 +165,7 @@ export default function TestHub({ initialTests }) {
           label='All Tests'
           icon={<CheckCircle size={16} />}
           isActive={activeTab === "all"}
-          onClick={() => handleTabClick("all")}
+          onClick={() => setActiveTab("all")}
         />
         {user && (
           <>
@@ -177,13 +173,13 @@ export default function TestHub({ initialTests }) {
               label='My Created Tests'
               icon={<History size={16} />}
               isActive={activeTab === "created"}
-              onClick={() => handleTabClick("created")}
+              onClick={() => setActiveTab("created")}
             />
             <TabButton
               label='My Favorites'
               icon={<Heart size={16} />}
               isActive={activeTab === "favorites"}
-              onClick={() => handleTabClick("favorites")}
+              onClick={() => setActiveTab("favorites")}
             />
           </>
         )}

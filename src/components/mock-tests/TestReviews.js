@@ -2,20 +2,20 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import {
-  collection,
   addDoc,
-  query,
-  where,
-  orderBy,
+  collection,
   getDocs,
+  orderBy,
+  query,
   serverTimestamp,
+  where,
 } from "firebase/firestore";
-import toast from "react-hot-toast";
 import { Star } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import toast from "react-hot-toast";
 
 export default function TestReviews({ testId }) {
   const { user, openLoginPrompt } = useAuth(); // Use openLoginPrompt
@@ -46,7 +46,12 @@ export default function TestReviews({ testId }) {
         setHasUserReviewed(fetchedReviews.some((r) => r.userId === user.uid));
       }
     } catch (error) {
-      toast.error("Could not load reviews.");
+      console.error(
+        "Could not load reviews, likely a permissions issue or new collection:",
+        error
+      );
+
+      // toast.error("Could not load reviews.");
     } finally {
       setLoading(false);
     }
@@ -100,7 +105,9 @@ export default function TestReviews({ testId }) {
           </h4>
           <form onSubmit={handleSubmit} className='space-y-4'>
             <div className='flex items-center gap-2'>
-              <span className='text-sm text-slate-950 font-medium'>Your Rating:</span>
+              <span className='text-sm text-slate-950 font-medium'>
+                Your Rating:
+              </span>
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   type='button'

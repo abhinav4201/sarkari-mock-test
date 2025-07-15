@@ -23,45 +23,53 @@ async function getInitialTests() {
     limit(9)
   );
 
-  // Query 2: Get the most recent tests created by the admin (which don't have a status field).
+  // Query 2: Get the most recent tests that DO NOT have a status field (i.e., admin-created tests).
+  // We achieve this by querying for a non-existent value. This is a common Firestore pattern.
   const adminTestsQuery = query(
     testsRef,
-    where("status", "==", null), // This is a placeholder; Firestore doesn't directly support "field does not exist". We filter client-side.
+    where("status", "==", null),
     orderBy("createdAt", "desc"),
     limit(9)
   );
 
-  // Fetch both sets of tests concurrently.
-  const [userTestsSnapshot, adminTestsSnapshot] = await Promise.all([
-    getDocs(userTestsQuery),
-    getDocs(adminTestsQuery),
-  ]);
+  try {
+    // Fetch both sets of tests concurrently for better performance.
+    const [userTestsSnapshot, adminTestsSnapshot] = await Promise.all([
+      getDocs(userTestsQuery),
+      getDocs(adminTestsQuery),
+    ]);
 
-  const userTests = userTestsSnapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  }));
+    const userTests = userTestsSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
 
-  // Filter admin tests to ensure they don't have a 'status' field.
-  const adminTests = adminTestsSnapshot.docs
-    .map((doc) => ({ id: doc.id, ...doc.data() }))
-    .filter((test) => typeof test.status === "undefined");
+    // The second query might incorrectly fetch documents where status is explicitly null.
+    // We must filter on the server to only include those where the field is truly missing.
+    const adminTests = adminTestsSnapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter((test) => typeof test.status === "undefined");
 
-  // Combine the two lists and remove any potential duplicates.
-  const combinedTests = [...userTests, ...adminTests];
-  const uniqueTests = Array.from(
-    new Map(combinedTests.map((test) => [test.id, test])).values()
-  );
+    // Combine the two lists and remove any potential duplicates using a Map.
+    const combinedTests = [...userTests, ...adminTests];
+    const uniqueTests = Array.from(
+      new Map(combinedTests.map((test) => [test.id, test])).values()
+    );
 
-  // Sort the final, unique list by date and return the top 9.
-  uniqueTests.sort(
-    (a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)
-  );
+    // Sort the final, unique list by date to ensure the newest are always first.
+    uniqueTests.sort(
+      (a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)
+    );
 
-  return uniqueTests.slice(0, 9).map((test) => ({
-    ...test,
-    createdAt: test.createdAt ? test.createdAt.toMillis() : null,
-  }));
+    // Return the top results, ensuring createdAt is serializable.
+    return uniqueTests.slice(0, 9).map((test) => ({
+      ...test,
+      createdAt: test.createdAt ? test.createdAt.toMillis() : null,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch initial tests:", error);
+    return []; // Return an empty array on error
+  }
 }
 
 export default async function MockTestsHubPage() {

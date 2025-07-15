@@ -16,14 +16,11 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
 export default function LikeButton({ testId, initialLikeCount }) {
-  // We now get the user's favorite tests directly from our updated AuthContext
   const { user, openLoginPrompt, favoriteTests } = useAuth();
-
   const [likes, setLikes] = useState(initialLikeCount || 0);
   const [isLiked, setIsLiked] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // This effect will now react to changes in the global favoriteTests state
   useEffect(() => {
     if (favoriteTests) {
       setIsLiked(favoriteTests.includes(testId));
@@ -31,16 +28,22 @@ export default function LikeButton({ testId, initialLikeCount }) {
   }, [favoriteTests, testId]);
 
   const handleLike = async () => {
+    console.log("--- Like Button Clicked ---");
     if (!user) {
+      console.log("User not logged in, opening prompt.");
       openLoginPrompt();
       return;
     }
-    if (isLoading) return;
+    if (isLoading) {
+      console.log("Already loading, exiting.");
+      return;
+    }
     setIsLoading(true);
 
     const newLikedState = !isLiked;
+    console.log(`Attempting to set liked state to: ${newLikedState}`);
 
-    // Optimistic UI update for a snappy feel
+    // Optimistic UI update
     setLikes((prev) => (newLikedState ? prev + 1 : prev - 1));
     setIsLiked(newLikedState);
 
@@ -48,33 +51,43 @@ export default function LikeButton({ testId, initialLikeCount }) {
     const testRef = doc(db, "mockTests", testId);
 
     try {
-      // Perform both updates in a single transaction for data integrity
+      console.log("Starting Firestore transaction...");
       await runTransaction(db, async (transaction) => {
-        // Update the user's favorites list
+        console.log("Inside transaction. Getting test document...");
+        const testDoc = await transaction.get(testRef);
+        if (!testDoc.exists()) {
+          throw new Error("Test document not found!");
+        }
+        console.log("Test document found.");
+
+        console.log("Updating user's favoriteTests array...");
         transaction.update(userRef, {
           favoriteTests: newLikedState
             ? arrayUnion(testId)
             : arrayRemove(testId),
         });
 
-        // Update the test's like count
-        const testDoc = await transaction.get(testRef);
-        if (!testDoc.exists()) throw new Error("Test not found!");
+        console.log("Updating test's likeCount...");
         const newLikeCount =
           (testDoc.data().likeCount || 0) + (newLikedState ? 1 : -1);
         transaction.update(testRef, { likeCount: newLikeCount });
+        console.log("Transaction updates prepared.");
       });
+      console.log("--- Transaction Successful ---");
     } catch (e) {
+      console.error("--- TRANSACTION FAILED ---");
+      console.error("Firebase Error:", e); // This will log the specific permission error
       toast.error("An error occurred. Please try again.");
+
       // Revert UI on failure
       setLikes(likes);
       setIsLiked(isLiked);
     } finally {
       setIsLoading(false);
+      console.log("--- handleLike function finished ---");
     }
   };
 
-  // The JSX for the button remains the same
   return (
     <button
       onClick={handleLike}

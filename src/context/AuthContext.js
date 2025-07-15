@@ -18,6 +18,7 @@ import {
   useState,
 } from "react";
 import toast from "react-hot-toast";
+import { useRouter } from "next/navigation";
 
 const AuthContext = createContext();
 
@@ -29,9 +30,13 @@ export const AuthContextProvider = ({ children }) => {
   const [freeTrialCount, setFreeTrialCount] = useState(0);
   const [favoriteTests, setFavoriteTests] = useState([]);
 
+  const router = useRouter();
+
   const [isLoginPromptOpen, setIsLoginPromptOpen] = useState(false);
   const openLoginPrompt = () => setIsLoginPromptOpen(true);
   const closeLoginPrompt = () => setIsLoginPromptOpen(false);
+
+  
 
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
@@ -62,7 +67,7 @@ export const AuthContextProvider = ({ children }) => {
         }
       } catch (error) {
         if (error.code !== "auth/popup-closed-by-user") {
-          console.error("Google Sign-In Error:", error);
+          // console.error("Google Sign-In Error:", error);
           toast.error("Failed to sign in. Please try again.");
         }
       }
@@ -73,9 +78,11 @@ export const AuthContextProvider = ({ children }) => {
   // --- UPDATED: Logout function with better error handling ---
   const logOut = useCallback(async () => {
     try {
-      Cookies.remove("selectedAccessControlTest");
+      // Cookies.remove("selectedAccessControlTest");
       await signOut(auth);
-      window.location.href = "/";
+      // window.location.href = "/";
+      router.push("/");
+      toast.success("Logged out successfully.");
     } catch (error) {
       // This will now log the actual Firebase error to your console for debugging
       // and show a clear message to the user.
@@ -84,40 +91,89 @@ export const AuthContextProvider = ({ children }) => {
     }
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setLoading(true);
-      if (currentUser) {
-        setUser(currentUser);
-        const userDocRef = doc(db, "users", currentUser.uid);
-        const userUnsubscribe = onSnapshot(userDocRef, (docSnap) => {
-          if (docSnap.exists()) {
-            const userData = docSnap.data();
-            const expires = userData.premiumAccessExpires?.toDate();
-            setIsPremium(expires && expires > new Date());
-            setPremiumExpires(expires || null);
-            setFreeTrialCount(userData.freeTrialCount || 0);
-             setFavoriteTests(userData.favoriteTests || []);
-          } else {
-            setIsPremium(false);
-            setFreeTrialCount(0);
-            setPremiumExpires(null);
-            setFavoriteTests([]);
-          }
-          setLoading(false);
-        });
-        return () => userUnsubscribe();
-      } else {
-        setUser(null);
-        setIsPremium(false);
-        setFreeTrialCount(0);
-        setPremiumExpires(null);
+  // useEffect(() => {
+  //   const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+  //     setLoading(true);
+  //     if (currentUser) {
+  //       setUser(currentUser);
+  //       const userDocRef = doc(db, "users", currentUser.uid);
+  //       const userUnsubscribe = onSnapshot(userDocRef, (docSnap) => {
+  //         if (docSnap.exists()) {
+  //           const userData = docSnap.data();
+  //           const expires = userData.premiumAccessExpires?.toDate();
+  //           setIsPremium(expires && expires > new Date());
+  //           setPremiumExpires(expires || null);
+  //           setFreeTrialCount(userData.freeTrialCount || 0);
+  //            setFavoriteTests(userData.favoriteTests || []);
+  //         } else {
+  //           setIsPremium(false);
+  //           setFreeTrialCount(0);
+  //           setPremiumExpires(null);
+  //           setFavoriteTests([]);
+  //         }
+  //         setLoading(false);
+  //       });
+  //       return () => userUnsubscribe();
+  //     } else {
+  //       setUser(null);
+  //       setIsPremium(false);
+  //       setFreeTrialCount(0);
+  //       setPremiumExpires(null);
+  //       setLoading(false);
+  //       setFavoriteTests([]);
+  //     }
+  //   });
+  //   return () => unsubscribe();
+  // }, []);
+
+useEffect(() => {
+  let userSnapshotUnsubscribe = null;
+
+  const authStateUnsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    // Always unsubscribe from any previous user document listener
+    if (userSnapshotUnsubscribe) {
+      userSnapshotUnsubscribe();
+    }
+
+    if (currentUser) {
+      setUser(currentUser);
+      const userDocRef = doc(db, "users", currentUser.uid);
+
+      // Set up the new listener
+      userSnapshotUnsubscribe = onSnapshot(userDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const userData = docSnap.data();
+          const expires = userData.premiumAccessExpires?.toDate();
+          setIsPremium(expires && expires > new Date());
+          setPremiumExpires(expires || null);
+          setFreeTrialCount(userData.freeTrialCount || 0);
+          setFavoriteTests(userData.favoriteTests || []);
+        } else {
+          // Reset state if user doc doesn't exist
+          setIsPremium(false);
+          setFreeTrialCount(0);
+          setFavoriteTests([]);
+        }
         setLoading(false);
-        setFavoriteTests([]);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+      });
+    } else {
+      // Clear all user-related state on logout
+      setUser(null);
+      setIsPremium(false);
+      setFreeTrialCount(0);
+      setFavoriteTests([]);
+      setLoading(false);
+    }
+  });
+
+  // Cleanup function for the entire component
+  return () => {
+    authStateUnsubscribe();
+    if (userSnapshotUnsubscribe) {
+      userSnapshotUnsubscribe();
+    }
+  };
+}, []);
 
   const value = useMemo(
     () => ({
