@@ -11,33 +11,57 @@ import {
 } from "firebase/firestore";
 import TestHub from "@/components/mock-tests/TestHub";
 
+// This function now correctly fetches ALL public tests for the initial page load.
 async function getInitialTests() {
   const testsRef = collection(db, "mockTests");
 
-  // This query fetches tests that are explicitly approved.
-  // We will handle admin tests without a status on the client-side.
-  const q = query(
+  // Query 1: Get the most recent tests created by users that are approved.
+  const userTestsQuery = query(
     testsRef,
     where("status", "==", "approved"),
     orderBy("createdAt", "desc"),
     limit(9)
   );
 
-  const snapshot = await getDocs(q);
+  // Query 2: Get the most recent tests created by the admin (which don't have a status field).
+  const adminTestsQuery = query(
+    testsRef,
+    where("status", "==", null), // This is a placeholder; Firestore doesn't directly support "field does not exist". We filter client-side.
+    orderBy("createdAt", "desc"),
+    limit(9)
+  );
 
-  const tests = snapshot.docs.map((doc) => {
-    const data = doc.data();
-    return {
-      id: doc.id,
-      ...data,
-      createdAt: data.createdAt ? data.createdAt.toMillis() : null,
-    };
-  });
+  // Fetch both sets of tests concurrently.
+  const [userTestsSnapshot, adminTestsSnapshot] = await Promise.all([
+    getDocs(userTestsQuery),
+    getDocs(adminTestsQuery),
+  ]);
 
-  // In a real-world scenario with many admin tests, you might run a second
-  // query here for tests where 'status' does not exist and merge the results.
-  // For now, the client-side filter is sufficient.
-  return tests;
+  const userTests = userTestsSnapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
+
+  // Filter admin tests to ensure they don't have a 'status' field.
+  const adminTests = adminTestsSnapshot.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() }))
+    .filter((test) => typeof test.status === "undefined");
+
+  // Combine the two lists and remove any potential duplicates.
+  const combinedTests = [...userTests, ...adminTests];
+  const uniqueTests = Array.from(
+    new Map(combinedTests.map((test) => [test.id, test])).values()
+  );
+
+  // Sort the final, unique list by date and return the top 9.
+  uniqueTests.sort(
+    (a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)
+  );
+
+  return uniqueTests.slice(0, 9).map((test) => ({
+    ...test,
+    createdAt: test.createdAt ? test.createdAt.toMillis() : null,
+  }));
 }
 
 export default async function MockTestsHubPage() {
@@ -61,6 +85,7 @@ export default async function MockTestsHubPage() {
 
       <div className='container mx-auto px-4 sm:px-6 lg:px-8 pb-16 md:pb-24'>
         <div className='-mt-16'>
+          {/* The TestHub component now receives the complete and correct initial list */}
           <TestHub initialTests={initialTests} />
         </div>
       </div>
