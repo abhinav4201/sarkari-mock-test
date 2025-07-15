@@ -1,12 +1,27 @@
-import { db } from "@/lib/firebase";
-import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
-import TestList from "@/components/mock-tests/TestList";
+// src/app/mock-tests/page.js
 
-// This function fetches the FIRST page of tests on the server.
-// It was previously missing or named incorrectly.
+import { db } from "@/lib/firebase";
+import {
+  collection,
+  getDocs,
+  query,
+  orderBy,
+  limit,
+  where,
+} from "firebase/firestore";
+import TestHub from "@/components/mock-tests/TestHub"; // Import the new hub component
+
+// This server-side function fetches only the *initial* set of public tests.
+// The TestHub component will handle fetching for the other tabs on the client-side.
 async function getInitialTests() {
   const testsRef = collection(db, "mockTests");
-  const q = query(testsRef, orderBy("createdAt", "desc"), limit(9));
+  // Ensure we only fetch approved, public tests initially
+  const q = query(
+    testsRef,
+    where("status", "==", "approved"),
+    orderBy("createdAt", "desc"),
+    limit(9)
+  );
   const snapshot = await getDocs(q);
 
   return snapshot.docs.map((doc) => {
@@ -14,14 +29,12 @@ async function getInitialTests() {
     return {
       id: doc.id,
       ...data,
-      // Safeguard against missing timestamp to prevent hydration errors.
       createdAt: data.createdAt ? data.createdAt.toMillis() : null,
     };
   });
 }
 
 export default async function MockTestsHubPage() {
-  // The function call is now correct.
   const initialTests = await getInitialTests();
 
   return (
@@ -42,7 +55,8 @@ export default async function MockTestsHubPage() {
 
       <div className='container mx-auto px-4 sm:px-6 lg:px-8 pb-16 md:pb-24'>
         <div className='-mt-16'>
-          <TestList initialTests={initialTests} />
+          {/* Use the new TestHub component here */}
+          <TestHub initialTests={initialTests} />
         </div>
       </div>
     </div>

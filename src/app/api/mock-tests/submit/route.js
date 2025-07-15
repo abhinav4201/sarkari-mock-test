@@ -1,13 +1,18 @@
 // src/app/api/mock-tests/submit/route.js
 
-import { db } from "@/lib/firebase";
+import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import {
   collection,
-  getDocs,
+  doc,
+  getDoc,
+  addDoc,
+  updateDoc,
+  serverTimestamp,
   query,
   where,
-  addDoc,
-  serverTimestamp,
+  getDocs,
+  increment,
+  arrayUnion,
 } from "firebase/firestore";
 import { NextResponse } from "next/server";
 
@@ -21,12 +26,25 @@ export async function POST(request) {
       );
     }
 
-    // 1. Fetch the correct answers from the database
-    const q = query(
-      collection(db, "mockTestQuestions"),
+    // Authenticate the user - this is a good practice for submission APIs
+    const userToken = request.headers.get("Authorization")?.split("Bearer ")[1];
+    if (!userToken) {
+      return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+    }
+    const decodedToken = await adminAuth.verifyIdToken(userToken);
+    if (decodedToken.uid !== userId) {
+      return NextResponse.json(
+        { message: "Forbidden: User ID mismatch." },
+        { status: 403 }
+      );
+    }
+
+    // --- Score Calculation ---
+    const questionsQuery = query(
+      collection(adminDb, "mockTestQuestions"),
       where("testId", "==", testId)
     );
-    const questionsSnapshot = await getDocs(q);
+    const questionsSnapshot = await getDocs(questionsQuery);
     const correctAnswersMap = new Map();
     questionsSnapshot.forEach((doc) => {
       correctAnswersMap.set(doc.id, doc.data().correctAnswer);
@@ -38,41 +56,53 @@ export async function POST(request) {
       );
     }
 
-    // --- THIS IS THE CORRECTED SCORE CALCULATION ---
     let score = 0;
     const totalQuestions = correctAnswersMap.size;
-
     for (const questionId in answers) {
-      const userAnswerObject = answers[questionId];
-      const correctAnswer = correctAnswersMap.get(questionId);
-
-      // FIX: Access the 'answer' property inside the object for comparison
-      if (userAnswerObject && userAnswerObject.answer === correctAnswer) {
+      if (answers[questionId]?.answer === correctAnswersMap.get(questionId)) {
         score++;
       }
     }
-
     const incorrectAnswers = totalQuestions - score;
 
-    // 3. Save the result to the 'mockTestResults' collection
-    const resultsCollection = collection(db, "mockTestResults");
-    const resultDocRef = await addDoc(resultsCollection, {
+    // --- Save the Result ---
+    const resultDocRef = await addDoc(collection(adminDb, "mockTestResults"), {
       userId,
       testId,
-      answers, // The detailed answers object is saved correctly
+      answers,
       score,
       totalQuestions,
-      incorrectAnswers, // Also save the incorrect answer count
+      incorrectAnswers,
       completedAt: serverTimestamp(),
     });
 
-    // 4. Return the ID of the new result document
+    // --- Update Test Analytics (takenCount and uniqueTakers) ---
+    const testRef = doc(adminDb, "mockTests", testId);
+    const testSnap = await getDoc(testRef);
+    if (testSnap.exists()) {
+      const testData = testSnap.data();
+      const updateData = {
+        takenCount: increment(1),
+      };
+      // Add user to uniqueTakers only if they are not already in the array
+      if (!testData.uniqueTakers || !testData.uniqueTakers.includes(userId)) {
+        updateData.uniqueTakers = arrayUnion(userId);
+      }
+      await updateDoc(testRef, updateData);
+    }
+
     return NextResponse.json(
       { message: "Test submitted successfully!", resultId: resultDocRef.id },
       { status: 201 }
     );
   } catch (error) {
     console.error("Error submitting test:", error);
+    if (error.code?.startsWith("auth/")) {
+      return NextResponse.json(
+        { message: "Authentication error." },
+        { status: 401 }
+      );
+    }
     return NextResponse.json(
       { message: "Internal Server Error", error: error.message },
       { status: 500 }

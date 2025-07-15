@@ -6,11 +6,14 @@ import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import {
-  addDoc,
+  addDoc, // Import increment
+  arrayUnion,
   collection,
   doc,
-  getDoc,
+  getDoc, // Import updateDoc
+  increment,
   serverTimestamp,
+  updateDoc, // Import updateDoc
 } from "firebase/firestore";
 import { Lock } from "lucide-react";
 import Link from "next/link";
@@ -97,20 +100,46 @@ export default function TakeDynamicTestPage() {
       }
       const totalQuestions = questions.length;
       const incorrectAnswers = totalQuestions - score;
+      const totalTimeTaken = Object.values(finalTimePerQuestion).reduce(
+        (acc, time) => acc + time,
+        0
+      );
+
+      // --- BEHAVIORAL ANALYSIS LOGIC ---
+      const estimatedTimeInSeconds = instanceData.estimatedTime * 60;
+      const suspiciousTimeThreshold = estimatedTimeInSeconds * 0.15;
 
       try {
+        // Step 1: Create the result document with the new fields
         const resultDocRef = await addDoc(collection(db, "mockTestResults"), {
           userId: user.uid,
           testId: instanceData.originalTestId,
           instanceId: instanceId,
-          answers: finalAnswers, // Saving the correctly formatted object
+          answers: finalAnswers,
           score,
           totalQuestions,
           incorrectAnswers,
           submissionReason: reason,
           isDynamic: true,
           completedAt: serverTimestamp(),
+          reviewFlag:
+            totalTimeTaken < suspiciousTimeThreshold
+              ? "low_completion_time"
+              : null,
+          totalTimeTaken: totalTimeTaken,
         });
+
+        // Step 2: Update the dedicated analytics document for the original test
+        const analyticsRef = doc(
+          db,
+          "testAnalytics",
+          instanceData.originalTestId
+        );
+        await updateDoc(analyticsRef, {
+          takenCount: increment(1),
+          uniqueTakers: arrayUnion(user.uid),
+        });
+
         toast.success("Test submitted!");
         router.push(`/mock-tests/results/results-dynamic/${resultDocRef.id}`);
       } catch (error) {

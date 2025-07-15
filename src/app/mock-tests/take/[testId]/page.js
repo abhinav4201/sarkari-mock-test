@@ -7,12 +7,15 @@ import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import {
   addDoc,
+  arrayUnion,
   collection,
   doc,
   getDoc,
-  getDocs,
+  getDocs, // We may use updateDoc directly if the transaction is simple
+  increment,
   query,
   serverTimestamp,
+  updateDoc,
   where,
 } from "firebase/firestore";
 import { Lock } from "lucide-react";
@@ -101,20 +104,47 @@ export default function TestTakingPage() {
       const totalQuestions = questions.length;
       const incorrectAnswers = totalQuestions - score;
 
+      const totalTimeTaken = Object.values(finalTimePerQuestion).reduce(
+        (acc, time) => acc + time,
+        0
+      );
+
+      // --- BEHAVIORAL ANALYSIS LOGIC ---
+      const estimatedTimeInSeconds = testDetails.estimatedTime * 60;
+      const suspiciousTimeThreshold = estimatedTimeInSeconds * 0.15;
+
+      const resultData = {
+        userId: user.uid,
+        testId,
+        answers: finalAnswers,
+        score,
+        totalQuestions,
+        incorrectAnswers,
+        submissionReason: reason,
+        isDynamic: false,
+        completedAt: serverTimestamp(),
+        // Add a flag if the test was completed suspiciously fast
+        reviewFlag:
+          totalTimeTaken < suspiciousTimeThreshold
+            ? "low_completion_time"
+            : null,
+        totalTimeTaken: totalTimeTaken, // Store the total time for analysis
+      };
+
       try {
-        const resultRef = await addDoc(collection(db, "mockTestResults"), {
-          userId: user.uid,
-          testId,
-          answers: finalAnswers, // Saving the correctly formatted object
-          score,
-          totalQuestions,
-          incorrectAnswers,
-          submissionReason: reason,
-          isDynamic: false,
-          completedAt: serverTimestamp(),
+        const resultDocRef = await addDoc(
+          collection(db, "mockTestResults"),
+          resultData
+        );
+
+        const analyticsRef = doc(db, "testAnalytics", testId);
+        await updateDoc(analyticsRef, {
+          takenCount: increment(1),
+          uniqueTakers: arrayUnion(user.uid),
         });
+
         toast.success("Test submitted successfully!");
-        router.push(`/mock-tests/results/${resultRef.id}`);
+        router.push(`/mock-tests/results/${resultDocRef.id}`);
       } catch (error) {
         console.error(error);
         toast.error("Failed to submit your test. Please try again.");
@@ -131,6 +161,7 @@ export default function TestTakingPage() {
       testId,
       user,
       testState,
+      testDetails,
     ]
   );
 

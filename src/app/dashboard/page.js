@@ -1,16 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link"; // Import Link
 import DailyDose from "@/components/dashboard/DailyDose";
 import WelcomeHeader from "@/components/dashboard/WelcomeHeader";
 import TestHistory from "@/components/dashboard/TestHistory";
 import UserStats from "@/components/dashboard/UserStats";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
-import PaymentModal from "@/components/dashboard/PaymentModal"; // Import the new modal
-import { Crown } from "lucide-react";
+import PaymentModal from "@/components/dashboard/PaymentModal";
 import toast from "react-hot-toast";
-import SubscriptionStatusCard from "@/components/dashboard/SubscriptionStatusCard"; 
+import SubscriptionStatusCard from "@/components/dashboard/SubscriptionStatusCard";
+import { PenSquare, ArrowRight } from "lucide-react";
 
 async function getDailyVocabulary() {
   const q = query(
@@ -91,6 +92,22 @@ export default function DashboardPage() {
           <SubscriptionStatusCard
             onUpgradeClick={() => setIsPaymentModalOpen(true)}
           />
+          <div className='mt-8'>
+            <Link href='/dashboard/monetization' className='block group'>
+              <div className='bg-white p-6 rounded-2xl shadow-lg border border-slate-200 hover:border-indigo-400 hover:shadow-xl transition-all flex justify-between items-center'>
+                <div>
+                  <h2 className='text-2xl font-bold text-slate-900 flex items-center gap-3'>
+                    <PenSquare className='text-indigo-500' />
+                    Content & Monetization
+                  </h2>
+                  <p className='text-slate-600 mt-1'>
+                    Create tests, track performance, and manage your earnings.
+                  </p>
+                </div>
+                <ArrowRight className='h-8 w-8 text-slate-400 group-hover:text-indigo-500 transition-transform group-hover:translate-x-1' />
+              </div>
+            </Link>
+          </div>
 
           <div className='mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8 items-start'>
             <div className='lg:col-span-2 space-y-8'>

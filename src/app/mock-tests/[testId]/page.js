@@ -1,5 +1,6 @@
 import PreviousResult from "@/components/mock-tests/PreviousResult";
 import StartTestButton from "@/components/mock-tests/StartTestButton";
+import TestReviews from "@/components/mock-tests/TestReviews";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { Book, Clock, FileText, Tag } from "lucide-react";
@@ -93,6 +94,7 @@ export default async function PreTestStartPage({ params }) {
           {/* The smart button handles all logic for login checks and premium status */}
           <StartTestButton test={test} />
         </div>
+        <TestReviews testId={test.id} />
       </div>
     </div>
   );

@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import TestCard from "./TestCard";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import TestCard from "./TestCard";
 
 const PAGE_SIZE = 9;
 
@@ -50,12 +50,19 @@ export default function TestList({ initialTests }) {
           test.examName.toLowerCase().includes(searchTerm.toLowerCase())
         : true;
 
+      const isVisible =
+        test.status === "approved" || typeof test.status === "undefined";
+      if (!isVisible) {
+        return false;
+      }
+
       if (!matchesSearch) {
         return false;
       }
 
       // --- NEW ACCESS CONTROL LOGIC STARTS HERE ---
       // This logic replaces the old JSON file check.
+
       const allowedUsers = test.allowedUserIds;
 
       // If the 'allowedUserIds' field doesn't exist or is empty, the test is public.

@@ -16,6 +16,7 @@
     "@tiptap/starter-kit": "^2.25.1",
     "csv-stringify": "^6.5.2",
     "firebase": "^11.10.0",
+    "firebase-admin": "^13.4.0",
     "idb": "^8.0.3",
     "imagetracerjs": "^1.2.6",
     "js-cookie": "^3.0.5",
@@ -24,7 +25,8 @@
     "papaparse": "^5.5.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-hot-toast": "^2.5.2"
+    "react-hot-toast": "^2.5.2",
+    "string-similarity": "^4.0.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

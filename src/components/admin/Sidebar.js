@@ -13,6 +13,9 @@ import {
   KeyRound,
   BookOpenText,
   Image,
+  CheckSquare,
+  LineChart,
+  DollarSign,
 } from "lucide-react"; // Added relevant icons
 
 const adminLinks = [
@@ -33,6 +36,11 @@ const adminLinks = [
   },
   // --- NEW ITEM ADDED FOR QUESTION BANK ---
   {
+    name: "Test Approvals",
+    href: "/admin/approvals",
+    icon: <CheckSquare className='mr-3 h-5 w-5' />,
+  },
+  {
     name: "Question Bank",
     href: "/admin/question-bank",
     icon: <BookOpenText className='mr-3 h-5 w-5' />,
@@ -51,6 +59,16 @@ const adminLinks = [
     name: "Access Control",
     href: "/admin/access-control",
     icon: <KeyRound className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Creator Analytics",
+    href: "/admin/analytics",
+    icon: <LineChart className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Monetization Requests",
+    href: "/admin/monetization-requests",
+    icon: <DollarSign className='mr-3 h-5 w-5' />,
   },
   {
     name: "SVG : Converter",
