@@ -13,9 +13,10 @@ import {
   KeyRound,
   BookOpenText,
   Image,
-  CheckSquare,
+  // CheckSquare,
   LineChart,
   DollarSign,
+  Banknote,
 } from "lucide-react"; // Added relevant icons
 
 const adminLinks = [
@@ -35,11 +36,11 @@ const adminLinks = [
     icon: <TestTube className='mr-3 h-5 w-5' />,
   },
   // --- NEW ITEM ADDED FOR QUESTION BANK ---
-  {
-    name: "Test Approvals",
-    href: "/admin/approvals",
-    icon: <CheckSquare className='mr-3 h-5 w-5' />,
-  },
+  // {
+  //   name: "Test Approvals",
+  //   href: "/admin/approvals",
+  //   icon: <CheckSquare className='mr-3 h-5 w-5' />,
+  // },
   {
     name: "Question Bank",
     href: "/admin/question-bank",
@@ -69,6 +70,11 @@ const adminLinks = [
     name: "Monetization Requests",
     href: "/admin/monetization-requests",
     icon: <DollarSign className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Manage Payouts",
+    href: "/admin/payouts",
+    icon: <Banknote className='mr-3 h-5 w-5' />,
   },
   {
     name: "SVG : Converter",

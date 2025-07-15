@@ -1,7 +1,8 @@
 // src/app/api/tests/submit-for-approval/route.js
 
 import { NextResponse } from "next/server";
-import { getFirebaseAdmin } from "@/lib/firebase-admin";
+// --- THIS IS THE CORRECTED IMPORT ---
+import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { compareTwoStrings } from "string-similarity";
 
@@ -9,7 +10,8 @@ const SIMILARITY_THRESHOLD = 0.85;
 
 export async function POST(request) {
   try {
-    const { auth: adminAuth, db: adminDb } = getFirebaseAdmin();
+    // We no longer need to call getFirebaseAdmin()
+    // const { auth: adminAuth, db: adminDb } = getFirebaseAdmin();
 
     const userToken = request.headers.get("Authorization")?.split("Bearer ")[1];
     if (!userToken) {
@@ -58,8 +60,6 @@ export async function POST(request) {
 
     const ip = request.headers.get("x-forwarded-for") ?? "127.0.0.1";
 
-    // --- STEP 1: Create the main test document, just like before ---
-    // We are no longer storing analytics counts directly on this document.
     const newTestDocData = {
       title,
       title_lowercase: title.toLowerCase(),
@@ -70,7 +70,7 @@ export async function POST(request) {
       createdBy: userId,
       status: "approved",
       monetizationStatus: "pending_review",
-      likeCount: 0, // Starts at 0 as requested
+      likeCount: 0,
       questionCount: 0,
       isPremium: false,
       isDynamic: false,
@@ -80,8 +80,6 @@ export async function POST(request) {
 
     const newTestRef = await testsRef.add(newTestDocData);
 
-    // --- STEP 2: Create the separate analytics document ---
-    // We use the same ID as the new test for easy lookup.
     const analyticsRef = adminDb.collection("testAnalytics").doc(newTestRef.id);
     await analyticsRef.set({
       testId: newTestRef.id,

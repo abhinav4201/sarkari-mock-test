@@ -17,11 +17,12 @@ export default function AdminAnalyticsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // --- THIS IS THE EFFICIENT REFACTORED LOGIC ---
-
       // 1. Fetch all documents from the lean 'testAnalytics' collection
       const analyticsSnapshot = await getDocs(collection(db, "testAnalytics"));
-      const allAnalytics = analyticsSnapshot.docs.map((doc) => doc.data());
+      const allAnalytics = analyticsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
 
       if (allAnalytics.length === 0) {
         setUserStats([]);
@@ -39,17 +40,11 @@ export default function AdminAnalyticsPage() {
         return;
       }
 
-      // 3. Fetch all user documents corresponding to the IDs
+      // 3. Fetch all corresponding user and test documents
       const usersQuery = query(
         collection(db, "users"),
         where("uid", "in", userIds)
       );
-      const usersSnapshot = await getDocs(usersQuery);
-      const usersMap = new Map(
-        usersSnapshot.docs.map((doc) => [doc.data().uid, doc.data()])
-      );
-
-      // 4. Fetch all test documents to get titles and other details
       const testsQuery = query(
         collection(db, "mockTests"),
         where(
@@ -58,12 +53,20 @@ export default function AdminAnalyticsPage() {
           allAnalytics.map((a) => a.testId)
         )
       );
-      const testsSnapshot = await getDocs(testsQuery);
+
+      const [usersSnapshot, testsSnapshot] = await Promise.all([
+        getDocs(usersQuery),
+        getDocs(testsQuery),
+      ]);
+
+      const usersMap = new Map(
+        usersSnapshot.docs.map((doc) => [doc.data().uid, doc.data()])
+      );
       const testsMap = new Map(
         testsSnapshot.docs.map((doc) => [doc.id, doc.data()])
       );
 
-      // 5. Aggregate stats per user
+      // 4. Aggregate stats for each user
       const stats = userIds
         .map((uid) => {
           const user = usersMap.get(uid);
@@ -81,7 +84,6 @@ export default function AdminAnalyticsPage() {
             0
           );
 
-          // Enrich test data with titles for the modal view
           const userTestsWithTitles = userAnalytics.map((analytic) => ({
             ...analytic,
             title: testsMap.get(analytic.testId)?.title || "Unknown Test",
@@ -118,7 +120,6 @@ export default function AdminAnalyticsPage() {
     return <div className='text-center p-12'>Loading Creator Analytics...</div>;
   }
 
-  // The JSX for rendering the page remains the same
   return (
     <>
       <UserTestsDetailModal

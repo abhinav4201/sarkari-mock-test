@@ -37,7 +37,7 @@ export default function MonetizationPolicyPage() {
           </li>
           <li>
             Your tests must have collectively reached a total of at least{" "}
-            <strong>1000 unique test takers</strong>. A "unique taker" is defined
+            <strong>2000 unique test takers</strong>. A "unique taker" is defined
             as a single registered user. No matter how many times the same user
             retakes your tests, they will only be counted once towards your
             total.

@@ -4,18 +4,25 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, LayoutGrid, BarChartHorizontalBig } from "lucide-react";
+import {
+  ArrowLeft,
+  LayoutGrid,
+  BarChartHorizontalBig,
+  Wallet,
+} from "lucide-react"; // Import Wallet icon
 
 const subNavLinks = [
+  { name: "Creator Hub", href: "/dashboard/monetization", icon: LayoutGrid },
   {
-    name: "Monetization Hub",
-    href: "/dashboard/monetization",
-    icon: LayoutGrid,
-  },
-  {
-    name: "My Content Analytics",
+    name: "My Analytics",
     href: "/dashboard/monetization/analytics",
     icon: BarChartHorizontalBig,
+  },
+  // --- NEW LINK ADDED ---
+  {
+    name: "Payouts & Earnings",
+    href: "/dashboard/monetization/payouts",
+    icon: Wallet,
   },
 ];
 
@@ -25,12 +32,15 @@ export default function MonetizationLayout({ children }) {
   return (
     <div className='bg-slate-100 min-h-screen'>
       <div className='container mx-auto px-4 sm:px-6 lg:px-8 py-8'>
-        {/* Sub-navigation Header */}
         <div className='bg-white p-4 rounded-xl shadow-md border mb-8'>
           <div className='flex flex-col sm:flex-row justify-between items-center gap-4'>
             <div className='flex items-center gap-2'>
               {subNavLinks.map((link) => {
-                const isActive = pathname === link.href;
+                // This logic correctly highlights parent paths as well
+                const isActive =
+                  pathname.startsWith(link.href) &&
+                  (link.href !== "/dashboard/monetization" ||
+                    pathname === "/dashboard/monetization");
                 return (
                   <Link
                     key={link.name}
@@ -57,7 +67,6 @@ export default function MonetizationLayout({ children }) {
           </div>
         </div>
 
-        {/* This will render the specific page (Hub, Analytics, or Test Management) */}
         <main>{children}</main>
       </div>
     </div>

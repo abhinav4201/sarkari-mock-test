@@ -2,23 +2,22 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import {
+  collection,
   doc,
   getDoc,
-  collection,
+  getDocs,
   query,
   where,
-  orderBy,
-  getDocs,
 } from "firebase/firestore";
+import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 // import BackButton from "@/components/BackButton";
-import UserEligibilityCard from "@/components/dashboard/UserEligibilityCard";
 import AnalyticsStatCard from "@/components/dashboard/AnalyticsStatCard";
-import { Eye, Users, BarChart2, FileText } from "lucide-react";
+import UserEligibilityCard from "@/components/dashboard/UserEligibilityCard";
+import { BarChart2, Eye, FileText, Users } from "lucide-react";
 import Link from "next/link";
 
 export default function AnalyticsPage() {
@@ -26,6 +25,7 @@ export default function AnalyticsPage() {
   const [myTests, setMyTests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userProfile, setUserProfile] = useState(null);
+  const [earnings, setEarnings] = useState({});
 
   const fetchData = useCallback(async () => {
     if (!user) {
@@ -90,7 +90,15 @@ export default function AnalyticsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+
+    if (userProfile?.monetizationStatus === "approved") {
+      const earningsRef = doc(db, "earnings", user.uid);
+      const earningsSnap = await getDoc(earningsRef);
+      if (earningsSnap.exists()) {
+        setEarnings(earningsSnap.data());
+      }
+    }
+  }, [user, userProfile?.monetizationStatus]);
 
   useEffect(() => {
     if (!authLoading) {
@@ -157,7 +165,6 @@ export default function AnalyticsPage() {
               icon={<Users />}
             />
           </div>
-
           <div className='mb-8'>
             <UserEligibilityCard
               userStats={aggregatedStats}

@@ -1,12 +1,10 @@
 // src/app/api/admin/handle-monetization-request/route.js
 
-import { getFirebaseAdmin } from "@/lib/firebase-admin";
-import { doc, updateDoc } from "firebase/firestore";
+import { adminAuth, adminDb } from "@/lib/firebase-admin"; // Import the guaranteed valid instances
 import { NextResponse } from "next/server";
 
 export async function POST(request) {
   try {
-    const { auth: adminAuth, db: adminDb } = getFirebaseAdmin();
     const { targetUserId, decision } = await request.json();
 
     const userToken = request.headers.get("Authorization")?.split("Bearer ")[1];
@@ -16,6 +14,7 @@ export async function POST(request) {
     const decodedToken = await adminAuth.verifyIdToken(userToken);
     const adminUser = await adminAuth.getUser(decodedToken.uid);
 
+    // Security Check: Ensure the caller is the admin
     if (adminUser.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
       return NextResponse.json(
         { message: "Forbidden: Not an admin." },
@@ -30,10 +29,14 @@ export async function POST(request) {
       );
     }
 
-    const userRef = doc(adminDb, "users", targetUserId);
-    await updateDoc(userRef, {
+    // --- THIS IS THE CORRECTED LOGIC ---
+    // Use the admin SDK's methods to reference and update the document
+    const userRef = adminDb.collection("users").doc(targetUserId);
+
+    await userRef.update({
       monetizationStatus: decision,
     });
+    // --- END OF CORRECTION ---
 
     return NextResponse.json({
       message: `User monetization status set to ${decision}.`,
