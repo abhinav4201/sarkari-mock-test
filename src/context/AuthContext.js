@@ -27,6 +27,7 @@ export const AuthContextProvider = ({ children }) => {
   const [isPremium, setIsPremium] = useState(false);
   const [premiumExpires, setPremiumExpires] = useState(null);
   const [freeTrialCount, setFreeTrialCount] = useState(0);
+  const [favoriteTests, setFavoriteTests] = useState([]);
 
   const [isLoginPromptOpen, setIsLoginPromptOpen] = useState(false);
   const openLoginPrompt = () => setIsLoginPromptOpen(true);
@@ -96,10 +97,12 @@ export const AuthContextProvider = ({ children }) => {
             setIsPremium(expires && expires > new Date());
             setPremiumExpires(expires || null);
             setFreeTrialCount(userData.freeTrialCount || 0);
+             setFavoriteTests(userData.favoriteTests || []);
           } else {
             setIsPremium(false);
             setFreeTrialCount(0);
             setPremiumExpires(null);
+            setFavoriteTests([]);
           }
           setLoading(false);
         });
@@ -110,6 +113,7 @@ export const AuthContextProvider = ({ children }) => {
         setFreeTrialCount(0);
         setPremiumExpires(null);
         setLoading(false);
+        setFavoriteTests([]);
       }
     });
     return () => unsubscribe();
@@ -127,6 +131,7 @@ export const AuthContextProvider = ({ children }) => {
       isLoginPromptOpen,
       openLoginPrompt,
       closeLoginPrompt,
+      favoriteTests,
     }),
     [
       user,
@@ -137,6 +142,7 @@ export const AuthContextProvider = ({ children }) => {
       freeTrialCount,
       premiumExpires,
       isLoginPromptOpen,
+      favoriteTests,
     ]
   );
 

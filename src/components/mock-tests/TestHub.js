@@ -35,109 +35,64 @@ const TabButton = ({ label, icon, isActive, onClick }) => (
 );
 
 export default function TestHub({ initialTests }) {
-  const { user } = useAuth();
+  const { user, favoriteTests } = useAuth();
   const [activeTab, setActiveTab] = useState("all");
   const [tests, setTests] = useState(initialTests);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // --- NEW STATE FOR PAGINATION ---
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(initialTests.length === PAGE_SIZE);
 
-  const getFavoriteTestIds = () => {
-    if (typeof window === "undefined") return [];
-    const ids = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (
-        key.startsWith("liked-test-") &&
-        localStorage.getItem(key) === "true"
-      ) {
-        ids.push(key.replace("liked-test-", ""));
-      }
-    }
-    return ids;
-  };
-
-  // --- REFACTORED FETCH LOGIC ---
-  const fetchTestsForTab = useCallback(
+  const fetchTests = useCallback(
     async (tab, loadMore = false) => {
-      if (loadMore) {
-        setLoadingMore(true);
+      if (loadMore && !hasMore) return;
+
+      loadMore ? setLoadingMore(true) : setLoading(true);
+
+      let q;
+      const collectionRef = collection(db, "mockTests");
+      const queryConstraints = [orderBy("createdAt", "desc"), limit(PAGE_SIZE)];
+
+      if (tab === "all") {
+        // For "All Tests", we don't need a `where` clause for the creator.
+        // The filtering for status will be done on the client-side to include admin tests.
+        if (loadMore && lastDoc) queryConstraints.push(startAfter(lastDoc));
+        q = query(collectionRef, ...queryConstraints);
+      } else if (tab === "created" && user) {
+        queryConstraints.unshift(where("createdBy", "==", user.uid));
+        if (loadMore && lastDoc) queryConstraints.push(startAfter(lastDoc));
+        q = query(collectionRef, ...queryConstraints);
+      } else if (tab === "favorites" && user) {
+        if (!favoriteTests || favoriteTests.length === 0) {
+          setTests([]);
+          setLoading(false);
+          return;
+        }
+        q = query(
+          collectionRef,
+          where("__name__", "in", favoriteTests.slice(0, 10))
+        );
       } else {
-        setLoading(true);
-        setTests([]); // Clear previous tests on tab switch
-      }
-
-      let queryConstraints = [];
-      let collectionRef = collection(db, "mockTests");
-
-      // Build the base query based on the active tab
-      switch (tab) {
-        case "created":
-          if (!user) {
-            setLoading(false);
-            setLoadingMore(false);
-            return;
-          }
-          queryConstraints.push(
-            where("createdBy", "==", user.uid),
-            orderBy("createdAt", "desc")
-          );
-          break;
-        case "favorites":
-          const favoriteIds = getFavoriteTestIds();
-          if (favoriteIds.length === 0) {
-            setLoading(false);
-            setLoadingMore(false);
-            return;
-          }
-          queryConstraints.push(
-            where("__name__", "in", favoriteIds.slice(0, 10))
-          );
-          break;
-        case "all":
-        default:
-          queryConstraints.push(
-            where("status", "==", "approved"),
-            orderBy("createdAt", "desc")
-          );
-          break;
-      }
-
-      queryConstraints.push(limit(PAGE_SIZE));
-
-      // Add pagination cursor if loading more
-      if (loadMore && lastDoc) {
-        queryConstraints.push(startAfter(lastDoc));
+        setLoading(false);
+        return;
       }
 
       try {
-        const finalQuery = query(collectionRef, ...queryConstraints);
-        const snapshot = await getDocs(finalQuery);
+        const snapshot = await getDocs(q);
         const newTests = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
         }));
 
-        setHasMore(newTests.length === PAGE_SIZE);
+        setHasMore(newTests.length === PAGE_SIZE && tab !== "favorites");
         setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
 
         if (loadMore) {
           setTests((prev) => [...prev, ...newTests]);
         } else {
-          // For the 'all' tab, on initial load, use the server-fetched tests
-          if (tab === "all") {
-            setTests(initialTests);
-            // We need to manually set the lastDoc for the 'all' tab on its first load
-            if (initialTests.length > 0) {
-              // This is a placeholder; a proper implementation might need to fetch the snapshot
-            }
-          } else {
-            setTests(newTests);
-          }
+          setTests(newTests);
         }
       } catch (error) {
         toast.error(`Failed to load tests.`);
@@ -146,31 +101,41 @@ export default function TestHub({ initialTests }) {
         setLoadingMore(false);
       }
     },
-    [user, lastDoc, initialTests]
+    [user, lastDoc, hasMore, favoriteTests]
   );
 
   const handleTabClick = (tab) => {
     setActiveTab(tab);
-    // Reset pagination state when switching tabs
+    setTests([]);
     setLastDoc(null);
     setHasMore(true);
-    fetchTestsForTab(tab, false);
+    fetchTests(tab, false);
   };
 
   const handleLoadMore = () => {
-    fetchTestsForTab(activeTab, true);
+    fetchTests(activeTab, true);
   };
 
-  // Memoized filter for search
   const filteredTests = useMemo(() => {
-    return tests.filter(
-      (test) =>
-        (test.title?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-        (test.topic?.toLowerCase() || "").includes(searchTerm.toLowerCase())
-    );
+    return tests.filter((test) => {
+      // --- THIS IS THE CORRECTED LOGIC FROM YOUR TestList.js ---
+      // A test is visible if it's approved OR if it's an older admin test without a status field.
+      const isVisible =
+        test.status === "approved" || typeof test.status === "undefined";
+      if (!isVisible) return false;
+
+      // Search filter
+      const matchesSearch = searchTerm
+        ? (test.title?.toLowerCase() || "").includes(
+            searchTerm.toLowerCase()
+          ) ||
+          (test.topic?.toLowerCase() || "").includes(searchTerm.toLowerCase())
+        : true;
+
+      return matchesSearch;
+    });
   }, [tests, searchTerm]);
 
-  // Taken test logic remains the same
   const [takenTestIds, setTakenTestIds] = useState(new Set());
   useEffect(() => {
     if (user) {
@@ -194,7 +159,7 @@ export default function TestHub({ initialTests }) {
             placeholder='Search tests by title or topic...'
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className='w-full p-4 pl-12 text-slate-900 bg-white border-2 border-slate-200 rounded-full shadow-inner focus:ring-2 focus:ring-indigo-500 transition text-lg'
+            className='w-full p-4 pl-12 bg-white border-2 border-slate-200 rounded-full shadow-inner focus:ring-2 focus:ring-indigo-500 transition text-lg'
           />
         </div>
       </div>
@@ -225,7 +190,7 @@ export default function TestHub({ initialTests }) {
       </div>
 
       {loading ? (
-        <div className='text-center py-16'>Loading tests...</div>
+        <div className='text-center py-16'>Loading...</div>
       ) : filteredTests.length > 0 ? (
         <>
           <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>

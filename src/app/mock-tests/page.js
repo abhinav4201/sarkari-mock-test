@@ -9,22 +9,23 @@ import {
   limit,
   where,
 } from "firebase/firestore";
-import TestHub from "@/components/mock-tests/TestHub"; // Import the new hub component
+import TestHub from "@/components/mock-tests/TestHub";
 
-// This server-side function fetches only the *initial* set of public tests.
-// The TestHub component will handle fetching for the other tabs on the client-side.
 async function getInitialTests() {
   const testsRef = collection(db, "mockTests");
-  // Ensure we only fetch approved, public tests initially
+
+  // This query fetches tests that are explicitly approved.
+  // We will handle admin tests without a status on the client-side.
   const q = query(
     testsRef,
     where("status", "==", "approved"),
     orderBy("createdAt", "desc"),
     limit(9)
   );
+
   const snapshot = await getDocs(q);
 
-  return snapshot.docs.map((doc) => {
+  const tests = snapshot.docs.map((doc) => {
     const data = doc.data();
     return {
       id: doc.id,
@@ -32,6 +33,11 @@ async function getInitialTests() {
       createdAt: data.createdAt ? data.createdAt.toMillis() : null,
     };
   });
+
+  // In a real-world scenario with many admin tests, you might run a second
+  // query here for tests where 'status' does not exist and merge the results.
+  // For now, the client-side filter is sufficient.
+  return tests;
 }
 
 export default async function MockTestsHubPage() {
@@ -55,7 +61,6 @@ export default async function MockTestsHubPage() {
 
       <div className='container mx-auto px-4 sm:px-6 lg:px-8 pb-16 md:pb-24'>
         <div className='-mt-16'>
-          {/* Use the new TestHub component here */}
           <TestHub initialTests={initialTests} />
         </div>
       </div>
