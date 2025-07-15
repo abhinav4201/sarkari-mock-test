@@ -159,7 +159,7 @@ export default function TestHub({ initialTests }) {
             placeholder='Search tests by title or topic...'
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className='w-full p-4 pl-12 bg-white border-2 border-slate-200 rounded-full shadow-inner focus:ring-2 focus:ring-indigo-500 transition text-lg'
+            className='w-full p-4 pl-12 text-slate-900 bg-white border-2 border-slate-200 rounded-full shadow-inner focus:ring-2 focus:ring-indigo-500 transition text-lg'
           />
         </div>
       </div>
