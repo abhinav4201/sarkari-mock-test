@@ -1,9 +1,11 @@
+// src/components/Navbar.js
 "use client";
 
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
+import NotificationBell from "./ui/NotificationBell"; // Import the bell
 
 export default function Navbar() {
   const { user, loading, googleSignIn, logOut } = useAuth();
@@ -30,7 +32,6 @@ export default function Navbar() {
 
   const linkClasses =
     "block md:inline-block py-2 px-4 md:px-3 text-indigo-100 font-medium hover:text-white rounded-md transition-colors";
-  const activeLinkClasses = "bg-indigo-600 text-white"; // This can remain for active links
 
   const homeLink = (
     <Link href='/' className={linkClasses} onClick={closeMobileMenu}>
@@ -62,7 +63,6 @@ export default function Navbar() {
     </Link>
   );
 
-  // --- UPDATED: Admin link style for better contrast ---
   const adminLinks = (
     <Link
       href='/admin'
@@ -78,7 +78,6 @@ export default function Navbar() {
     logoHref = user.email === adminEmail ? "/admin" : "/dashboard";
   }
 
-  // --- UPDATED: Changed from red to a blue/indigo gradient ---
   return (
     <nav className='bg-slate-900 shadow-lg sticky top-0 z-50'>
       <div className='container mx-auto px-4 sm:px-6 lg:px-8'>
@@ -97,7 +96,7 @@ export default function Navbar() {
               (user.email === adminEmail ? adminLinks : userLinks)}
           </div>
 
-          <div className='hidden md:flex items-center space-x-4'>
+          <div className='hidden md:flex items-center space-x-2'>
             {loading ? (
               <div className='h-9 w-28 bg-blue-500 rounded-lg animate-pulse'></div>
             ) : !user ? (
@@ -108,12 +107,15 @@ export default function Navbar() {
                 Login / Sign Up
               </button>
             ) : (
-              <button
-                onClick={handleSignOut}
-                className='px-4 py-2 bg-blue-500/50 text-white rounded-lg text-sm font-semibold hover:bg-blue-500 transition-colors'
-              >
-                Logout
-              </button>
+              <>
+                <NotificationBell />
+                <button
+                  onClick={handleSignOut}
+                  className='px-4 py-2 bg-blue-500/50 text-white rounded-lg text-sm font-semibold hover:bg-blue-500 transition-colors'
+                >
+                  Logout
+                </button>
+              </>
             )}
           </div>
 

@@ -1,9 +1,9 @@
 // src/components/LibraryNavbar.js
-
 "use client";
 
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
+import NotificationBell from "../components/ui/NotificationBell"; // Import the bell
 
 export default function LibraryNavbar() {
   const { logOut } = useAuth();
@@ -20,8 +20,7 @@ export default function LibraryNavbar() {
               Sarkari Mock Test
             </Link>
           </div>
-          <div className='flex items-center gap-1 sm:gap-4'>
-            {/* --- NEW: Dashboard Link Added --- */}
+          <div className='flex items-center gap-1 sm:gap-2'>
             <Link
               href='/library-dashboard'
               className='px-3 py-2 text-indigo-100 font-medium hover:text-white rounded-md text-sm sm:text-base'
@@ -40,6 +39,7 @@ export default function LibraryNavbar() {
             >
               Contact
             </Link>
+            <NotificationBell />
             <button
               onClick={logOut}
               className='px-4 py-2 bg-blue-500/50 text-white rounded-lg text-sm font-semibold hover:bg-blue-500'
