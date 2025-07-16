@@ -20,16 +20,23 @@ export default function LibraryNavbar() {
               Sarkari Mock Test
             </Link>
           </div>
-          <div className='flex items-center gap-4'>
+          <div className='flex items-center gap-1 sm:gap-4'>
+            {/* --- NEW: Dashboard Link Added --- */}
+            <Link
+              href='/library-dashboard'
+              className='px-3 py-2 text-indigo-100 font-medium hover:text-white rounded-md text-sm sm:text-base'
+            >
+              Dashboard
+            </Link>
             <Link
               href='/mock-tests'
-              className='px-4 py-2 text-indigo-100 font-medium hover:text-white rounded-md'
+              className='px-3 py-2 text-indigo-100 font-medium hover:text-white rounded-md text-sm sm:text-base'
             >
               Tests
             </Link>
             <Link
               href='/contact'
-              className='px-4 py-2 text-indigo-100 font-medium hover:text-white rounded-md'
+              className='px-3 py-2 text-indigo-100 font-medium hover:text-white rounded-md text-sm sm:text-base'
             >
               Contact
             </Link>

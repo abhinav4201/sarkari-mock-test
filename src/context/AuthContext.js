@@ -43,43 +43,90 @@ export const AuthContextProvider = ({ children }) => {
 
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
+  /**
+   * --- THE UNIFIED SIGN-IN FUNCTION ---
+   * Handles all Google Sign-In scenarios for both regular and library users.
+   * @param {object} [options] - Optional parameters.
+   * @param {string} [options.libraryId] - The ID of the library if it's a library sign-up.
+   * @param {string} [options.redirectUrl] - The URL to redirect to for regular users.
+   */
   const googleSignIn = useCallback(
-    async (redirectUrl = "/dashboard") => {
+    async (options = {}) => {
+      const { libraryId, redirectUrl = "/dashboard" } = options;
       closeLoginPrompt();
       const provider = new GoogleAuthProvider();
+
       try {
         const result = await signInWithPopup(auth, provider);
         const loggedInUser = result.user;
-        const visitorId = await getFingerprint();
 
-        if (loggedInUser) {
-          const userRef = doc(db, "users", loggedInUser.uid);
-          const userSnap = await getDoc(userRef);
-          if (!userSnap.exists()) {
-            await setDoc(
-              userRef,
-              {
-                uid: loggedInUser.uid,
-                name: loggedInUser.displayName,
-                email: loggedInUser.email,
-                lastLogin: serverTimestamp(),
-                initialVisitorId: visitorId,
-              },
-              { merge: true }
-            );
-          } else {
-            await setDoc(
-              userRef,
-              {
-                lastLogin: serverTimestamp(),
-              },
-              { merge: true }
-            );
-          }
-        }
+        // If it's the admin, always redirect to the admin panel.
         if (loggedInUser.email === adminEmail) {
           window.location.href = "/admin";
+          return;
+        }
+
+        const userRef = doc(db, "users", loggedInUser.uid);
+        const libraryUserRef = doc(db, "libraryUsers", loggedInUser.uid);
+
+        const [userSnap, libraryUserSnap] = await Promise.all([
+          getDoc(userRef),
+          getDoc(libraryUserRef),
+        ]);
+
+        // Scenario 1: User already exists as a library user.
+        if (libraryUserSnap.exists()) {
+          router.push("/library-dashboard");
+          return;
+        }
+
+        // Scenario 2: User already exists as a regular user.
+        if (userSnap.exists()) {
+          // If they tried to join via a library link but are already a regular user.
+          if (libraryId) {
+            toast.error("This email is already registered as a regular user.", {
+              duration: 5000,
+            });
+          }
+          await setDoc(
+            userRef,
+            { lastLogin: serverTimestamp() },
+            { merge: true }
+          );
+          window.location.href = redirectUrl;
+          return;
+        }
+
+        // Scenario 3: This is a brand new user.
+        const visitorId = await getFingerprint();
+
+        // If a libraryId is provided, create a library user.
+        if (libraryId) {
+          await setDoc(libraryUserRef, {
+            uid: loggedInUser.uid,
+            name: loggedInUser.displayName,
+            email: loggedInUser.email,
+            libraryId: libraryId,
+            role: "student",
+            createdAt: serverTimestamp(),
+            initialVisitorId: visitorId,
+          });
+          setUser(loggedInUser);
+          setIsLibraryUser(true);
+          router.push("/library-dashboard");
         } else {
+          // Otherwise, create a regular user.
+          await setDoc(
+            userRef,
+            {
+              uid: loggedInUser.uid,
+              name: loggedInUser.displayName,
+              email: loggedInUser.email,
+              lastLogin: serverTimestamp(),
+              initialVisitorId: visitorId,
+            },
+            { merge: true }
+          );
           window.location.href = redirectUrl;
         }
       } catch (error) {
@@ -88,49 +135,15 @@ export const AuthContextProvider = ({ children }) => {
         }
       }
     },
-    [adminEmail]
+    [adminEmail, router]
   );
 
+  // This function is now just for context exposure, the logic is in googleSignIn.
   const googleSignInForLibrary = useCallback(
     async (libraryId) => {
-      if (!libraryId) return toast.error("Library ID is missing.");
-      const provider = new GoogleAuthProvider();
-      try {
-        const result = await signInWithPopup(auth, provider);
-        const loggedInUser = result.user;
-        const visitorId = await getFingerprint();
-
-        if (loggedInUser) {
-          const userRef = doc(db, "libraryUsers", loggedInUser.uid);
-          const userSnap = await getDoc(userRef);
-          if (!userSnap.exists()) {
-            await setDoc(userRef, {
-              uid: loggedInUser.uid,
-              name: loggedInUser.displayName,
-              email: loggedInUser.email,
-              libraryId: libraryId,
-              role: "student",
-              createdAt: serverTimestamp(),
-              initialVisitorId: visitorId,
-            });
-          }
-        }
-
-        // --- THE FIX ---
-        // Manually set the user state immediately after sign-up.
-        // This prevents the race condition and ensures the layout knows the correct user type.
-        setUser(loggedInUser);
-        setIsLibraryUser(true);
-        // --- END OF FIX ---
-
-        router.push("/library-dashboard");
-      } catch (error) {
-        if (error.code !== "auth/popup-closed-by-user") {
-          toast.error("Failed to sign in. Please try again.");
-        }
-      }
+      await googleSignIn({ libraryId });
     },
-    [router]
+    [googleSignIn]
   );
 
   const logOut = useCallback(async () => {
@@ -186,7 +199,7 @@ export const AuthContextProvider = ({ children }) => {
           setIsPremium(false);
           setFreeTrialCount(0);
           setFavoriteTests([]);
-          setIsLibraryUser(false); // Reset library user status on logout
+          setIsLibraryUser(false);
           setLoading(false);
         }
       }
@@ -214,7 +227,7 @@ export const AuthContextProvider = ({ children }) => {
       closeLoginPrompt,
       favoriteTests,
       isLibraryUser,
-      googleSignInForLibrary,
+      googleSignInForLibrary, // Still expose this for the join page
     }),
     [
       user,

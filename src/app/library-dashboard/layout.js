@@ -5,7 +5,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import LibraryNavbar from "@/components/LibraryNavbar"; // Import the new navbar
+// REMOVED: No longer need to import LibraryNavbar here
 
 export default function LibraryDashboardLayout({ children }) {
   const { user, loading, isLibraryUser } = useAuth();
@@ -26,10 +26,9 @@ export default function LibraryDashboardLayout({ children }) {
     );
   }
 
-  // If the user is a library user, show the special layout
+  // The layout now only renders the main content, not its own navbar.
   return (
     <div className='bg-slate-100 min-h-screen'>
-      <LibraryNavbar />
       <main>{children}</main>
     </div>
   );
