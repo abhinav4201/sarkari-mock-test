@@ -8,7 +8,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
-import Cookies from "js-cookie";
+// import Cookies from "js-cookie";
 import {
   createContext,
   useCallback,
@@ -19,6 +19,7 @@ import {
 } from "react";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
+import { getDoc } from "firebase/firestore";
 
 const AuthContext = createContext();
 
@@ -29,6 +30,8 @@ export const AuthContextProvider = ({ children }) => {
   const [premiumExpires, setPremiumExpires] = useState(null);
   const [freeTrialCount, setFreeTrialCount] = useState(0);
   const [favoriteTests, setFavoriteTests] = useState([]);
+
+  const [isLibraryUser, setIsLibraryUser] = useState(false);
 
   const router = useRouter();
 
@@ -75,6 +78,42 @@ export const AuthContextProvider = ({ children }) => {
     [adminEmail]
   );
 
+  const googleSignInForLibrary = useCallback(
+    async (libraryId) => {
+      if (!libraryId) return toast.error("Library ID is missing.");
+
+      const provider = new GoogleAuthProvider();
+      try {
+        const result = await signInWithPopup(auth, provider);
+        const loggedInUser = result.user;
+
+        if (loggedInUser) {
+          // It correctly saves the new user to the 'libraryUsers' collection
+          const userRef = doc(db, "libraryUsers", loggedInUser.uid);
+          const userSnap = await getDoc(userRef);
+          if (!userSnap.exists()) {
+            await setDoc(userRef, {
+              uid: loggedInUser.uid,
+              name: loggedInUser.displayName,
+              email: loggedInUser.email,
+              libraryId: libraryId,
+              role: "student",
+              createdAt: serverTimestamp(),
+            });
+          }
+        }
+        // --- THIS IS THE KEY CHANGE ---
+        // It redirects the user to their new, dedicated dashboard.
+        router.push("/library-dashboard");
+      } catch (error) {
+        if (error.code !== "auth/popup-closed-by-user") {
+          toast.error("Failed to sign in. Please try again.");
+        }
+      }
+    },
+    [router]
+  );
+
   // --- UPDATED: Logout function with better error handling ---
   const logOut = useCallback(async () => {
     try {
@@ -91,71 +130,47 @@ export const AuthContextProvider = ({ children }) => {
     }
   }, []);
 
-  // useEffect(() => {
-  //   const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-  //     setLoading(true);
-  //     if (currentUser) {
-  //       setUser(currentUser);
-  //       const userDocRef = doc(db, "users", currentUser.uid);
-  //       const userUnsubscribe = onSnapshot(userDocRef, (docSnap) => {
-  //         if (docSnap.exists()) {
-  //           const userData = docSnap.data();
-  //           const expires = userData.premiumAccessExpires?.toDate();
-  //           setIsPremium(expires && expires > new Date());
-  //           setPremiumExpires(expires || null);
-  //           setFreeTrialCount(userData.freeTrialCount || 0);
-  //            setFavoriteTests(userData.favoriteTests || []);
-  //         } else {
-  //           setIsPremium(false);
-  //           setFreeTrialCount(0);
-  //           setPremiumExpires(null);
-  //           setFavoriteTests([]);
-  //         }
-  //         setLoading(false);
-  //       });
-  //       return () => userUnsubscribe();
-  //     } else {
-  //       setUser(null);
-  //       setIsPremium(false);
-  //       setFreeTrialCount(0);
-  //       setPremiumExpires(null);
-  //       setLoading(false);
-  //       setFavoriteTests([]);
-  //     }
-  //   });
-  //   return () => unsubscribe();
-  // }, []);
-
 useEffect(() => {
   let userSnapshotUnsubscribe = null;
 
-  const authStateUnsubscribe = onAuthStateChanged(auth, (currentUser) => {
+  const authStateUnsubscribe = onAuthStateChanged(auth, async (currentUser) => {
     // Always unsubscribe from any previous user document listener
     if (userSnapshotUnsubscribe) {
       userSnapshotUnsubscribe();
     }
 
     if (currentUser) {
-      setUser(currentUser);
-      const userDocRef = doc(db, "users", currentUser.uid);
+      const libraryUserRef = doc(db, "libraryUsers", currentUser.uid);
+      const libraryUserSnap = await getDoc(libraryUserRef);
 
-      // Set up the new listener
-      userSnapshotUnsubscribe = onSnapshot(userDocRef, (docSnap) => {
-        if (docSnap.exists()) {
-          const userData = docSnap.data();
-          const expires = userData.premiumAccessExpires?.toDate();
-          setIsPremium(expires && expires > new Date());
-          setPremiumExpires(expires || null);
-          setFreeTrialCount(userData.freeTrialCount || 0);
-          setFavoriteTests(userData.favoriteTests || []);
-        } else {
-          // Reset state if user doc doesn't exist
-          setIsPremium(false);
-          setFreeTrialCount(0);
-          setFavoriteTests([]);
-        }
+      if (libraryUserSnap.exists()) {
+        setUser(currentUser);
+        setIsLibraryUser(true);
         setLoading(false);
-      });
+      } else {
+        setUser(currentUser);
+        setIsLibraryUser(false);
+
+        const userDocRef = doc(db, "users", currentUser.uid);
+
+        // Set up the new listener
+        userSnapshotUnsubscribe = onSnapshot(userDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const userData = docSnap.data();
+            const expires = userData.premiumAccessExpires?.toDate();
+            setIsPremium(expires && expires > new Date());
+            setPremiumExpires(expires || null);
+            setFreeTrialCount(userData.freeTrialCount || 0);
+            setFavoriteTests(userData.favoriteTests || []);
+          } else {
+            // Reset state if user doc doesn't exist
+            setIsPremium(false);
+            setFreeTrialCount(0);
+            setFavoriteTests([]);
+          }
+        });
+        setLoading(false);
+      }
     } else {
       // Clear all user-related state on logout
       setUser(null);
@@ -188,6 +203,8 @@ useEffect(() => {
       openLoginPrompt,
       closeLoginPrompt,
       favoriteTests,
+      isLibraryUser,
+      googleSignInForLibrary,
     }),
     [
       user,
@@ -199,6 +216,8 @@ useEffect(() => {
       premiumExpires,
       isLoginPromptOpen,
       favoriteTests,
+      isLibraryUser,
+      googleSignInForLibrary,
     ]
   );
 
