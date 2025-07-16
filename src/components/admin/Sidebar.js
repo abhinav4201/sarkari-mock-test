@@ -17,6 +17,7 @@ import {
   LineChart,
   DollarSign,
   Banknote,
+  Library,
 } from "lucide-react"; // Added relevant icons
 
 const adminLinks = [
@@ -24,6 +25,11 @@ const adminLinks = [
     name: "Dashboard",
     href: "/admin",
     icon: <LayoutDashboard className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Library Partners",
+    href: "/admin/libraries",
+    icon: <Library className='mr-3 h-5 w-5' />,
   },
   {
     name: "Blog Management",
