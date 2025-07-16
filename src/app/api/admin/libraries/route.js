@@ -48,8 +48,10 @@ export async function POST(request) {
       contactPhone,
       commissionPerTest: Number(commissionPerTest),
       uniqueJoinCode: nanoid(), // Generate a random 8-character code
+      ownerJoinCode: nanoid(10),
       status: "active",
       createdAt: FieldValue.serverTimestamp(),
+      ownerId: null,
     };
 
     const newLibraryRef = await adminDb

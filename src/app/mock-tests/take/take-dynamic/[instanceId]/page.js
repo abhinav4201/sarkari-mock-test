@@ -53,7 +53,7 @@ export default function TakeDynamicTestPage() {
   const [lastQuestionWarningShown, setLastQuestionWarningShown] =
     useState(false);
 
-  const { user, loading: authLoading, isPremium } = useAuth();
+  const { user, loading: authLoading, isPremium, libraryId } = useAuth();
   const router = useRouter();
   const params = useParams();
   const { instanceId } = params;
@@ -108,26 +108,35 @@ export default function TakeDynamicTestPage() {
       // --- BEHAVIORAL ANALYSIS LOGIC ---
       const estimatedTimeInSeconds = instanceData.estimatedTime * 60;
       const suspiciousTimeThreshold = estimatedTimeInSeconds * 0.15;
+      const resultData = {
+        userId: user.uid,
+        testId: instanceData.originalTestId,
+        instanceId: instanceId,
+        answers: finalAnswers,
+        score,
+        totalQuestions,
+        incorrectAnswers,
+        submissionReason: reason,
+        isDynamic: true,
+        completedAt: serverTimestamp(),
+        reviewFlag:
+          totalTimeTaken < suspiciousTimeThreshold
+            ? "low_completion_time"
+            : null,
+        totalTimeTaken: totalTimeTaken,
+      };
+
+      // --- THIS IS THE FIX ---
+      if (libraryId) {
+        resultData.libraryId = libraryId;
+      }
+      // --- END OF FIX ---
 
       try {
-        // Step 1: Create the result document with the new fields
-        const resultDocRef = await addDoc(collection(db, "mockTestResults"), {
-          userId: user.uid,
-          testId: instanceData.originalTestId,
-          instanceId: instanceId,
-          answers: finalAnswers,
-          score,
-          totalQuestions,
-          incorrectAnswers,
-          submissionReason: reason,
-          isDynamic: true,
-          completedAt: serverTimestamp(),
-          reviewFlag:
-            totalTimeTaken < suspiciousTimeThreshold
-              ? "low_completion_time"
-              : null,
-          totalTimeTaken: totalTimeTaken,
-        });
+        const resultDocRef = await addDoc(
+          collection(db, "mockTestResults"),
+          resultData
+        );
 
         // Step 2: Update the dedicated analytics document for the original test
         const analyticsRef = doc(
@@ -159,6 +168,7 @@ export default function TakeDynamicTestPage() {
       user,
       instanceId,
       testState,
+      libraryId,
     ]
   );
 

@@ -3,6 +3,7 @@
 "use client";
 
 import LibraryQRCodeModal from "@/components/admin/LibraryQRCodeModal";
+import LibraryOwnerLinkModal from "@/components/admin/LibraryOwnerLinkModal"; // NEW: Import the new modal
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import {
@@ -12,8 +13,11 @@ import {
   orderBy,
   query,
   startAfter,
+  doc, // NEW: Import doc for updates
+  updateDoc, // NEW: Import updateDoc for updates
 } from "firebase/firestore";
-import { Edit, QrCode, X } from "lucide-react";
+import { Edit, QrCode, X, BarChart, UserCog } from "lucide-react"; // Import BarChart and UserCog
+import Link from "next/link"; // Import Link
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
@@ -36,9 +40,15 @@ export default function LibrariesPage() {
   const [commission, setCommission] = useState(5);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // State for the QR Code Modal
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedLibraryForQr, setSelectedLibraryForQr] = useState(null);
+  // State for the QR Code Modal (Student)
+  const [isStudentQrModalOpen, setIsStudentQrModalOpen] = useState(false);
+  const [selectedLibraryForStudentQr, setSelectedLibraryForStudentQr] =
+    useState(null);
+
+  // NEW: State for the Owner Link Modal
+  const [isOwnerLinkModalOpen, setIsOwnerLinkModalOpen] = useState(false);
+  const [selectedLibraryForOwnerLink, setSelectedLibraryForOwnerLink] =
+    useState(null);
 
   const fetchLibraries = useCallback(
     async (loadMore = false) => {
@@ -147,28 +157,35 @@ export default function LibrariesPage() {
     }
   };
 
-  const openQrModal = (library) => {
-    setSelectedLibraryForQr(library);
-    setIsModalOpen(true);
+  const openStudentQrModal = (library) => {
+    setSelectedLibraryForStudentQr(library);
+    setIsStudentQrModalOpen(true);
+  };
+
+  // NEW: Function to open the owner link modal
+  const openOwnerLinkModal = (library) => {
+    setSelectedLibraryForOwnerLink(library);
+    setIsOwnerLinkModalOpen(true);
   };
 
   return (
     <>
       <LibraryQRCodeModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        library={selectedLibraryForQr}
+        isOpen={isStudentQrModalOpen}
+        onClose={() => setIsStudentQrModalOpen(false)}
+        library={selectedLibraryForStudentQr}
+      />
+      {/* NEW: Render the LibraryOwnerLinkModal */}
+      <LibraryOwnerLinkModal
+        isOpen={isOwnerLinkModalOpen}
+        onClose={() => setIsOwnerLinkModalOpen(false)}
+        library={selectedLibraryForOwnerLink}
       />
       <div>
         <h1 className='text-3xl font-bold text-slate-900 mb-6'>
           Library Partner Management
         </h1>
         <div className='grid grid-cols-1 lg:grid-cols-3 gap-8 items-start'>
-          {/*
-            --- THIS IS THE FIX ---
-            The `sticky top-8` classes have been removed from the div below.
-            This ensures the form scrolls naturally on mobile.
-          */}
           <div className='lg:col-span-1 bg-white p-6 rounded-2xl shadow-lg border'>
             <h2 className='text-xl font-bold text-slate-800 mb-4'>
               {isEditing ? "Edit Library" : "Add New Library"}
@@ -271,10 +288,26 @@ export default function LibrariesPage() {
                       </p>
                     </div>
                     <div className='flex gap-2'>
-                      <button
-                        onClick={() => openQrModal(lib)}
+                      {/* New button for analytics */}
+                      <Link
+                        href={`/admin/libraries/analytics/${lib.id}`}
                         className='p-2 text-slate-600 hover:bg-slate-100 rounded-md'
-                        title='Show QR Code'
+                        title='View Analytics'
+                      >
+                        <BarChart size={18} />
+                      </Link>
+                      {/* NEW: Button to open owner link modal */}
+                      <button
+                        onClick={() => openOwnerLinkModal(lib)}
+                        className='p-2 text-slate-600 hover:bg-slate-100 rounded-md'
+                        title='Generate Owner Link'
+                      >
+                        <UserCog size={18} />
+                      </button>
+                      <button
+                        onClick={() => openStudentQrModal(lib)}
+                        className='p-2 text-slate-600 hover:bg-slate-100 rounded-md'
+                        title='Show Student QR Code'
                       >
                         <QrCode size={18} />
                       </button>

@@ -1,5 +1,3 @@
-"use client";
-
 import { auth, db } from "@/lib/firebase";
 import {
   GoogleAuthProvider,
@@ -13,6 +11,13 @@ import {
   serverTimestamp,
   setDoc,
   getDoc,
+  updateDoc,
+  arrayUnion,
+  collection,
+  query,
+  where,
+  limit,
+  getDocs,
 } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import {
@@ -36,6 +41,10 @@ export const AuthContextProvider = ({ children }) => {
   const [freeTrialCount, setFreeTrialCount] = useState(0);
   const [favoriteTests, setFavoriteTests] = useState([]);
   const [isLibraryUser, setIsLibraryUser] = useState(false);
+  const [isLibraryOwner, setIsLibraryOwner] = useState(false);
+  const [ownedLibraryIds, setOwnedLibraryIds] = useState([]);
+  const [libraryId, setLibraryId] = useState(null);
+
   const router = useRouter();
   const [isLoginPromptOpen, setIsLoginPromptOpen] = useState(false);
   const openLoginPrompt = () => setIsLoginPromptOpen(true);
@@ -43,16 +52,13 @@ export const AuthContextProvider = ({ children }) => {
 
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
-  /**
-   * --- THE UNIFIED SIGN-IN FUNCTION ---
-   * Handles all Google Sign-In scenarios for both regular and library users.
-   * @param {object} [options] - Optional parameters.
-   * @param {string} [options.libraryId] - The ID of the library if it's a library sign-up.
-   * @param {string} [options.redirectUrl] - The URL to redirect to for regular users.
-   */
   const googleSignIn = useCallback(
     async (options = {}) => {
-      const { libraryId, redirectUrl = "/dashboard" } = options;
+      const {
+        libraryId: joinLibraryId,
+        ownerJoinCode,
+        redirectUrl = "/dashboard",
+      } = options;
       closeLoginPrompt();
       const provider = new GoogleAuthProvider();
 
@@ -60,7 +66,6 @@ export const AuthContextProvider = ({ children }) => {
         const result = await signInWithPopup(auth, provider);
         const loggedInUser = result.user;
 
-        // If it's the admin, always redirect to the admin panel.
         if (loggedInUser.email === adminEmail) {
           window.location.href = "/admin";
           return;
@@ -74,19 +79,72 @@ export const AuthContextProvider = ({ children }) => {
           getDoc(libraryUserRef),
         ]);
 
-        // Scenario 1: User already exists as a library user.
+        const visitorId = await getFingerprint();
+
+        if (ownerJoinCode) {
+          const librariesQuery = query(
+            collection(db, "libraries"),
+            where("ownerJoinCode", "==", ownerJoinCode),
+            limit(1)
+          );
+          const librarySnapshot = await getDocs(librariesQuery);
+
+          if (!librarySnapshot.empty) {
+            const libraryDoc = librarySnapshot.docs[0];
+            const libraryData = libraryDoc.data();
+            const libraryIdToOwn = libraryDoc.id;
+
+            await setDoc(
+              userRef,
+              {
+                uid: loggedInUser.uid,
+                name: loggedInUser.displayName,
+                email: loggedInUser.email,
+                lastLogin: serverTimestamp(),
+                initialVisitorId: visitorId,
+                libraryOwnerOf: arrayUnion(libraryIdToOwn),
+              },
+              { merge: true }
+            );
+
+            await updateDoc(libraryDoc.ref, {
+              ownerId: loggedInUser.uid,
+            });
+
+            // --- THIS IS THE FIX ---
+            // Set owner state immediately after successful sign-in
+            setUser(loggedInUser);
+            setIsLibraryOwner(true);
+            setOwnedLibraryIds((prev) => [...new Set([...prev, libraryIdToOwn])]);
+            // --- END OF FIX ---
+
+            toast.success(
+              `Welcome, Library Owner of ${libraryData.libraryName}!`
+            );
+            router.push(`/library-owner/${libraryIdToOwn}`); // Correct redirect
+            return;
+          } else {
+            toast.error("Invalid owner join code.");
+            await signOut(auth);
+            return;
+          }
+        }
+
         if (libraryUserSnap.exists()) {
           router.push("/library-dashboard");
           return;
         }
 
-        // Scenario 2: User already exists as a regular user.
         if (userSnap.exists()) {
-          // If they tried to join via a library link but are already a regular user.
-          if (libraryId) {
-            toast.error("This email is already registered as a regular user.", {
-              duration: 5000,
-            });
+          if (joinLibraryId) {
+            toast.error(
+              "This email is already registered as a regular user and cannot be added as a student to a library. Please use a different email or sign in normally.",
+              {
+                duration: 8000,
+              }
+            );
+            await signOut(auth);
+            return;
           }
           await setDoc(
             userRef,
@@ -97,25 +155,21 @@ export const AuthContextProvider = ({ children }) => {
           return;
         }
 
-        // Scenario 3: This is a brand new user.
-        const visitorId = await getFingerprint();
-
-        // If a libraryId is provided, create a library user.
-        if (libraryId) {
+        if (joinLibraryId) {
           await setDoc(libraryUserRef, {
             uid: loggedInUser.uid,
             name: loggedInUser.displayName,
             email: loggedInUser.email,
-            libraryId: libraryId,
+            libraryId: joinLibraryId,
             role: "student",
             createdAt: serverTimestamp(),
             initialVisitorId: visitorId,
           });
           setUser(loggedInUser);
           setIsLibraryUser(true);
+          setLibraryId(joinLibraryId);
           router.push("/library-dashboard");
         } else {
-          // Otherwise, create a regular user.
           await setDoc(
             userRef,
             {
@@ -124,6 +178,7 @@ export const AuthContextProvider = ({ children }) => {
               email: loggedInUser.email,
               lastLogin: serverTimestamp(),
               initialVisitorId: visitorId,
+              libraryOwnerOf: [],
             },
             { merge: true }
           );
@@ -133,15 +188,22 @@ export const AuthContextProvider = ({ children }) => {
         if (error.code !== "auth/popup-closed-by-user") {
           toast.error("Failed to sign in. Please try again.");
         }
+        console.error("Google Sign-In Error:", error);
       }
     },
     [adminEmail, router]
   );
 
-  // This function is now just for context exposure, the logic is in googleSignIn.
   const googleSignInForLibrary = useCallback(
     async (libraryId) => {
       await googleSignIn({ libraryId });
+    },
+    [googleSignIn]
+  );
+
+  const googleSignInForLibraryOwner = useCallback(
+    async (ownerJoinCode) => {
+      await googleSignIn({ ownerJoinCode });
     },
     [googleSignIn]
   );
@@ -159,47 +221,84 @@ export const AuthContextProvider = ({ children }) => {
 
   useEffect(() => {
     let userSnapshotUnsubscribe = null;
+    let libraryUserSnapshotUnsubscribe = null;
+
     const authStateUnsubscribe = onAuthStateChanged(
       auth,
       async (currentUser) => {
         if (userSnapshotUnsubscribe) {
           userSnapshotUnsubscribe();
         }
+        if (libraryUserSnapshotUnsubscribe) {
+          libraryUserSnapshotUnsubscribe();
+        }
 
         if (currentUser) {
-          const libraryUserRef = doc(db, "libraryUsers", currentUser.uid);
-          const libraryUserSnap = await getDoc(libraryUserRef);
-
-          if (libraryUserSnap.exists()) {
-            setUser(currentUser);
-            setIsLibraryUser(true);
-            setLoading(false);
-          } else {
+          if (currentUser.email === adminEmail) {
             setUser(currentUser);
             setIsLibraryUser(false);
-            const userDocRef = doc(db, "users", currentUser.uid);
-            userSnapshotUnsubscribe = onSnapshot(userDocRef, (docSnap) => {
-              if (docSnap.exists()) {
-                const userData = docSnap.data();
-                const expires = userData.premiumAccessExpires?.toDate();
-                setIsPremium(expires && expires > new Date());
-                setPremiumExpires(expires || null);
-                setFreeTrialCount(userData.freeTrialCount || 0);
-                setFavoriteTests(userData.favoriteTests || []);
-              } else {
-                setIsPremium(false);
-                setFreeTrialCount(0);
-                setFavoriteTests([]);
-              }
-            });
+            setIsLibraryOwner(false);
+            setOwnedLibraryIds([]);
+            setLibraryId(null);
             setLoading(false);
+            return;
           }
+
+          const libraryUserRef = doc(db, "libraryUsers", currentUser.uid);
+          libraryUserSnapshotUnsubscribe = onSnapshot(
+            libraryUserRef,
+            (docSnap) => {
+              if (docSnap.exists()) {
+                const libraryUserData = docSnap.data();
+                setUser(currentUser);
+                setIsLibraryUser(true);
+                setIsLibraryOwner(false);
+                setOwnedLibraryIds([]);
+                setLibraryId(libraryUserData.libraryId);
+                setLoading(false);
+              } else {
+                const userDocRef = doc(db, "users", currentUser.uid);
+                userSnapshotUnsubscribe = onSnapshot(userDocRef, (docSnap) => {
+                  if (docSnap.exists()) {
+                    const userData = docSnap.data();
+                    const expires = userData.premiumAccessExpires?.toDate();
+                    setIsPremium(expires && expires > new Date());
+                    setPremiumExpires(expires || null);
+                    setFreeTrialCount(userData.freeTrialCount || 0);
+                    setFavoriteTests(userData.favoriteTests || []);
+
+                    const ownedLibs = userData.libraryOwnerOf || [];
+                    setIsLibraryOwner(ownedLibs.length > 0);
+                    setOwnedLibraryIds(ownedLibs);
+
+                    setUser(currentUser);
+                    setIsLibraryUser(false);
+                    setLibraryId(null);
+                    setLoading(false);
+                  } else {
+                    setUser(null);
+                    setIsPremium(false);
+                    setFreeTrialCount(0);
+                    setFavoriteTests([]);
+                    setIsLibraryUser(false);
+                    setIsLibraryOwner(false);
+                    setOwnedLibraryIds([]);
+                    setLibraryId(null);
+                    setLoading(false);
+                  }
+                });
+              }
+            }
+          );
         } else {
           setUser(null);
           setIsPremium(false);
           setFreeTrialCount(0);
           setFavoriteTests([]);
           setIsLibraryUser(false);
+          setIsLibraryOwner(false);
+          setOwnedLibraryIds([]);
+          setLibraryId(null);
           setLoading(false);
         }
       }
@@ -210,8 +309,11 @@ export const AuthContextProvider = ({ children }) => {
       if (userSnapshotUnsubscribe) {
         userSnapshotUnsubscribe();
       }
+      if (libraryUserSnapshotUnsubscribe) {
+        libraryUserSnapshotUnsubscribe();
+      }
     };
-  }, []);
+  }, [adminEmail]);
 
   const value = useMemo(
     () => ({
@@ -227,7 +329,11 @@ export const AuthContextProvider = ({ children }) => {
       closeLoginPrompt,
       favoriteTests,
       isLibraryUser,
-      googleSignInForLibrary, // Still expose this for the join page
+      libraryId,
+      googleSignInForLibrary,
+      isLibraryOwner,
+      ownedLibraryIds,
+      googleSignInForLibraryOwner,
     }),
     [
       user,
@@ -240,7 +346,11 @@ export const AuthContextProvider = ({ children }) => {
       isLoginPromptOpen,
       favoriteTests,
       isLibraryUser,
+      libraryId,
       googleSignInForLibrary,
+      isLibraryOwner,
+      ownedLibraryIds,
+      googleSignInForLibraryOwner,
     ]
   );
 
