@@ -7,9 +7,13 @@ import {
   signInWithPopup,
   signOut,
 } from "firebase/auth";
-import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
-// import Cookies from "js-cookie";
-import { getDoc } from "firebase/firestore";
+import {
+  doc,
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+  getDoc,
+} from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import {
   createContext,
@@ -20,7 +24,6 @@ import {
   useState,
 } from "react";
 import toast from "react-hot-toast";
-
 import { getFingerprint } from "@guardhivefraudshield/device-fingerprint";
 
 const AuthContext = createContext();
@@ -32,11 +35,8 @@ export const AuthContextProvider = ({ children }) => {
   const [premiumExpires, setPremiumExpires] = useState(null);
   const [freeTrialCount, setFreeTrialCount] = useState(0);
   const [favoriteTests, setFavoriteTests] = useState([]);
-
   const [isLibraryUser, setIsLibraryUser] = useState(false);
-
   const router = useRouter();
-
   const [isLoginPromptOpen, setIsLoginPromptOpen] = useState(false);
   const openLoginPrompt = () => setIsLoginPromptOpen(true);
   const closeLoginPrompt = () => setIsLoginPromptOpen(false);
@@ -84,7 +84,6 @@ export const AuthContextProvider = ({ children }) => {
         }
       } catch (error) {
         if (error.code !== "auth/popup-closed-by-user") {
-          // console.error("Google Sign-In Error:", error);
           toast.error("Failed to sign in. Please try again.");
         }
       }
@@ -95,7 +94,6 @@ export const AuthContextProvider = ({ children }) => {
   const googleSignInForLibrary = useCallback(
     async (libraryId) => {
       if (!libraryId) return toast.error("Library ID is missing.");
-
       const provider = new GoogleAuthProvider();
       try {
         const result = await signInWithPopup(auth, provider);
@@ -103,7 +101,6 @@ export const AuthContextProvider = ({ children }) => {
         const visitorId = await getFingerprint();
 
         if (loggedInUser) {
-          // It correctly saves the new user to the 'libraryUsers' collection
           const userRef = doc(db, "libraryUsers", loggedInUser.uid);
           const userSnap = await getDoc(userRef);
           if (!userSnap.exists()) {
@@ -118,8 +115,14 @@ export const AuthContextProvider = ({ children }) => {
             });
           }
         }
-        // --- THIS IS THE KEY CHANGE ---
-        // It redirects the user to their new, dedicated dashboard.
+
+        // --- THE FIX ---
+        // Manually set the user state immediately after sign-up.
+        // This prevents the race condition and ensures the layout knows the correct user type.
+        setUser(loggedInUser);
+        setIsLibraryUser(true);
+        // --- END OF FIX ---
+
         router.push("/library-dashboard");
       } catch (error) {
         if (error.code !== "auth/popup-closed-by-user") {
@@ -130,29 +133,22 @@ export const AuthContextProvider = ({ children }) => {
     [router]
   );
 
-  // --- UPDATED: Logout function with better error handling ---
   const logOut = useCallback(async () => {
     try {
-      // Cookies.remove("selectedAccessControlTest");
       await signOut(auth);
-      // window.location.href = "/";
       router.push("/");
       toast.success("Logged out successfully.");
     } catch (error) {
-      // This will now log the actual Firebase error to your console for debugging
-      // and show a clear message to the user.
       console.error("Logout Error:", error);
       toast.error("Logout failed. Please try again.");
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     let userSnapshotUnsubscribe = null;
-
     const authStateUnsubscribe = onAuthStateChanged(
       auth,
       async (currentUser) => {
-        // Always unsubscribe from any previous user document listener
         if (userSnapshotUnsubscribe) {
           userSnapshotUnsubscribe();
         }
@@ -168,10 +164,7 @@ export const AuthContextProvider = ({ children }) => {
           } else {
             setUser(currentUser);
             setIsLibraryUser(false);
-
             const userDocRef = doc(db, "users", currentUser.uid);
-
-            // Set up the new listener
             userSnapshotUnsubscribe = onSnapshot(userDocRef, (docSnap) => {
               if (docSnap.exists()) {
                 const userData = docSnap.data();
@@ -181,7 +174,6 @@ export const AuthContextProvider = ({ children }) => {
                 setFreeTrialCount(userData.freeTrialCount || 0);
                 setFavoriteTests(userData.favoriteTests || []);
               } else {
-                // Reset state if user doc doesn't exist
                 setIsPremium(false);
                 setFreeTrialCount(0);
                 setFavoriteTests([]);
@@ -190,17 +182,16 @@ export const AuthContextProvider = ({ children }) => {
             setLoading(false);
           }
         } else {
-          // Clear all user-related state on logout
           setUser(null);
           setIsPremium(false);
           setFreeTrialCount(0);
           setFavoriteTests([]);
+          setIsLibraryUser(false); // Reset library user status on logout
           setLoading(false);
         }
       }
     );
 
-    // Cleanup function for the entire component
     return () => {
       authStateUnsubscribe();
       if (userSnapshotUnsubscribe) {
