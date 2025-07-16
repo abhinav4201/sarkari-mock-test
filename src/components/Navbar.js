@@ -82,12 +82,14 @@ export default function Navbar() {
     <nav className='bg-slate-900 shadow-lg sticky top-0 z-50'>
       <div className='container mx-auto px-4 sm:px-6 lg:px-8'>
         <div className='flex justify-between items-center h-16'>
+          {/* Logo */}
           <div className='flex-shrink-0'>
             <Link href={logoHref} className='text-2xl font-bold text-white'>
               Sarkari Mock Test
             </Link>
           </div>
 
+          {/* Desktop Menu Links */}
           <div className='hidden md:flex md:items-center md:space-x-1 lg:space-x-2'>
             {!user && homeLink}
             {publicLinks}
@@ -96,6 +98,7 @@ export default function Navbar() {
               (user.email === adminEmail ? adminLinks : userLinks)}
           </div>
 
+          {/* Desktop Auth Buttons & Notification Bell */}
           <div className='hidden md:flex items-center space-x-2'>
             {loading ? (
               <div className='h-9 w-28 bg-blue-500 rounded-lg animate-pulse'></div>
@@ -119,23 +122,29 @@ export default function Navbar() {
             )}
           </div>
 
+          {/* Mobile Menu Button & Notification Bell */}
           <div className='md:hidden flex items-center'>
+            {user && <NotificationBell />}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className='inline-flex items-center justify-center p-2 rounded-md text-indigo-200 hover:text-white hover:bg-indigo-600'
+              className='ml-2 inline-flex items-center justify-center p-2 rounded-md text-indigo-200 hover:text-white hover:bg-slate-800'
+              aria-controls='mobile-menu'
+              aria-expanded='false'
             >
+              <span className='sr-only'>Open main menu</span>
               {isMobileMenuOpen ? (
-                <X className='h-6 w-6' />
+                <X className='block h-6 w-6' aria-hidden='true' />
               ) : (
-                <Menu className='h-6 w-6' />
+                <Menu className='block h-6 w-6' aria-hidden='true' />
               )}
             </button>
           </div>
         </div>
       </div>
 
+      {/* Mobile Menu Dropdown */}
       {isMobileMenuOpen && (
-        <div className='md:hidden'>
+        <div className='md:hidden' id='mobile-menu'>
           <div className='px-2 pt-2 pb-3 space-y-1 sm:px-3'>
             {!user && homeLink}
             {publicLinks}
