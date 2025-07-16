@@ -1,95 +1,96 @@
 // components/admin/Sidebar.js
 "use client";
+import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useAuth } from "@/context/AuthContext";
-import {
-  LogOut,
-  LayoutDashboard,
-  PenSquare,
-  TestTube,
-  FileClock,
-  Mail,
-  KeyRound,
-  BookOpenText,
-  Image,
-  // CheckSquare,
-  LineChart,
-  DollarSign,
-  Banknote,
-  Library,
-} from "lucide-react"; // Added relevant icons
+import { LogOut } from "lucide-react";
+// import {
+//   LogOut,
+//   LayoutDashboard,
+//   PenSquare,
+//   TestTube,
+//   FileClock,
+//   Mail,
+//   KeyRound,
+//   BookOpenText,
+//   Image,
+//   // CheckSquare,
+//   LineChart,
+//   DollarSign,
+//   Banknote,
+//   Library,
+// } from "lucide-react"; // Added relevant icons
 
-const adminLinks = [
-  {
-    name: "Dashboard",
-    href: "/admin",
-    icon: <LayoutDashboard className='mr-3 h-5 w-5' />,
-  },
-  {
-    name: "Library Partners",
-    href: "/admin/libraries",
-    icon: <Library className='mr-3 h-5 w-5' />,
-  },
-  {
-    name: "Blog Management",
-    href: "/admin/blog",
-    icon: <PenSquare className='mr-3 h-5 w-5' />,
-  },
-  {
-    name: "Mock Tests",
-    href: "/admin/mock-tests",
-    icon: <TestTube className='mr-3 h-5 w-5' />,
-  },
-  // --- NEW ITEM ADDED FOR QUESTION BANK ---
-  // {
-  //   name: "Test Approvals",
-  //   href: "/admin/approvals",
-  //   icon: <CheckSquare className='mr-3 h-5 w-5' />,
-  // },
-  {
-    name: "Question Bank",
-    href: "/admin/question-bank",
-    icon: <BookOpenText className='mr-3 h-5 w-5' />,
-  },
-  {
-    name: "Daily Content",
-    href: "/admin/daily-content",
-    icon: <FileClock className='mr-3 h-5 w-5' />,
-  },
-  {
-    name: "Contact Submissions",
-    href: "/admin/contacts",
-    icon: <Mail className='mr-3 h-5 w-5' />,
-  },
-  {
-    name: "Access Control",
-    href: "/admin/access-control",
-    icon: <KeyRound className='mr-3 h-5 w-5' />,
-  },
-  {
-    name: "Creator Analytics",
-    href: "/admin/analytics",
-    icon: <LineChart className='mr-3 h-5 w-5' />,
-  },
-  {
-    name: "Monetization Requests",
-    href: "/admin/monetization-requests",
-    icon: <DollarSign className='mr-3 h-5 w-5' />,
-  },
-  {
-    name: "Manage Payouts",
-    href: "/admin/payouts",
-    icon: <Banknote className='mr-3 h-5 w-5' />,
-  },
-  {
-    name: "SVG : Converter",
-    href: "/admin/svg-converter",
-    icon: <Image className='mr-3 h-5 w-5' />,
-  },
-];
+// const adminLinks = [
+//   {
+//     name: "Dashboard",
+//     href: "/admin",
+//     icon: <LayoutDashboard className='mr-3 h-5 w-5' />,
+//   },
+//   {
+//     name: "Library Partners",
+//     href: "/admin/libraries",
+//     icon: <Library className='mr-3 h-5 w-5' />,
+//   },
+//   {
+//     name: "Blog Management",
+//     href: "/admin/blog",
+//     icon: <PenSquare className='mr-3 h-5 w-5' />,
+//   },
+//   {
+//     name: "Mock Tests",
+//     href: "/admin/mock-tests",
+//     icon: <TestTube className='mr-3 h-5 w-5' />,
+//   },
+//   // --- NEW ITEM ADDED FOR QUESTION BANK ---
+//   // {
+//   //   name: "Test Approvals",
+//   //   href: "/admin/approvals",
+//   //   icon: <CheckSquare className='mr-3 h-5 w-5' />,
+//   // },
+//   {
+//     name: "Question Bank",
+//     href: "/admin/question-bank",
+//     icon: <BookOpenText className='mr-3 h-5 w-5' />,
+//   },
+//   {
+//     name: "Daily Content",
+//     href: "/admin/daily-content",
+//     icon: <FileClock className='mr-3 h-5 w-5' />,
+//   },
+//   {
+//     name: "Contact Submissions",
+//     href: "/admin/contacts",
+//     icon: <Mail className='mr-3 h-5 w-5' />,
+//   },
+//   {
+//     name: "Access Control",
+//     href: "/admin/access-control",
+//     icon: <KeyRound className='mr-3 h-5 w-5' />,
+//   },
+//   {
+//     name: "Creator Analytics",
+//     href: "/admin/analytics",
+//     icon: <LineChart className='mr-3 h-5 w-5' />,
+//   },
+//   {
+//     name: "Monetization Requests",
+//     href: "/admin/monetization-requests",
+//     icon: <DollarSign className='mr-3 h-5 w-5' />,
+//   },
+//   {
+//     name: "Manage Payouts",
+//     href: "/admin/payouts",
+//     icon: <Banknote className='mr-3 h-5 w-5' />,
+//   },
+//   {
+//     name: "SVG : Converter",
+//     href: "/admin/svg-converter",
+//     icon: <Image className='mr-3 h-5 w-5' />,
+//   },
+// ];
 
-export default function Sidebar() {
+export default function Sidebar({ adminLinks }) {
   const pathname = usePathname();
   const { user, logOut } = useAuth();
 

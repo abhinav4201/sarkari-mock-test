@@ -1,21 +1,107 @@
 // components/ClientAdminLayout.js
 "use client";
-import { useAuth } from "@/context/AuthContext";
 import Sidebar from "@/components/admin/Sidebar";
-import { useState, useEffect } from "react";
-import { Menu, X } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
+import { Menu } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import AdminMobileNav from "./AdminMobileNav";
+
+import {
+  Banknote,
+  BookOpenText,
+  DollarSign,
+  FileClock,
+  Image,
+  KeyRound,
+  LayoutDashboard,
+  Library,
+  LineChart,
+  Mail,
+  PenSquare,
+  TestTube,
+} from "lucide-react";
+
+const adminLinks = [
+  {
+    name: "Dashboard",
+    href: "/admin",
+    icon: <LayoutDashboard className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Library Partners",
+    href: "/admin/libraries",
+    icon: <Library className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Blog Management",
+    href: "/admin/blog",
+    icon: <PenSquare className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Mock Tests",
+    href: "/admin/mock-tests",
+    icon: <TestTube className='mr-3 h-5 w-5' />,
+  },
+  // --- NEW ITEM ADDED FOR QUESTION BANK ---
+  // {
+  //   name: "Test Approvals",
+  //   href: "/admin/approvals",
+  //   icon: <CheckSquare className='mr-3 h-5 w-5' />,
+  // },
+  {
+    name: "Question Bank",
+    href: "/admin/question-bank",
+    icon: <BookOpenText className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Daily Content",
+    href: "/admin/daily-content",
+    icon: <FileClock className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Contact Submissions",
+    href: "/admin/contacts",
+    icon: <Mail className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Access Control",
+    href: "/admin/access-control",
+    icon: <KeyRound className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Creator Analytics",
+    href: "/admin/analytics",
+    icon: <LineChart className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Monetization Requests",
+    href: "/admin/monetization-requests",
+    icon: <DollarSign className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Manage Payouts",
+    href: "/admin/payouts",
+    icon: <Banknote className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "SVG : Converter",
+    href: "/admin/svg-converter",
+    icon: <Image className='mr-3 h-5 w-5' />,
+  },
+];
 
 export default function ClientAdminLayout({ children }) {
   const { user, loading } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
 
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
   useEffect(() => {
-    setSidebarOpen(false);
+    setMobileMenuOpen(false);
   }, [pathname]);
 
   if (loading) {
@@ -30,45 +116,43 @@ export default function ClientAdminLayout({ children }) {
 
   if (user && user.email === adminEmail) {
     return (
-      <div className='flex min-h-screen bg-slate-100'>
-        <header className='md:hidden bg-white shadow-md p-4 flex justify-between items-center fixed top-0 left-0 right-0 z-40'>
-          <Link href='/admin' className='font-bold text-indigo-600'>
-            Admin Panel
-          </Link>
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className='p-2 rounded-md hover:bg-slate-100 text-slate-800'
-          >
-            {sidebarOpen ? (
-              <X className='h-6 w-6' />
-            ) : (
+      <>
+        <div className='flex min-h-screen bg-slate-100'>
+          {/* Desktop Sidebar: Visible only on md and larger screens */}
+          <div className='hidden md:block'>
+            <Sidebar adminLinks={adminLinks} />
+          </div>
+
+          {/* Mobile Header */}
+          <header className='md:hidden bg-white shadow-md p-4 flex justify-between items-center fixed top-0 left-0 right-0 z-10'>
+            <Link href='/admin' className='font-bold text-indigo-600'>
+              Admin Panel
+            </Link>
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className='p-2 rounded-md hover:bg-slate-100 text-slate-800'
+            >
               <Menu className='h-6 w-6' />
-            )}
-          </button>
-        </header>
+            </button>
+          </header>
 
-        {sidebarOpen && (
-          <div
-            className='md:hidden fixed inset-0 bg-black/30 z-20'
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-
-        <div
-          className={`fixed inset-y-0 left-0 z-30 transform ${
-            sidebarOpen ? "translate-x-0" : "-translate-x-full"
-          } transition-transform duration-300 ease-in-out md:relative md:translate-x-0`}
-        >
-          <Sidebar />
+          {/* Main Content Area */}
+          <main className='flex-1 p-4 sm:p-6 lg:p-8 pt-20 md:pt-8'>
+            {children}
+          </main>
         </div>
 
-        <main className='flex-1 p-4 sm:p-6 lg:p-8 pt-20 md:pt-8'>
-          {children}
-        </main>
-      </div>
+        {/* Mobile Navigation Modal */}
+        <AdminMobileNav
+          adminLinks={adminLinks}
+          isOpen={mobileMenuOpen}
+          onClose={() => setMobileMenuOpen(false)}
+        />
+      </>
     );
   }
 
+  // If not an admin, show Access Denied
   return (
     <div className='flex justify-center items-center h-screen text-center p-4'>
       <div>

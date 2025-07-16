@@ -7,7 +7,7 @@ import { NextResponse } from "next/server";
 export async function POST(request) {
   try {
     // We no longer need to call a getter function
-    const { testId } = await request.json();
+    const { testId, visitorId } = await request.json();
 
     const userToken = request.headers.get("Authorization")?.split("Bearer ")[1];
     if (!userToken) {
@@ -16,7 +16,7 @@ export async function POST(request) {
     const decodedToken = await adminAuth.verifyIdToken(userToken);
     const userId = decodedToken.uid;
 
-    if (!testId) {
+    if (!testId || !visitorId) {
       return NextResponse.json(
         { message: "Test ID is required." },
         { status: 400 }
@@ -27,6 +27,7 @@ export async function POST(request) {
     await adminDb.collection("testStarts").add({
       userId,
       testId,
+      visitorId,
       startedAt: FieldValue.serverTimestamp(),
       ip: request.headers.get("x-forwarded-for") ?? "127.0.0.1",
       userAgent: request.headers.get("user-agent"),

@@ -9,6 +9,8 @@ import {
 } from "firebase/auth";
 import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 // import Cookies from "js-cookie";
+import { getDoc } from "firebase/firestore";
+import { useRouter } from "next/navigation";
 import {
   createContext,
   useCallback,
@@ -18,8 +20,8 @@ import {
   useState,
 } from "react";
 import toast from "react-hot-toast";
-import { useRouter } from "next/navigation";
-import { getDoc } from "firebase/firestore";
+
+import { getFingerprint } from "@guardhivefraudshield/device-fingerprint";
 
 const AuthContext = createContext();
 
@@ -39,8 +41,6 @@ export const AuthContextProvider = ({ children }) => {
   const openLoginPrompt = () => setIsLoginPromptOpen(true);
   const closeLoginPrompt = () => setIsLoginPromptOpen(false);
 
-  
-
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
   const googleSignIn = useCallback(
@@ -50,18 +50,32 @@ export const AuthContextProvider = ({ children }) => {
       try {
         const result = await signInWithPopup(auth, provider);
         const loggedInUser = result.user;
+        const visitorId = await getFingerprint();
+
         if (loggedInUser) {
           const userRef = doc(db, "users", loggedInUser.uid);
-          await setDoc(
-            userRef,
-            {
-              uid: loggedInUser.uid,
-              name: loggedInUser.displayName,
-              email: loggedInUser.email,
-              lastLogin: serverTimestamp(),
-            },
-            { merge: true }
-          );
+          const userSnap = await getDoc(userRef);
+          if (!userSnap.exists()) {
+            await setDoc(
+              userRef,
+              {
+                uid: loggedInUser.uid,
+                name: loggedInUser.displayName,
+                email: loggedInUser.email,
+                lastLogin: serverTimestamp(),
+                initialVisitorId: visitorId,
+              },
+              { merge: true }
+            );
+          } else {
+            await setDoc(
+              userRef,
+              {
+                lastLogin: serverTimestamp(),
+              },
+              { merge: true }
+            );
+          }
         }
         if (loggedInUser.email === adminEmail) {
           window.location.href = "/admin";
@@ -86,6 +100,7 @@ export const AuthContextProvider = ({ children }) => {
       try {
         const result = await signInWithPopup(auth, provider);
         const loggedInUser = result.user;
+        const visitorId = await getFingerprint();
 
         if (loggedInUser) {
           // It correctly saves the new user to the 'libraryUsers' collection
@@ -99,6 +114,7 @@ export const AuthContextProvider = ({ children }) => {
               libraryId: libraryId,
               role: "student",
               createdAt: serverTimestamp(),
+              initialVisitorId: visitorId,
             });
           }
         }
@@ -130,65 +146,68 @@ export const AuthContextProvider = ({ children }) => {
     }
   }, []);
 
-useEffect(() => {
-  let userSnapshotUnsubscribe = null;
+  useEffect(() => {
+    let userSnapshotUnsubscribe = null;
 
-  const authStateUnsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-    // Always unsubscribe from any previous user document listener
-    if (userSnapshotUnsubscribe) {
-      userSnapshotUnsubscribe();
-    }
+    const authStateUnsubscribe = onAuthStateChanged(
+      auth,
+      async (currentUser) => {
+        // Always unsubscribe from any previous user document listener
+        if (userSnapshotUnsubscribe) {
+          userSnapshotUnsubscribe();
+        }
 
-    if (currentUser) {
-      const libraryUserRef = doc(db, "libraryUsers", currentUser.uid);
-      const libraryUserSnap = await getDoc(libraryUserRef);
+        if (currentUser) {
+          const libraryUserRef = doc(db, "libraryUsers", currentUser.uid);
+          const libraryUserSnap = await getDoc(libraryUserRef);
 
-      if (libraryUserSnap.exists()) {
-        setUser(currentUser);
-        setIsLibraryUser(true);
-        setLoading(false);
-      } else {
-        setUser(currentUser);
-        setIsLibraryUser(false);
-
-        const userDocRef = doc(db, "users", currentUser.uid);
-
-        // Set up the new listener
-        userSnapshotUnsubscribe = onSnapshot(userDocRef, (docSnap) => {
-          if (docSnap.exists()) {
-            const userData = docSnap.data();
-            const expires = userData.premiumAccessExpires?.toDate();
-            setIsPremium(expires && expires > new Date());
-            setPremiumExpires(expires || null);
-            setFreeTrialCount(userData.freeTrialCount || 0);
-            setFavoriteTests(userData.favoriteTests || []);
+          if (libraryUserSnap.exists()) {
+            setUser(currentUser);
+            setIsLibraryUser(true);
+            setLoading(false);
           } else {
-            // Reset state if user doc doesn't exist
-            setIsPremium(false);
-            setFreeTrialCount(0);
-            setFavoriteTests([]);
-          }
-        });
-        setLoading(false);
-      }
-    } else {
-      // Clear all user-related state on logout
-      setUser(null);
-      setIsPremium(false);
-      setFreeTrialCount(0);
-      setFavoriteTests([]);
-      setLoading(false);
-    }
-  });
+            setUser(currentUser);
+            setIsLibraryUser(false);
 
-  // Cleanup function for the entire component
-  return () => {
-    authStateUnsubscribe();
-    if (userSnapshotUnsubscribe) {
-      userSnapshotUnsubscribe();
-    }
-  };
-}, []);
+            const userDocRef = doc(db, "users", currentUser.uid);
+
+            // Set up the new listener
+            userSnapshotUnsubscribe = onSnapshot(userDocRef, (docSnap) => {
+              if (docSnap.exists()) {
+                const userData = docSnap.data();
+                const expires = userData.premiumAccessExpires?.toDate();
+                setIsPremium(expires && expires > new Date());
+                setPremiumExpires(expires || null);
+                setFreeTrialCount(userData.freeTrialCount || 0);
+                setFavoriteTests(userData.favoriteTests || []);
+              } else {
+                // Reset state if user doc doesn't exist
+                setIsPremium(false);
+                setFreeTrialCount(0);
+                setFavoriteTests([]);
+              }
+            });
+            setLoading(false);
+          }
+        } else {
+          // Clear all user-related state on logout
+          setUser(null);
+          setIsPremium(false);
+          setFreeTrialCount(0);
+          setFavoriteTests([]);
+          setLoading(false);
+        }
+      }
+    );
+
+    // Cleanup function for the entire component
+    return () => {
+      authStateUnsubscribe();
+      if (userSnapshotUnsubscribe) {
+        userSnapshotUnsubscribe();
+      }
+    };
+  }, []);
 
   const value = useMemo(
     () => ({

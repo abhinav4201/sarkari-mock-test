@@ -79,12 +79,10 @@ export default function LibrariesPage() {
 
   useEffect(() => {
     fetchLibraries();
-  }, []); // Run only on initial mount
+  }, []);
 
   const handlePhoneChange = (e) => {
-    // Remove all non-digit characters
     const numericValue = e.target.value.replace(/\D/g, "");
-    // Limit to the first 10 digits
     setContactPhone(numericValue.slice(0, 10));
   };
 
@@ -110,9 +108,9 @@ export default function LibrariesPage() {
     e.preventDefault();
     if (!user) return toast.error("Admin not logged in.");
 
-     if (contactPhone.length !== 10) {
-       return toast.error("Phone number must be exactly 10 digits.");
-     }
+    if (contactPhone.length !== 10) {
+      return toast.error("Phone number must be exactly 10 digits.");
+    }
     setIsSubmitting(true);
 
     const apiEndpoint = isEditing
@@ -141,7 +139,7 @@ export default function LibrariesPage() {
 
       toast.success(`Library ${isEditing ? "updated" : "added"} successfully!`);
       cancelEdit();
-      fetchLibraries(); // Refresh the entire list
+      fetchLibraries();
     } catch (error) {
       toast.error(`Error: ${error.message}`);
     } finally {
@@ -166,7 +164,12 @@ export default function LibrariesPage() {
           Library Partner Management
         </h1>
         <div className='grid grid-cols-1 lg:grid-cols-3 gap-8 items-start'>
-          <div className='lg:col-span-1 bg-white p-6 rounded-2xl shadow-lg border sticky top-8'>
+          {/*
+            --- THIS IS THE FIX ---
+            The `sticky top-8` classes have been removed from the div below.
+            This ensures the form scrolls naturally on mobile.
+          */}
+          <div className='lg:col-span-1 bg-white p-6 rounded-2xl shadow-lg border'>
             <h2 className='text-xl font-bold text-slate-800 mb-4'>
               {isEditing ? "Edit Library" : "Add New Library"}
             </h2>
@@ -195,7 +198,6 @@ export default function LibrariesPage() {
                   required
                 />
               </div>
-              {/* --- NEW PHONE NUMBER FIELD --- */}
               <div>
                 <label className='block text-sm font-medium text-slate-700'>
                   Contact Phone (10 digits)
@@ -263,7 +265,6 @@ export default function LibrariesPage() {
                       <p className='font-semibold text-slate-800'>
                         {lib.libraryName}
                       </p>
-                      {/* --- DISPLAY PHONE NUMBER --- */}
                       <p className='text-sm text-slate-500'>
                         {lib.contactEmail} | {lib.contactPhone} - ₹
                         {lib.commissionPerTest}/test

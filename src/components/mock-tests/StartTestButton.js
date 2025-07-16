@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { usePathname, useRouter } from "next/navigation";
-import { Shield, PlayCircle, Loader2, Crown } from "lucide-react";
+import { PlayCircle, Loader2, Crown } from "lucide-react";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -16,9 +16,11 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import toast from "react-hot-toast";
+import { useFingerprint } from "@/hooks/useFingerprint";
 
 export default function StartTestButton({ test }) {
   const { user, googleSignIn, isPremium } = useAuth();
+  const { visitorId } = useFingerprint();
   const pathname = usePathname();
   const [isPreparing, setIsPreparing] = useState(false);
   const router = useRouter();
@@ -62,6 +64,13 @@ export default function StartTestButton({ test }) {
   const handleStartClick = async () => {
     if (!user) return handleLogin();
     if (isPreparing) return;
+
+        if (!visitorId) {
+          toast.error(
+            "Could not identify device. Please refresh and try again."
+          );
+          return;
+        }
 
     setIsPreparing(true);
     const loadingToast = toast.loading("Preparing your test...");
