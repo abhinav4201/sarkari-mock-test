@@ -58,7 +58,14 @@ export default function TestTakingPage() {
   const [lastQuestionWarningShown, setLastQuestionWarningShown] =
     useState(false); // NEW: State to track the warning
 
- const { user, loading: authLoading, isPremium, libraryId } = useAuth();
+ const {
+   user,
+   loading: authLoading,
+   isPremium,
+   isLibraryUser,
+   libraryId,
+   ownerId,
+ } = useAuth();
   const router = useRouter();
   const params = useParams();
   const { testId } = params;
@@ -131,9 +138,10 @@ export default function TestTakingPage() {
         totalTimeTaken: totalTimeTaken, // Store the total time for analysis
       };
 
-      if (libraryId) {
-        resultData.libraryId = libraryId;
-      }
+        if (isLibraryUser && libraryId && ownerId) {
+          resultData.libraryId = libraryId;
+          resultData.ownerId = ownerId;
+        }
 
       try {
         const resultDocRef = await addDoc(

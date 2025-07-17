@@ -44,6 +44,7 @@ export const AuthContextProvider = ({ children }) => {
   const [isLibraryOwner, setIsLibraryOwner] = useState(false);
   const [ownedLibraryIds, setOwnedLibraryIds] = useState([]);
   const [libraryId, setLibraryId] = useState(null);
+  const [ownerId, setOwnerId] = useState(null);
   const [isLoginPromptOpen, setIsLoginPromptOpen] = useState(false);
   const openLoginPrompt = () => setIsLoginPromptOpen(true);
   const closeLoginPrompt = () => setIsLoginPromptOpen(false);
@@ -220,6 +221,7 @@ const logOut = useCallback(async () => {
             setOwnedLibraryIds(ownedLibs);
             setIsLibraryUser(false);
             setLibraryId(null);
+            setOwnerId(null);
             setLoading(false);
           } else {
             const libraryUserDocRef = doc(db, "libraryUsers", currentUser.uid);
@@ -233,6 +235,7 @@ const logOut = useCallback(async () => {
                   setLibraryId(libraryUserData.libraryId);
                   setIsLibraryOwner(false);
                   setOwnedLibraryIds([]);
+                  setOwnerId(libraryUserData.ownerId);
                 }
                 setLoading(false);
               }
@@ -278,6 +281,7 @@ const logOut = useCallback(async () => {
       openLoginPrompt,
       closeLoginPrompt,
       isLoginPromptOpen,
+      ownerId,
     }),
     [
       user,
@@ -295,6 +299,7 @@ const logOut = useCallback(async () => {
       googleSignInForLibrary,
       googleSignInForLibraryOwner,
       isLoginPromptOpen,
+      ownerId,
     ]
   );
 

@@ -53,7 +53,7 @@ export default function TakeDynamicTestPage() {
   const [lastQuestionWarningShown, setLastQuestionWarningShown] =
     useState(false);
 
-  const { user, loading: authLoading, isPremium, libraryId } = useAuth();
+  const { user, loading: authLoading, isPremium, isLibraryUser, libraryId, ownerId } = useAuth();
   const router = useRouter();
   const params = useParams();
   const { instanceId } = params;
@@ -127,9 +127,10 @@ export default function TakeDynamicTestPage() {
       };
 
       // --- THIS IS THE FIX ---
-      if (libraryId) {
-        resultData.libraryId = libraryId;
-      }
+       if (isLibraryUser && libraryId && ownerId) {
+         resultData.libraryId = libraryId;
+         resultData.ownerId = ownerId;
+       }
       // --- END OF FIX ---
 
       try {
