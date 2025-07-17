@@ -72,6 +72,7 @@ export const AuthContextProvider = ({ children }) => {
         }
 
         const userRef = doc(db, "users", loggedInUser.uid);
+        const visitorId = await getFingerprint();
         const libraryUserRef = doc(db, "libraryUsers", loggedInUser.uid);
 
         const [userSnap, libraryUserSnap] = await Promise.all([
@@ -79,7 +80,6 @@ export const AuthContextProvider = ({ children }) => {
           getDoc(libraryUserRef),
         ]);
 
-        const visitorId = await getFingerprint();
 
         if (ownerJoinCode) {
           const librariesQuery = query(
@@ -115,8 +115,9 @@ export const AuthContextProvider = ({ children }) => {
             // Set owner state immediately after successful sign-in
             setUser(loggedInUser);
             setIsLibraryOwner(true);
-            setOwnedLibraryIds((prev) => [...new Set([...prev, libraryIdToOwn])]);
-            // --- END OF FIX ---
+            setOwnedLibraryIds((prev) => [
+              ...new Set([...prev, libraryIdToOwn]),
+            ]);
 
             toast.success(
               `Welcome, Library Owner of ${libraryData.libraryName}!`
@@ -188,7 +189,6 @@ export const AuthContextProvider = ({ children }) => {
         if (error.code !== "auth/popup-closed-by-user") {
           toast.error("Failed to sign in. Please try again.");
         }
-        console.error("Google Sign-In Error:", error);
       }
     },
     [adminEmail, router]
@@ -214,7 +214,6 @@ export const AuthContextProvider = ({ children }) => {
       router.push("/");
       toast.success("Logged out successfully.");
     } catch (error) {
-      console.error("Logout Error:", error);
       toast.error("Logout failed. Please try again.");
     }
   }, [router]);
@@ -270,7 +269,6 @@ export const AuthContextProvider = ({ children }) => {
                     const ownedLibs = userData.libraryOwnerOf || [];
                     setIsLibraryOwner(ownedLibs.length > 0);
                     setOwnedLibraryIds(ownedLibs);
-
                     setUser(currentUser);
                     setIsLibraryUser(false);
                     setLibraryId(null);
