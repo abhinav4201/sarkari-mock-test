@@ -11,8 +11,13 @@ const nanoid = customAlphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
 export async function POST(request) {
   try {
     // const { adminAuth, db: adminDb } = getFirebaseAdmin();
-    const { libraryName, contactEmail, contactPhone, commissionPerTest } =
-      await request.json();
+    const {
+      libraryName,
+      contactEmail,
+      contactPhone,
+      commissionPerTest,
+      monthlyTestLimit,
+    } = await request.json();
 
     const userToken = request.headers.get("Authorization")?.split("Bearer ")[1];
     if (!userToken) {
@@ -47,6 +52,7 @@ export async function POST(request) {
       contactEmail,
       contactPhone,
       commissionPerTest: Number(commissionPerTest),
+      monthlyTestLimit: Number(monthlyTestLimit) || 10,
       uniqueJoinCode: nanoid(), // Generate a random 8-character code
       ownerJoinCode: nanoid(10),
       status: "active",

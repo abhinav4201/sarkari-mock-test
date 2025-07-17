@@ -44,7 +44,6 @@ export const AuthContextProvider = ({ children }) => {
   const [isLibraryOwner, setIsLibraryOwner] = useState(false);
   const [ownedLibraryIds, setOwnedLibraryIds] = useState([]);
   const [libraryId, setLibraryId] = useState(null);
-  const [ownerId, setOwnerId] = useState(null);
   const [isLoginPromptOpen, setIsLoginPromptOpen] = useState(false);
   const openLoginPrompt = () => setIsLoginPromptOpen(true);
   const closeLoginPrompt = () => setIsLoginPromptOpen(false);
@@ -52,6 +51,7 @@ export const AuthContextProvider = ({ children }) => {
   const router = useRouter();
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
+  // This googleSignIn function is correct and handles all sign-in flows
   const googleSignIn = useCallback(
     async (options = {}) => {
       const {
@@ -87,12 +87,9 @@ export const AuthContextProvider = ({ children }) => {
             await signOut(auth);
             return;
           }
-
           const libraryDoc = librarySnapshot.docs[0];
           const libraryIdToOwn = libraryDoc.id;
 
-          // Perform all database writes before redirecting
-          await updateDoc(libraryDoc.ref, { ownerId: loggedInUser.uid });
           await setDoc(
             userRef,
             {
@@ -103,6 +100,7 @@ export const AuthContextProvider = ({ children }) => {
             },
             { merge: true }
           );
+          await updateDoc(libraryDoc.ref, { ownerId: loggedInUser.uid });
 
           toast.success(`Welcome, Owner of ${libraryDoc.data().libraryName}!`);
           router.push(`/library-owner/${libraryIdToOwn}`);
@@ -137,7 +135,7 @@ export const AuthContextProvider = ({ children }) => {
           const libraryRef = doc(db, "libraries", joinLibraryId);
           const libSnap = await getDoc(libraryRef);
           if (!libSnap.exists() || !libSnap.data().ownerId) {
-            toast.error("This library is not yet claimed by an owner.", {
+            toast.error("This library has not yet been claimed by an owner.", {
               duration: 6000,
             });
             await signOut(auth);
@@ -191,25 +189,40 @@ export const AuthContextProvider = ({ children }) => {
     [googleSignIn]
   );
 
-const logOut = useCallback(async () => {
-  try {
-    await signOut(auth);
-    toast.success("Logged out successfully.");
-    router.push("/");
-  } catch (error) {
-    toast.error("Logout failed. Please try again.");
-  }
-}, [router]);
+  const logOut = useCallback(async () => {
+    try {
+      await signOut(auth);
+      toast.success("Logged out successfully.");
+      router.push("/");
+    } catch (error) {
+      console.error("Logout Error:", error);
+      toast.error("Logout failed. Please try again.");
+    }
+  }, [router]);
 
   useEffect(() => {
     const authStateUnsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      let userUnsubscribe = () => {};
-      let libraryUserUnsubscribe = () => {};
+      let userSnapshotUnsubscribe = null;
+      let libraryUserSnapshotUnsubscribe = null;
+
+      const resetAllStates = () => {
+        setUser(null);
+        setIsPremium(false);
+        setPremiumExpires(null);
+        setFreeTrialCount(0);
+        setFavoriteTests([]);
+        setIsLibraryUser(false);
+        setIsLibraryOwner(false);
+        setOwnedLibraryIds([]);
+        setLibraryId(null);
+        setLoading(false);
+      };
+
       if (currentUser) {
         const userDocRef = doc(db, "users", currentUser.uid);
-        userUnsubscribe = onSnapshot(userDocRef, (docSnap) => {
-          if (docSnap.exists()) {
-            const userData = docSnap.data();
+        userSnapshotUnsubscribe = onSnapshot(userDocRef, (userDoc) => {
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
             setUser(currentUser);
             const expires = userData.premiumAccessExpires?.toDate();
             setIsPremium(expires && expires > new Date());
@@ -221,11 +234,10 @@ const logOut = useCallback(async () => {
             setOwnedLibraryIds(ownedLibs);
             setIsLibraryUser(false);
             setLibraryId(null);
-            setOwnerId(null);
             setLoading(false);
           } else {
             const libraryUserDocRef = doc(db, "libraryUsers", currentUser.uid);
-            libraryUserUnsubscribe = onSnapshot(
+            libraryUserSnapshotUnsubscribe = onSnapshot(
               libraryUserDocRef,
               (libUserDoc) => {
                 if (libUserDoc.exists()) {
@@ -233,9 +245,14 @@ const logOut = useCallback(async () => {
                   setUser(currentUser);
                   setIsLibraryUser(true);
                   setLibraryId(libraryUserData.libraryId);
+                  // Ensure other roles are false for a library user
                   setIsLibraryOwner(false);
                   setOwnedLibraryIds([]);
-                  setOwnerId(libraryUserData.ownerId);
+                  // Reset regular user states to their defaults
+                  setIsPremium(false);
+                  setPremiumExpires(null);
+                  setFreeTrialCount(0);
+                  setFavoriteTests([]);
                 }
                 setLoading(false);
               }
@@ -243,22 +260,15 @@ const logOut = useCallback(async () => {
           }
         });
       } else {
-        setUser(null);
-        setIsPremium(false);
-        setPremiumExpires(null);
-        setFreeTrialCount(0);
-        setFavoriteTests([]);
-        setIsLibraryUser(false);
-        setIsLibraryOwner(false);
-        setOwnedLibraryIds([]);
-        setLibraryId(null);
-        setLoading(false);
+        resetAllStates();
       }
+
       return () => {
-        userUnsubscribe();
-        libraryUserUnsubscribe();
+        if (userSnapshotUnsubscribe) userSnapshotUnsubscribe();
+        if (libraryUserSnapshotUnsubscribe) libraryUserSnapshotUnsubscribe();
       };
     });
+
     return () => authStateUnsubscribe();
   }, []);
 
@@ -281,7 +291,6 @@ const logOut = useCallback(async () => {
       openLoginPrompt,
       closeLoginPrompt,
       isLoginPromptOpen,
-      ownerId,
     }),
     [
       user,
@@ -299,7 +308,6 @@ const logOut = useCallback(async () => {
       googleSignInForLibrary,
       googleSignInForLibraryOwner,
       isLoginPromptOpen,
-      ownerId,
     ]
   );
 

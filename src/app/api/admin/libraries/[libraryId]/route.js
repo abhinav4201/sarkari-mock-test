@@ -6,8 +6,13 @@ import { NextResponse } from "next/server";
 export async function PUT(request, { params }) {
   try {
     const { libraryId } = params;
-    const { libraryName, contactEmail, contactPhone, commissionPerTest } =
-      await request.json();
+    const {
+      libraryName,
+      contactEmail,
+      contactPhone,
+      commissionPerTest,
+      monthlyTestLimit,
+    } = await request.json();
 
     const userToken = request.headers.get("Authorization")?.split("Bearer ")[1];
     if (!userToken) {
@@ -46,6 +51,7 @@ export async function PUT(request, { params }) {
       contactEmail,
       contactPhone,
       commissionPerTest: Number(commissionPerTest),
+      monthlyTestLimit: Number(monthlyTestLimit) || 10,
     });
 
     return NextResponse.json({ message: "Library updated successfully." });

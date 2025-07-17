@@ -1,18 +1,19 @@
+// src/components/dashboard/TestHistory.js
+
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
+import toast from "react-hot-toast";
 import { db } from "@/lib/firebase";
 import {
   collection,
   query,
   where,
   getDocs,
-  orderBy,
   documentId,
 } from "firebase/firestore";
-import toast from "react-hot-toast";
 import UserAttemptDetailsModal from "./UserAttemptDetailsModal";
 
 export default function TestHistory() {
@@ -22,7 +23,6 @@ export default function TestHistory() {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedDetails, setSelectedDetails] = useState(null);
 
-  // This useEffect now correctly fetches both results and their corresponding test titles.
   useEffect(() => {
     if (!user) {
       setLoading(false);
@@ -32,17 +32,19 @@ export default function TestHistory() {
     const fetchAndProcessHistory = async () => {
       setLoading(true);
       try {
-        // 1. Fetch all of the user's test results, ordered by most recent first.
-        const resultsQuery = query(
-          collection(db, "mockTestResults"),
-          where("userId", "==", user.uid),
-          orderBy("completedAt", "desc")
-        );
-        const resultsSnapshot = await getDocs(resultsQuery);
-        const allResults = resultsSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+        // **THE FIX: Call the new API route instead of querying Firestore directly**
+        const idToken = await user.getIdToken();
+        const response = await fetch("/api/user/test-history", {
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch test history");
+        }
+
+        const allResults = await response.json();
 
         if (allResults.length === 0) {
           setAggregatedHistory([]);
@@ -50,7 +52,7 @@ export default function TestHistory() {
           return;
         }
 
-        // 2. Group the results by testId to count attempts.
+        // --- The rest of the processing logic remains the same ---
         const summary = new Map();
         allResults.forEach((res) => {
           const key = res.testId;
@@ -66,14 +68,18 @@ export default function TestHistory() {
           entry.attemptCount += 1;
           entry.allAttemptsForTest.push({
             ...res,
-            completedAt: res.completedAt.toDate().toISOString(),
+            completedAt: new Date(res.completedAt), // Convert milliseconds back to Date
           });
         });
 
-        // 3. FIX: Efficiently fetch all required test titles.
         const testIds = [...summary.keys()];
+        if (testIds.length === 0) {
+          setAggregatedHistory([]);
+          setLoading(false);
+          return;
+        }
+
         const fetchedTests = [];
-        // Handle Firestore's 10-item limit for 'in' queries by chunking
         for (let i = 0; i < testIds.length; i += 10) {
           const chunk = testIds.slice(i, i + 10);
           const testsQuery = query(
@@ -87,16 +93,21 @@ export default function TestHistory() {
         }
         const testsMap = new Map(fetchedTests.map((test) => [test.id, test]));
 
-        // 4. Combine all the data into the final list for display.
         const finalData = [...summary.values()].map((item) => ({
           ...item,
           testTitle: testsMap.get(item.testId)?.title || "Unknown Test",
         }));
 
+        // Sort the aggregated history by the most recent attempt's completion date
+        finalData.sort(
+          (a, b) =>
+            b.mostRecentAttempt.completedAt - a.mostRecentAttempt.completedAt
+        );
+
         setAggregatedHistory(finalData);
       } catch (error) {
+        console.error("Test History Fetch Error:", error);
         toast.error("Could not load your test history.");
-        console.error(error);
       } finally {
         setLoading(false);
       }
@@ -109,10 +120,7 @@ export default function TestHistory() {
     if (item.attemptCount > 1) {
       setSelectedDetails({
         testTitle: item.testTitle,
-        allAttempts: item.allAttemptsForTest.map((att) => ({
-          ...att,
-          completedAt: new Date(att.completedAt),
-        })),
+        allAttempts: item.allAttemptsForTest,
       });
       setIsDetailsModalOpen(true);
     }
@@ -153,7 +161,6 @@ export default function TestHistory() {
           aggregatedHistory.map((item) => {
             const content = (
               <div className='flex flex-col sm:flex-row justify-between items-center w-full gap-4'>
-                {/* Left side: Test details */}
                 <div className='text-left'>
                   <h3 className='font-bold text-lg text-slate-900'>
                     {item.testTitle}
@@ -161,7 +168,7 @@ export default function TestHistory() {
                   <p className='text-sm text-slate-700 mt-1'>
                     Last attempt:{" "}
                     {new Date(
-                      item.mostRecentAttempt.completedAt.toDate()
+                      item.mostRecentAttempt.completedAt
                     ).toLocaleDateString()}
                   </p>
                   <p className='text-slate-800 mt-2'>
@@ -172,8 +179,6 @@ export default function TestHistory() {
                     / {item.mostRecentAttempt.totalQuestions}
                   </p>
                 </div>
-
-                {/* Right side: The action button */}
                 <div className='flex-shrink-0 px-4 py-3 bg-indigo-100 text-indigo-700 text-sm font-semibold rounded-lg hover:bg-indigo-200 text-center'>
                   {item.attemptCount > 1
                     ? `View ${item.attemptCount} Attempts`
@@ -182,7 +187,6 @@ export default function TestHistory() {
               </div>
             );
 
-            // FIX: Use the unique testId as the key for each item
             const resultPath = item.mostRecentAttempt.isDynamic
               ? `/mock-tests/results/results-dynamic/${item.mostRecentAttempt.id}`
               : `/mock-tests/results/${item.mostRecentAttempt.id}`;

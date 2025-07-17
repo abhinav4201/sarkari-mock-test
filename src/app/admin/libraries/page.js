@@ -39,6 +39,7 @@ export default function LibrariesPage() {
   const [contactPhone, setContactPhone] = useState("");
   const [commission, setCommission] = useState(5);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [monthlyTestLimit, setMonthlyTestLimit] = useState(10);
 
   // State for the QR Code Modal (Student)
   const [isStudentQrModalOpen, setIsStudentQrModalOpen] = useState(false);
@@ -103,6 +104,7 @@ export default function LibrariesPage() {
     setContactEmail(library.contactEmail);
     setContactPhone(library.contactPhone || "");
     setCommission(library.commissionPerTest);
+    setMonthlyTestLimit(library.monthlyTestLimit || 10);
   };
 
   const cancelEdit = () => {
@@ -112,6 +114,7 @@ export default function LibrariesPage() {
     setContactEmail("");
     setContactPhone("");
     setCommission(5);
+    setMonthlyTestLimit(10);
   };
 
   const handleSubmit = async (e) => {
@@ -142,6 +145,7 @@ export default function LibrariesPage() {
           contactEmail: contactEmail,
           commissionPerTest: commission,
           contactPhone,
+          monthlyTestLimit: Number(monthlyTestLimit),
         }),
       });
       const data = await res.json();
@@ -240,6 +244,19 @@ export default function LibrariesPage() {
                   required
                 />
               </div>
+              <div>
+                <label className='block text-sm font-medium text-slate-700'>
+                  Monthly Test Limit per Student
+                </label>
+                <input
+                  type='number'
+                  value={monthlyTestLimit}
+                  onChange={(e) => setMonthlyTestLimit(e.target.value)}
+                  className='mt-1 w-full p-2 border text-slate-900 border-slate-300 rounded-md'
+                  required
+                  min='0'
+                />
+              </div>
               <div className='flex gap-2'>
                 {isEditing && (
                   <button
@@ -285,6 +302,10 @@ export default function LibrariesPage() {
                       <p className='text-sm text-slate-500'>
                         {lib.contactEmail} | {lib.contactPhone} - ₹
                         {lib.commissionPerTest}/test
+                      </p>
+                      <p className='text-sm text-slate-500'>
+                        {lib.monthlyTestLimit || "No"}{" "}
+                        limit
                       </p>
                     </div>
                     <div className='flex gap-2'>

@@ -2,6 +2,7 @@
 
 "use client";
 
+import { useImpression } from "@/hooks/useImpression";
 import {
   CheckCircle2,
   Clock,
@@ -13,9 +14,8 @@ import {
 import Link from "next/link";
 import LikeButton from "./LikeButton";
 import ShareButton from "./ShareButton"; // Import the new ShareButton
-import { useImpression } from "@/hooks/useImpression";
 
-export default function TestCard({ test, hasTaken }) {
+export default function TestCard({ test, hasTaken, isLibraryUser }) {
   const impressionRef = useImpression(test.id);
   const buttonText = hasTaken
     ? "View Details & Retake"
@@ -70,7 +70,11 @@ export default function TestCard({ test, hasTaken }) {
       {/* --- THIS IS THE UPDATED SECTION --- */}
       <div className='mt-auto flex justify-between items-center'>
         <div className='flex items-center gap-2'>
-          <LikeButton testId={test.id} initialLikeCount={test.likeCount} />
+          {/* <LikeButton testId={test.id} initialLikeCount={test.likeCount} /> */}
+          {!isLibraryUser && (
+            <LikeButton testId={test.id} initialLikeCount={test.likeCount} />
+          )}
+
           <ShareButton testId={test.id} title={test.title} />
         </div>
         <Link

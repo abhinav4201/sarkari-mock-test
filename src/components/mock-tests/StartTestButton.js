@@ -2,24 +2,24 @@
 
 "use client";
 
-import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { usePathname, useRouter } from "next/navigation";
-import { PlayCircle, Loader2, Crown } from "lucide-react";
+import { useFingerprint } from "@/hooks/useFingerprint";
 import { db } from "@/lib/firebase";
 import {
-  collection,
-  query,
-  where,
-  getDocs,
   addDoc,
+  collection,
+  getDocs,
+  query,
   serverTimestamp,
+  where,
 } from "firebase/firestore";
+import { Crown, Loader2, PlayCircle } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 import toast from "react-hot-toast";
-import { useFingerprint } from "@/hooks/useFingerprint";
 
 export default function StartTestButton({ test }) {
-  const { user, googleSignIn, isPremium } = useAuth();
+  const { user, googleSignIn, isPremium, isLibraryUser } = useAuth();
   const { visitorId } = useFingerprint();
   const pathname = usePathname();
   const [isPreparing, setIsPreparing] = useState(false);
@@ -65,19 +65,33 @@ export default function StartTestButton({ test }) {
     if (!user) return handleLogin();
     if (isPreparing) return;
 
-        if (!visitorId) {
-          toast.error(
-            "Could not identify device. Please refresh and try again."
-          );
-          return;
-        }
+    if (!visitorId) {
+      toast.error("Could not identify device. Please refresh and try again.");
+      return;
+    }
 
     setIsPreparing(true);
-    const loadingToast = toast.loading("Preparing your test...");
+    const loadingToast = toast.loading("Checking permissions...");
 
     try {
       // Step 1: Call the fingerprinting API (works for both test types)
       const idToken = await user.getIdToken();
+      const permissionRes = await fetch("/api/library-users/start-test", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+      });
+      const permissionData = await permissionRes.json();
+      if (!permissionRes.ok || !permissionData.allowed) {
+        throw new Error(
+          permissionData.message || "You are not allowed to take this test."
+        );
+      }
+
+      toast.loading("Preparing your test...", { id: loadingToast });
+
       await fetch("/api/tests/start-fingerprint", {
         method: "POST",
         headers: {
