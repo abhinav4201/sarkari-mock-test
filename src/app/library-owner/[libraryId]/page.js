@@ -6,7 +6,6 @@ import { doc, getDoc } from "firebase/firestore";
 import { Library, User } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import toast from "react-hot-toast";
 
 export default function LibraryOwnerAnalyticsPage() {
   const params = useParams();
@@ -49,7 +48,6 @@ export default function LibraryOwnerAnalyticsPage() {
 
       const usersData = await response.json();
 
-      // Convert timestamp back to Date object for display
       const formattedUsers = usersData.map((u) => ({
         ...u,
         createdAt: u.createdAt ? new Date(u.createdAt) : null,
