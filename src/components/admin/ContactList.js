@@ -37,7 +37,7 @@ export default function ContactList() {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // State for date filters, now defaulting to today
+  // State for date filters, defaulting to today
   const [startDate, setStartDate] = useState(formatDateForInput(new Date()));
   const [endDate, setEndDate] = useState(formatDateForInput(new Date()));
 
@@ -47,63 +47,69 @@ export default function ContactList() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   // This function now handles all data fetching with filters
-  const fetchContacts = useCallback(async (initialLoad = false) => {
-    if (!hasMore && !initialLoad) return;
+  const fetchContacts = useCallback(
+    async (initialLoad = false) => {
+      if (!hasMore && !initialLoad) return;
 
-    if (initialLoad) {
-      setLoading(true);
-      setContacts([]); // Clear previous results on new filter search
-    } else {
-      setLoadingMore(true);
-    }
-
-    try {
-      const contactsRef = collection(db, "contacts");
-      const queryConstraints = [
-        orderBy("submittedAt", "desc"),
-        limit(PAGE_SIZE),
-      ];
-
-      // Add date filters to the query
-      if (startDate) {
-        const start = Timestamp.fromDate(new Date(new Date(startDate).setHours(0, 0, 0, 0)));
-        queryConstraints.push(where("submittedAt", ">=", start));
-      }
-      if (endDate) {
-        const end = Timestamp.fromDate(new Date(new Date(endDate).setHours(23, 59, 59, 999)));
-        queryConstraints.push(where("submittedAt", "<=", end));
-      }
-      
-      // Add pagination cursor if it's not an initial load
-      if (!initialLoad && lastDoc) {
-        queryConstraints.push(startAfter(lastDoc));
+      if (initialLoad) {
+        setLoading(true);
+        setContacts([]); // Clear previous results on new filter search
+      } else {
+        setLoadingMore(true);
       }
 
-      const q = query(contactsRef, ...queryConstraints);
-      const snapshot = await getDocs(q);
-      const newContacts = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          submittedAt: data.submittedAt.toMillis(),
-        };
-      });
+      try {
+        const contactsRef = collection(db, "contacts");
+        const queryConstraints = [
+          orderBy("submittedAt", "desc"),
+          limit(PAGE_SIZE),
+        ];
 
-      setContacts((prev) =>
-        initialLoad ? newContacts : [...prev, ...newContacts]
-      );
-      setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
-      setHasMore(newContacts.length === PAGE_SIZE);
-    } catch (error) {
-      toast.error("Failed to load contacts.");
-      console.error("Failed to load contacts", error);
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  }, [startDate, endDate, lastDoc, hasMore]);
+        // Add date filters to the query
+        if (startDate) {
+          const start = Timestamp.fromDate(
+            new Date(new Date(startDate).setHours(0, 0, 0, 0))
+          );
+          queryConstraints.push(where("submittedAt", ">=", start));
+        }
+        if (endDate) {
+          const end = Timestamp.fromDate(
+            new Date(new Date(endDate).setHours(23, 59, 59, 999))
+          );
+          queryConstraints.push(where("submittedAt", "<=", end));
+        }
 
+        // Add pagination cursor if it's not an initial load
+        if (!initialLoad && lastDoc) {
+          queryConstraints.push(startAfter(lastDoc));
+        }
+
+        const q = query(contactsRef, ...queryConstraints);
+        const snapshot = await getDocs(q);
+        const newContacts = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            submittedAt: data.submittedAt.toMillis(),
+          };
+        });
+
+        setContacts((prev) =>
+          initialLoad ? newContacts : [...prev, ...newContacts]
+        );
+        setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+        setHasMore(newContacts.length === PAGE_SIZE);
+      } catch (error) {
+        toast.error("Failed to load contacts.");
+        console.error("Failed to load contacts", error);
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [startDate, endDate, lastDoc, hasMore]
+  );
 
   // Re-fetch when date filters are applied by the user
   useEffect(() => {
@@ -112,20 +118,21 @@ export default function ContactList() {
     fetchContacts(true); // Perform an initial load with the new filters
   }, [startDate, endDate]);
 
-
   const handleDownloadCsv = () => {
     if (contacts.length === 0) {
       toast.error("No data to download for the selected criteria.");
       return;
     }
 
-    const headers = ["Name", "Email", "Message", "Date Submitted"];
+    // --- THIS IS THE FIX: Added "Phone" to the headers ---
+    const headers = ["Name", "Email", "Phone", "Message", "Date Submitted"];
     const csvRows = [
       headers.join(","),
       ...contacts.map((row) =>
         [
           `"${(row.name || "").replace(/"/g, '""')}"`,
           `"${(row.email || "").replace(/"/g, '""')}"`,
+          `"${(row.phone || "").replace(/"/g, '""')}"`, // --- FIX: Added phone number to the row data ---
           `"${(row.message || "").replace(/"/g, '""')}"`,
           `"${new Date(row.submittedAt).toLocaleString()}"`,
         ].join(",")
@@ -164,7 +171,9 @@ export default function ContactList() {
   };
 
   if (loading) {
-    return <div className='text-center p-8'>Loading submissions for today...</div>;
+    return (
+      <div className='text-center p-8'>Loading submissions for today...</div>
+    );
   }
   return (
     <div>
@@ -239,6 +248,7 @@ export default function ContactList() {
               <tr>
                 <th className='p-4 font-bold text-slate-900'>Name</th>
                 <th className='p-4 font-bold text-slate-900'>Email</th>
+                <th className='p-4 font-bold text-slate-900'>Phone</th>
                 <th className='p-4 font-bold text-slate-900'>Message</th>
                 <th className='p-4 font-bold text-slate-900'>Date</th>
                 <th className='p-4 font-bold text-slate-900'>Actions</th>
@@ -252,6 +262,10 @@ export default function ContactList() {
                   </td>
                   <td className='p-4 text-slate-800 align-top'>
                     {contact.email}
+                  </td>
+                  {/* --- THIS IS THE FIX: Added phone number column --- */}
+                  <td className='p-4 text-slate-800 align-top'>
+                    {contact.phone}
                   </td>
                   <td className='p-4 text-slate-700 max-w-sm align-top'>
                     {contact.message}
@@ -280,6 +294,8 @@ export default function ContactList() {
             >
               <p className='font-bold text-slate-900'>{contact.name}</p>
               <p className='text-sm text-indigo-600'>{contact.email}</p>
+              {/* --- THIS IS THE FIX: Added phone number to mobile view --- */}
+              <p className='text-sm text-slate-600'>{contact.phone}</p>
               <p className='mt-2 text-sm text-slate-600'>
                 {new Date(contact.submittedAt).toLocaleString()}
               </p>
