@@ -3,7 +3,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
-import { Library, User, FileText } from "lucide-react";
+import { Library, User } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
@@ -22,13 +22,26 @@ export default function LibraryOwnerAnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchLibraryUsers = useCallback(async () => {
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+  const fetchLibraryData = useCallback(async () => {
     if (!user) return;
 
     setLoading(true);
     setError(null);
 
     try {
+      // Fetch library details first to get the name
+      const libraryRef = doc(db, "libraries", libraryId);
+      const librarySnap = await getDoc(libraryRef);
+      if (librarySnap.exists()) {
+        setLibraryDetails(librarySnap.data());
+      } else {
+        throw new Error("Library not found.");
+      }
+
+      // Now fetch student data for the selected month
       const idToken = await user.getIdToken();
       const response = await fetch("/api/library-owner/get-students", {
         method: "POST",
@@ -36,7 +49,11 @@ export default function LibraryOwnerAnalyticsPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify({ libraryId }),
+        body: JSON.stringify({
+          libraryId,
+          month: selectedMonth,
+          year: selectedYear,
+        }),
       });
 
       if (!response.ok) {
@@ -47,21 +64,17 @@ export default function LibraryOwnerAnalyticsPage() {
       }
 
       const usersData = await response.json();
-      const formattedUsers = usersData.map((u) => ({
-        ...u,
-        createdAt: u.createdAt ? new Date(u.createdAt) : null,
-      }));
-      setOnboardedUsers(formattedUsers);
+      setOnboardedUsers(usersData);
     } catch (err) {
       console.error("[PAGE FETCH ERROR]", err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [libraryId, user]);
+  }, [libraryId, user, selectedMonth, selectedYear]);
 
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading || !user) return;
 
     if (!isLibraryOwner || !ownedLibraryIds.includes(libraryId)) {
       setError("Access Denied: You do not have permission to view this page.");
@@ -69,25 +82,26 @@ export default function LibraryOwnerAnalyticsPage() {
       return;
     }
 
-    const fetchLibraryInfo = async () => {
-      const libraryRef = doc(db, "libraries", libraryId);
-      const librarySnap = await getDoc(libraryRef);
-      if (librarySnap.exists()) {
-        setLibraryDetails(librarySnap.data());
-      }
-    };
-
-    fetchLibraryInfo();
-    fetchLibraryUsers();
+    fetchLibraryData();
   }, [
     libraryId,
     authLoading,
     isLibraryOwner,
     ownedLibraryIds,
-    fetchLibraryUsers,
+    user,
+    fetchLibraryData,
   ]);
 
-  if (loading || authLoading || !libraryDetails) {
+  const months = Array.from({ length: 12 }, (v, i) => ({
+    value: i + 1,
+    name: new Date(0, i).toLocaleString("en-US", { month: "long" }),
+  }));
+  const years = Array.from(
+    { length: 5 },
+    (v, i) => new Date().getFullYear() - i
+  );
+
+  if (loading || authLoading) {
     return (
       <div className='text-center p-12 text-lg font-medium'>
         Loading Analytics...
@@ -111,6 +125,55 @@ export default function LibraryOwnerAnalyticsPage() {
         <p className='text-lg text-slate-600 mb-6'>
           A list of all students who have joined using this library's code.
         </p>
+
+        <div className='bg-white p-6 rounded-2xl shadow-lg border mb-6'>
+          <h2 className='text-xl font-bold text-slate-800 mb-4'>
+            Filter Activity by Month
+          </h2>
+          <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+            <div>
+              <label
+                htmlFor='month-select'
+                className='block text-sm text-slate-900 font-medium'
+              >
+                Month
+              </label>
+              <select
+                id='month-select'
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                className='mt-1 block w-full p-2 border text-slate-900 border-slate-300 rounded-md'
+              >
+                {months.map((month) => (
+                  <option key={month.value} value={month.value}>
+                    {month.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor='year-select'
+                className='block text-sm text-slate-900 font-medium'
+              >
+                Year
+              </label>
+              <select
+                id='year-select'
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                className='mt-1 block w-full p-2 border text-slate-900 border-slate-300 rounded-md'
+              >
+                {years.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
         <div className='bg-white p-6 rounded-2xl shadow-lg border'>
           <h2 className='text-xl font-bold text-slate-800 mb-4'>
             Onboarded Users ({onboardedUsers.length})
@@ -149,7 +212,7 @@ export default function LibraryOwnerAnalyticsPage() {
                           {limit > 0 ? (
                             <span
                               className={
-                                remaining > 5
+                                remaining > limit / 2
                                   ? "text-green-600"
                                   : "text-amber-600"
                               }

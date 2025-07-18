@@ -1,20 +1,15 @@
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
 
 export async function POST(request) {
   try {
-    const { libraryId } = await request.json();
+    const { libraryId, month, year } = await request.json(); // Accept month and year
     const userToken = request.headers.get("Authorization")?.split("Bearer ")[1];
 
-    if (!userToken) {
+    if (!userToken || !libraryId || !month || !year) {
       return NextResponse.json(
-        { message: "Unauthorized: No token provided" },
-        { status: 401 }
-      );
-    }
-    if (!libraryId) {
-      return NextResponse.json(
-        { message: "Bad Request: Missing libraryId" },
+        { message: "Bad Request: Missing parameters" },
         { status: 400 }
       );
     }
@@ -23,21 +18,20 @@ export async function POST(request) {
     const userId = decodedToken.uid;
 
     const userDocSnap = await adminDb.collection("users").doc(userId).get();
-
     if (!userDocSnap.exists) {
       return NextResponse.json(
-        { message: "Forbidden: User profile not found" },
+        { message: "Forbidden: User not found" },
         { status: 403 }
       );
     }
 
     const userData = userDocSnap.data();
-    const ownedLibraries = userData.libraryOwnerOf || [];
     const isOwner =
       userData.role === "library-owner" ||
-      (Array.isArray(ownedLibraries) && ownedLibraries.length > 0);
+      (Array.isArray(userData.libraryOwnerOf) &&
+        userData.libraryOwnerOf.length > 0);
 
-    if (!isOwner || !ownedLibraries.includes(libraryId)) {
+    if (!isOwner || !userData.libraryOwnerOf.includes(libraryId)) {
       return NextResponse.json(
         { message: "Forbidden: You do not own this library" },
         { status: 403 }
@@ -47,49 +41,42 @@ export async function POST(request) {
     const studentsQuery = adminDb
       .collection("users")
       .where("libraryId", "==", libraryId)
-      .where("role", "==", "library-student")
-      .orderBy("createdAt", "desc");
-
+      .where("role", "==", "library-student");
     const studentsSnapshot = await studentsQuery.get();
 
-    // --- NEW LOGIC TO FETCH TEST COUNTS ---
-    const yearMonth = `${new Date().getFullYear()}-${
-      new Date().getMonth() + 1
-    }`;
+    const startDate = Timestamp.fromDate(new Date(year, month - 1, 1));
+    const endDate = Timestamp.fromDate(new Date(year, month, 0, 23, 59, 59));
 
     const studentsWithCounts = await Promise.all(
       studentsSnapshot.docs.map(async (doc) => {
-        const data = doc.data();
-        const countRef = adminDb
-          .collection("users")
-          .doc(doc.id)
-          .collection("monthlyTestCounts")
-          .doc(yearMonth);
+        const studentData = doc.data();
 
-        const countSnap = await countRef.get();
-        const testsTakenThisMonth = countSnap.exists
-          ? countSnap.data().count
-          : 0;
+        const resultsQuery = adminDb
+          .collection("mockTestResults")
+          .where("userId", "==", studentData.uid)
+          .where("libraryId", "==", libraryId)
+          .where("completedAt", ">=", startDate)
+          .where("completedAt", "<=", endDate);
+
+        const resultsSnapshot = await resultsQuery.get();
 
         return {
           id: doc.id,
-          ...data,
-          createdAt: data.createdAt ? data.createdAt.toMillis() : null,
-          testsTakenThisMonth: testsTakenThisMonth,
+          ...studentData,
+          createdAt: studentData.createdAt
+            ? studentData.createdAt.toMillis()
+            : null,
+          testsTakenThisMonth: resultsSnapshot.size,
         };
       })
     );
-    // --- END OF NEW LOGIC ---
+
+    // Sort by name before sending
+    studentsWithCounts.sort((a, b) => a.name.localeCompare(b.name));
 
     return NextResponse.json(studentsWithCounts, { status: 200 });
   } catch (error) {
     console.error("API Error fetching students:", error);
-    if (error.code === "auth/id-token-expired") {
-      return NextResponse.json(
-        { message: "Unauthorized: Token expired" },
-        { status: 401 }
-      );
-    }
     return NextResponse.json(
       { message: "Internal Server Error" },
       { status: 500 }
