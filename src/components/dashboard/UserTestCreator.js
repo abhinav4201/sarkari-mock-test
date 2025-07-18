@@ -13,6 +13,7 @@ export default function UserTestCreator({ onTestCreated }) {
   const [subject, setSubject] = useState("");
   const [examName, setExamName] = useState("");
   const [estimatedTime, setEstimatedTime] = useState(10); // Default to a sensible value
+  const [isPremiumTest, setIsPremiumTest] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
 

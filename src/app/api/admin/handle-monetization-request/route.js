@@ -1,6 +1,6 @@
 // src/app/api/admin/handle-monetization-request/route.js
 
-import { adminAuth, adminDb } from "@/lib/firebase-admin"; // Import the guaranteed valid instances
+import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { NextResponse } from "next/server";
 
 export async function POST(request) {
@@ -29,13 +29,37 @@ export async function POST(request) {
       );
     }
 
-    // --- THIS IS THE CORRECTED LOGIC ---
-    // Use the admin SDK's methods to reference and update the document
     const userRef = adminDb.collection("users").doc(targetUserId);
 
-    await userRef.update({
-      monetizationStatus: decision,
-    });
+    // --- THIS IS THE CORRECTED LOGIC ---
+    if (decision === "approved") {
+      // Use a batch write to update the user and all their tests atomically
+      const batch = adminDb.batch();
+
+      // 1. Update the user's monetization status
+      batch.update(userRef, { monetizationStatus: "approved" });
+
+      // 2. Find all tests by this user that are pending monetization
+      const testsToApproveQuery = adminDb
+        .collection("mockTests")
+        .where("createdBy", "==", targetUserId)
+        .where("monetizationStatus", "==", "pending_review");
+
+      const testsSnapshot = await testsToApproveQuery.get();
+
+      // 3. Add an update for each pending test to the batch
+      testsSnapshot.forEach((doc) => {
+        batch.update(doc.ref, { monetizationStatus: "approved" });
+      });
+
+      // 4. Commit all changes at once
+      await batch.commit();
+    } else {
+      // If rejected, just update the user's status
+      await userRef.update({
+        monetizationStatus: decision,
+      });
+    }
     // --- END OF CORRECTION ---
 
     return NextResponse.json({
