@@ -14,7 +14,10 @@ const inter = Inter({ subsets: ["latin"] });
 
 function AppLayout({ children }) {
   const pathname = usePathname();
-  const { userProfile, loading: authLoading } = useAuth();
+  // --- THIS IS THE FIX ---
+  // We now get the correct, robustly-calculated booleans directly from the context
+  const { isLibraryUser, isLibraryOwner, loading: authLoading } = useAuth();
+  // --- END OF FIX ---
 
   if (authLoading) {
     return (
@@ -25,9 +28,8 @@ function AppLayout({ children }) {
   }
 
   const isAdminPage = pathname.startsWith("/admin");
-  const isLibraryUser = userProfile?.role === "library-student";
-  const isLibraryOwner = userProfile?.role === "library-owner";
 
+  // The logic here is now much cleaner and uses the correct state
   if (isAdminPage) {
     return <main>{children}</main>;
   }
