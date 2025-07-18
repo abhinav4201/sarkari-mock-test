@@ -12,6 +12,7 @@ import {
   where,
   doc,
   getDoc,
+  Timestamp,
 } from "firebase/firestore";
 import { Crown, Loader2, PlayCircle } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -30,37 +31,27 @@ export default function StartTestButton({ test }) {
   const router = useRouter();
 
   const handleLogin = () => {
-    googleSignIn(pathname);
+    googleSignIn({ redirectUrl: pathname });
   };
 
+  // This function contains the logic to actually start the test,
+  // and is only called after all checks and confirmations are complete.
   const proceedToStartTest = async () => {
-    setIsConfirmModalOpen(false); // Close modal if open
-    if (!user) return handleLogin();
+    setIsConfirmModalOpen(false); // Ensure modal is closed
     if (isPreparing) return;
-    if (!visitorId) {
-      toast.error("Could not identify device. Please refresh and try again.");
-      return;
-    }
-
     setIsPreparing(true);
     const loadingToast = toast.loading("Preparing your test...");
 
     try {
       const idToken = await user.getIdToken();
-      // Permission check is still done server-side for security
-      const permissionRes = await fetch("/api/library-users/start-test", {
+      // The API call now only increments the counter, as the check is done client-side
+      await fetch("/api/library-users/start-test", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${idToken}`,
         },
       });
-      const permissionData = await permissionRes.json();
-      if (!permissionRes.ok || !permissionData.allowed) {
-        throw new Error(
-          permissionData.message || "You are not allowed to take this test."
-        );
-      }
 
       await fetch("/api/tests/start-fingerprint", {
         method: "POST",
@@ -73,6 +64,7 @@ export default function StartTestButton({ test }) {
 
       let targetPath;
       if (test.isDynamic) {
+        // Dynamic test instance creation logic...
         const { sourceCriteria, questionCount } = test;
         const q = query(
           collection(db, "questionBank"),
@@ -117,39 +109,67 @@ export default function StartTestButton({ test }) {
     }
   };
 
+  // This is the main function called on button click
   const handleStartClick = async () => {
     if (!user) return handleLogin();
     if (isPreparing) return;
 
+    // --- THIS IS THE FIX ---
+    // The logic is now much cleaner. It decides whether to show the modal or proceed directly.
     if (isLibraryUser && userProfile?.libraryId) {
       setIsPreparing(true);
       const loadingToast = toast.loading("Checking your test limit...");
+
       try {
+        // 1. Get library limit
         const libraryRef = doc(db, "libraries", userProfile.libraryId);
         const librarySnap = await getDoc(libraryRef);
-        if (!librarySnap.exists())
+        if (!librarySnap.exists()) {
           throw new Error("Could not verify library membership.");
+        }
         const limit = librarySnap.data().monthlyTestLimit || 0;
 
-        const yearMonth = `${new Date().getFullYear()}-${
-          new Date().getMonth() + 1
-        }`;
-        const countRef = doc(
-          db,
-          `users/${user.uid}/monthlyTestCounts/${yearMonth}`
+        // 2. Get the accurate, up-to-date count of tests taken this month
+        const now = new Date();
+        const startOfMonth = Timestamp.fromDate(
+          new Date(now.getFullYear(), now.getMonth(), 1)
         );
-        const countSnap = await getDoc(countRef);
-        const taken = countSnap.exists() ? countSnap.data().count : 0;
+        const endOfMonth = Timestamp.fromDate(
+          new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
+        );
+
+        const resultsQuery = query(
+          collection(db, "mockTestResults"),
+          where("userId", "==", user.uid),
+          where("libraryId", "==", userProfile.libraryId),
+          where("completedAt", ">=", startOfMonth),
+          where("completedAt", "<=", endOfMonth)
+        );
+        const resultsSnapshot = await getDocs(resultsQuery);
+        const taken = resultsSnapshot.size;
 
         toast.dismiss(loadingToast);
 
-        if (taken > 0 && limit > 0) {
-          setUserTestStats({ taken, limit, remaining: limit - taken });
-          setIsConfirmModalOpen(true);
-          setIsPreparing(false);
-          return;
+        // 3. Check conditions to show the modal
+        if (limit > 0) {
+          // Only check if a limit is actually set
+          if (taken >= limit) {
+            toast.error(
+              `You have reached your monthly limit of ${limit} tests.`
+            );
+            setIsPreparing(false);
+            return;
+          }
+          if (taken > 0) {
+            // Show modal only if it's not the first test
+            setUserTestStats({ taken, limit, remaining: limit - taken });
+            setIsConfirmModalOpen(true);
+            setIsPreparing(false);
+            return; // Stop here and wait for user confirmation
+          }
         }
 
+        // If it's the first test or unlimited, proceed directly
         await proceedToStartTest();
       } catch (error) {
         toast.error(error.message || "Could not check test limit.", {
@@ -158,10 +178,12 @@ export default function StartTestButton({ test }) {
         setIsPreparing(false);
       }
     } else {
+      // For non-library users, start the test directly
       await proceedToStartTest();
     }
   };
 
+  // The JSX part of the component remains the same
   if (!user) {
     return (
       <button
