@@ -1,4 +1,5 @@
 import { auth, db } from "@/lib/firebase";
+import { getFingerprint } from "@guardhivefraudshield/device-fingerprint";
 import {
   GoogleAuthProvider,
   onAuthStateChanged,
@@ -6,18 +7,18 @@ import {
   signOut,
 } from "firebase/auth";
 import {
-  doc,
-  onSnapshot,
-  serverTimestamp,
-  setDoc,
-  getDoc,
-  updateDoc,
   arrayUnion,
   collection,
-  query,
-  where,
-  limit,
+  doc,
+  getDoc,
   getDocs,
+  limit,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
 } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import {
@@ -29,7 +30,6 @@ import {
   useState,
 } from "react";
 import toast from "react-hot-toast";
-import { getFingerprint } from "@guardhivefraudshield/device-fingerprint";
 
 const AuthContext = createContext();
 
@@ -130,6 +130,9 @@ export const AuthContextProvider = ({ children }) => {
             await signOut(auth);
             return;
           }
+          const premiumExpiryDate = new Date();
+          premiumExpiryDate.setFullYear(premiumExpiryDate.getFullYear() + 10);
+
           await setDoc(
             userRef,
             {
@@ -138,6 +141,7 @@ export const AuthContextProvider = ({ children }) => {
               email: loggedInUser.email,
               role: "library-student",
               libraryId: joinLibraryId,
+              premiumAccessExpires: premiumExpiryDate,
               ownerId: libSnap.data().ownerId,
               createdAt: serverTimestamp(),
               lastLogin: serverTimestamp(),

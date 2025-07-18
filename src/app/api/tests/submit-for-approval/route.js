@@ -1,18 +1,12 @@
-// src/app/api/tests/submit-for-approval/route.js
-
-import { NextResponse } from "next/server";
-// --- THIS IS THE CORRECTED IMPORT ---
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { NextResponse } from "next/server";
 import { compareTwoStrings } from "string-similarity";
 
 const SIMILARITY_THRESHOLD = 0.85;
 
 export async function POST(request) {
   try {
-    // We no longer need to call getFirebaseAdmin()
-    // const { auth: adminAuth, db: adminDb } = getFirebaseAdmin();
-
     const userToken = request.headers.get("Authorization")?.split("Bearer ")[1];
     if (!userToken) {
       return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
@@ -20,7 +14,7 @@ export async function POST(request) {
     const decodedToken = await adminAuth.verifyIdToken(userToken);
     const userId = decodedToken.uid;
 
-    const { title, topic, subject, examName, estimatedTime } =
+    const { title, topic, subject, examName, estimatedTime, isPremium } =
       await request.json();
 
     if (
@@ -40,6 +34,19 @@ export async function POST(request) {
         },
         { status: 400 }
       );
+    }
+
+    if (isPremium) {
+      const userDoc = await adminDb.collection("users").doc(userId).get();
+      if (
+        !userDoc.exists() ||
+        userDoc.data().monetizationStatus !== "approved"
+      ) {
+        return NextResponse.json(
+          { message: "You are not approved to create premium content." },
+          { status: 403 } // Forbidden
+        );
+      }
     }
 
     const testsRef = adminDb.collection("mockTests");
@@ -72,7 +79,7 @@ export async function POST(request) {
       monetizationStatus: "pending_review",
       likeCount: 0,
       questionCount: 0,
-      isPremium: false,
+      isPremium: isPremium || false,
       isDynamic: false,
       createdAt: FieldValue.serverTimestamp(),
       submitterInfo: { ip, userAgent: request.headers.get("user-agent") },

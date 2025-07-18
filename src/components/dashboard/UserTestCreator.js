@@ -1,5 +1,3 @@
-// src/components/dashboard/UserTestCreator.js
-
 "use client";
 
 import { useAuth } from "@/context/AuthContext";
@@ -9,7 +7,7 @@ import toast from "react-hot-toast";
 
 export default function UserTestCreator({ onTestCreated }) {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
   const [subject, setSubject] = useState("");
@@ -55,6 +53,7 @@ export default function UserTestCreator({ onTestCreated }) {
           subject,
           examName,
           estimatedTime: Number(estimatedTime),
+          isPremium: isPremiumTest,
         }),
       });
 
@@ -178,6 +177,25 @@ export default function UserTestCreator({ onTestCreated }) {
           <p className='mt-1 text-sm text-red-600'>{errors.estimatedTime}</p>
         )}
       </div>
+      {userProfile?.monetizationStatus === "approved" && (
+        <div className='pt-2'>
+          <div className='flex items-center'>
+            <input
+              type='checkbox'
+              id='isPremiumTest'
+              checked={isPremiumTest}
+              onChange={(e) => setIsPremiumTest(e.target.checked)}
+              className='h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500'
+            />
+            <label
+              htmlFor='isPremiumTest'
+              className='ml-3 block text-sm font-medium text-slate-900'
+            >
+              Mark this as a Premium Test? (Exclusive for subscribers)
+            </label>
+          </div>
+        </div>
+      )}
       <button
         type='submit'
         className='w-full px-4 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-green-400'
