@@ -11,7 +11,7 @@ import {
   collection,
   doc,
   getDoc,
-  getDocs, // We may use updateDoc directly if the transaction is simple
+  getDocs,
   increment,
   query,
   serverTimestamp,
@@ -56,16 +56,16 @@ export default function TestTakingPage() {
   const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
   const [warningInfo, setWarningInfo] = useState({ type: null, count: 0 });
   const [lastQuestionWarningShown, setLastQuestionWarningShown] =
-    useState(false); // NEW: State to track the warning
+    useState(false);
 
- const {
-   user,
-   loading: authLoading,
-   isPremium,
-   isLibraryUser,
-   libraryId,
-   ownerId,
- } = useAuth();
+  const {
+    user,
+    loading: authLoading,
+    isPremium,
+    isLibraryUser,
+    libraryId,
+    userProfile, // Get the full userProfile
+  } = useAuth();
   const router = useRouter();
   const params = useParams();
   const { testId } = params;
@@ -116,7 +116,6 @@ export default function TestTakingPage() {
         0
       );
 
-      // --- BEHAVIORAL ANALYSIS LOGIC ---
       const estimatedTimeInSeconds = testDetails.estimatedTime * 60;
       const suspiciousTimeThreshold = estimatedTimeInSeconds * 0.15;
 
@@ -130,18 +129,18 @@ export default function TestTakingPage() {
         submissionReason: reason,
         isDynamic: false,
         completedAt: serverTimestamp(),
-        // Add a flag if the test was completed suspiciously fast
         reviewFlag:
           totalTimeTaken < suspiciousTimeThreshold
             ? "low_completion_time"
             : null,
-        totalTimeTaken: totalTimeTaken, // Store the total time for analysis
+        totalTimeTaken: totalTimeTaken,
       };
 
-        if (isLibraryUser && libraryId && ownerId) {
-          resultData.libraryId = libraryId;
-          resultData.ownerId = ownerId;
-        }
+      // Correctly add library info if the user is a library student
+      if (isLibraryUser && userProfile?.libraryId) {
+        resultData.libraryId = userProfile.libraryId;
+        resultData.ownerId = userProfile.ownerId; // Assuming ownerId is on the profile
+      }
 
       try {
         const resultDocRef = await addDoc(
@@ -174,7 +173,8 @@ export default function TestTakingPage() {
       user,
       testState,
       testDetails,
-      libraryId,
+      isLibraryUser,
+      userProfile,
     ]
   );
 
@@ -222,7 +222,7 @@ export default function TestTakingPage() {
         const data = await getTestData(testId);
         if (!data || !data.questions || data.questions.length === 0) {
           toast.error("This test could not be loaded or has no questions.");
-          setTestState("access_denied"); // Use the access denied screen
+          setTestState("access_denied");
           return;
         }
 
@@ -285,7 +285,6 @@ export default function TestTakingPage() {
       [currentQuestionId]: (prev[currentQuestionId] || 0) + timeSpent,
     }));
 
-    // NEW: Logic to show a warning on the last question
     if (newIndex === questions.length - 1 && !lastQuestionWarningShown) {
       toast.success(
         "This is the last question. Review your answers before submitting."
@@ -297,15 +296,12 @@ export default function TestTakingPage() {
     setQuestionStartTime(Date.now());
   };
 
-  // FIX: This function now allows deselecting an answer.
   const handleAnswerSelect = (questionId, option) => {
     setSelectedOptions((prev) => {
       const newSelected = { ...prev };
-      // If the user clicks the same option again, deselect it.
       if (newSelected[questionId] === option) {
         delete newSelected[questionId];
       } else {
-        // Otherwise, select the new option.
         newSelected[questionId] = option;
       }
       return newSelected;

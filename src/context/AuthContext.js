@@ -40,10 +40,9 @@ export const AuthContextProvider = ({ children }) => {
   const [premiumExpires, setPremiumExpires] = useState(null);
   const [freeTrialCount, setFreeTrialCount] = useState(0);
   const [favoriteTests, setFavoriteTests] = useState([]);
-  const [isLibraryUser, setIsLibraryUser] = useState(false);
-  const [isLibraryOwner, setIsLibraryOwner] = useState(false);
-  const [ownedLibraryIds, setOwnedLibraryIds] = useState([]);
-  const [libraryId, setLibraryId] = useState(null);
+
+  const [userProfile, setUserProfile] = useState(null);
+
   const [isLoginPromptOpen, setIsLoginPromptOpen] = useState(false);
   const openLoginPrompt = () => setIsLoginPromptOpen(true);
   const closeLoginPrompt = () => setIsLoginPromptOpen(false);
@@ -51,7 +50,6 @@ export const AuthContextProvider = ({ children }) => {
   const router = useRouter();
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
-  // This googleSignIn function is correct and handles all sign-in flows
   const googleSignIn = useCallback(
     async (options = {}) => {
       const {
@@ -72,6 +70,7 @@ export const AuthContextProvider = ({ children }) => {
         }
 
         const userRef = doc(db, "users", loggedInUser.uid);
+        const userSnap = await getDoc(userRef);
         const visitorId = await getFingerprint();
 
         if (ownerJoinCode) {
@@ -96,7 +95,9 @@ export const AuthContextProvider = ({ children }) => {
               uid: loggedInUser.uid,
               name: loggedInUser.displayName,
               email: loggedInUser.email,
+              role: "library-owner",
               libraryOwnerOf: arrayUnion(libraryIdToOwn),
+              lastLogin: serverTimestamp(),
             },
             { merge: true }
           );
@@ -107,31 +108,21 @@ export const AuthContextProvider = ({ children }) => {
           return;
         }
 
-        const libraryUserRef = doc(db, "libraryUsers", loggedInUser.uid);
-        const [userSnap, libraryUserSnap] = await Promise.all([
-          getDoc(userRef),
-          getDoc(libraryUserRef),
-        ]);
-
-        if (libraryUserSnap.exists()) {
-          router.push("/library-dashboard");
-          return;
-        }
-
-        if (userSnap.exists()) {
-          if (joinLibraryId) {
+        if (joinLibraryId) {
+          if (userSnap.exists()) {
+            if (userSnap.data().role === "library-student") {
+              // If they are already a library student, just update login time and redirect.
+              await updateDoc(userRef, { lastLogin: serverTimestamp() });
+              router.push("/library-dashboard");
+              return;
+            }
             toast.error("This email is already registered as a regular user.", {
               duration: 8000,
             });
             await signOut(auth);
             return;
           }
-          await updateDoc(userRef, { lastLogin: serverTimestamp() });
-          window.location.href = redirectUrl;
-          return;
-        }
 
-        if (joinLibraryId) {
           const libraryRef = doc(db, "libraries", joinLibraryId);
           const libSnap = await getDoc(libraryRef);
           if (!libSnap.exists() || !libSnap.data().ownerId) {
@@ -141,33 +132,39 @@ export const AuthContextProvider = ({ children }) => {
             await signOut(auth);
             return;
           }
-          const libraryOwnerId = libSnap.data().ownerId;
-          await setDoc(libraryUserRef, {
-            uid: loggedInUser.uid,
-            name: loggedInUser.displayName,
-            email: loggedInUser.email,
-            libraryId: joinLibraryId,
-            ownerId: libraryOwnerId,
-            role: "student",
-            createdAt: serverTimestamp(),
-            initialVisitorId: visitorId,
-          });
-          router.push("/library-dashboard");
-        } else {
           await setDoc(
             userRef,
             {
               uid: loggedInUser.uid,
               name: loggedInUser.displayName,
               email: loggedInUser.email,
+              role: "library-student",
+              libraryId: joinLibraryId,
+              ownerId: libSnap.data().ownerId,
+              createdAt: serverTimestamp(),
               lastLogin: serverTimestamp(),
               initialVisitorId: visitorId,
-              libraryOwnerOf: [],
             },
             { merge: true }
           );
-          window.location.href = redirectUrl;
+          router.push("/library-dashboard");
+          return;
         }
+
+        if (userSnap.exists()) {
+          await updateDoc(userRef, { lastLogin: serverTimestamp() });
+        } else {
+          await setDoc(userRef, {
+            uid: loggedInUser.uid,
+            name: loggedInUser.displayName,
+            email: loggedInUser.email,
+            role: "regular",
+            lastLogin: serverTimestamp(),
+            initialVisitorId: visitorId,
+            libraryOwnerOf: [],
+          });
+        }
+        window.location.href = redirectUrl;
       } catch (error) {
         if (error.code !== "auth/popup-closed-by-user")
           toast.error("Sign-in failed. Please try again.");
@@ -182,6 +179,7 @@ export const AuthContextProvider = ({ children }) => {
     },
     [googleSignIn]
   );
+
   const googleSignInForLibraryOwner = useCallback(
     async (ownerJoinCode) => {
       await googleSignIn({ ownerJoinCode });
@@ -201,89 +199,51 @@ export const AuthContextProvider = ({ children }) => {
   }, [router]);
 
   useEffect(() => {
-    const authStateUnsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      let userSnapshotUnsubscribe = null;
-      let libraryUserSnapshotUnsubscribe = null;
-
-      const resetAllStates = () => {
-        setUser(null);
-        setIsPremium(false);
-        setPremiumExpires(null);
-        setFreeTrialCount(0);
-        setFavoriteTests([]);
-        setIsLibraryUser(false);
-        setIsLibraryOwner(false);
-        setOwnedLibraryIds([]);
-        setLibraryId(null);
-        setLoading(false);
-      };
-
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         const userDocRef = doc(db, "users", currentUser.uid);
-        userSnapshotUnsubscribe = onSnapshot(userDocRef, (userDoc) => {
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
+        const unsub = onSnapshot(userDocRef, (doc) => {
+          if (doc.exists()) {
+            const userData = doc.data();
             setUser(currentUser);
+            setUserProfile(userData);
+
             const expires = userData.premiumAccessExpires?.toDate();
             setIsPremium(expires && expires > new Date());
             setPremiumExpires(expires || null);
             setFreeTrialCount(userData.freeTrialCount || 0);
             setFavoriteTests(userData.favoriteTests || []);
-            const ownedLibs = userData.libraryOwnerOf || [];
-            setIsLibraryOwner(ownedLibs.length > 0);
-            setOwnedLibraryIds(ownedLibs);
-            setIsLibraryUser(false);
-            setLibraryId(null);
-            setLoading(false);
-          } else {
-            const libraryUserDocRef = doc(db, "libraryUsers", currentUser.uid);
-            libraryUserSnapshotUnsubscribe = onSnapshot(
-              libraryUserDocRef,
-              (libUserDoc) => {
-                if (libUserDoc.exists()) {
-                  const libraryUserData = libUserDoc.data();
-                  setUser(currentUser);
-                  setIsLibraryUser(true);
-                  setLibraryId(libraryUserData.libraryId);
-                  // Ensure other roles are false for a library user
-                  setIsLibraryOwner(false);
-                  setOwnedLibraryIds([]);
-                  // Reset regular user states to their defaults
-                  setIsPremium(false);
-                  setPremiumExpires(null);
-                  setFreeTrialCount(0);
-                  setFavoriteTests([]);
-                }
-                setLoading(false);
-              }
-            );
           }
+          setLoading(false);
         });
+        return () => unsub();
       } else {
-        resetAllStates();
+        setUser(null);
+        setUserProfile(null);
+        setIsPremium(false);
+        setPremiumExpires(null);
+        setFreeTrialCount(0);
+        setFavoriteTests([]);
+        setLoading(false);
       }
-
-      return () => {
-        if (userSnapshotUnsubscribe) userSnapshotUnsubscribe();
-        if (libraryUserSnapshotUnsubscribe) libraryUserSnapshotUnsubscribe();
-      };
     });
 
-    return () => authStateUnsubscribe();
+    return () => unsubscribe();
   }, []);
 
   const value = useMemo(
     () => ({
       user,
+      userProfile,
       loading,
       isPremium,
       premiumExpires,
       freeTrialCount,
       favoriteTests,
-      isLibraryOwner,
-      ownedLibraryIds,
-      isLibraryUser,
-      libraryId,
+      isLibraryUser: userProfile?.role === "library-student",
+      isLibraryOwner: userProfile?.role === "library-owner",
+      ownedLibraryIds: userProfile?.libraryOwnerOf || [],
+      libraryId: userProfile?.libraryId || null,
       googleSignIn,
       logOut,
       googleSignInForLibrary,
@@ -294,15 +254,12 @@ export const AuthContextProvider = ({ children }) => {
     }),
     [
       user,
+      userProfile,
       loading,
       isPremium,
       premiumExpires,
       freeTrialCount,
       favoriteTests,
-      isLibraryOwner,
-      ownedLibraryIds,
-      isLibraryUser,
-      libraryId,
       googleSignIn,
       logOut,
       googleSignInForLibrary,

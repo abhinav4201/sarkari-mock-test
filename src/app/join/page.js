@@ -1,4 +1,3 @@
-// src/app/join/page.js
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
@@ -12,12 +11,11 @@ import {
   query,
   where,
   limit,
-  getDocs, // Ensure getDocs is imported
-} from "firebase/firestore"; //
+  getDocs,
+} from "firebase/firestore";
 import { Library, LogIn, UserCog } from "lucide-react";
 import toast from "react-hot-toast";
 
-// A smaller component to handle the logic, wrapped in Suspense
 function JoinPageContent() {
   const searchParams = useSearchParams();
   const { googleSignInForLibrary, googleSignInForLibraryOwner } = useAuth();
@@ -51,20 +49,18 @@ function JoinPageContent() {
             where("ownerJoinCode", "==", ownerJoinCode),
             limit(1)
           );
-          const querySnapshot = await getDocs(q); //
+          const querySnapshot = await getDocs(q);
           if (!querySnapshot.empty) {
-            // Check if snapshot is not empty
             librarySnap = querySnapshot.docs[0];
           } else {
-            librarySnap = null; // No matching library found
+            librarySnap = null;
           }
         } else {
           const libraryRef = doc(db, "libraries", libraryId);
-          librarySnap = await getDoc(libraryRef); //
+          librarySnap = await getDoc(libraryRef);
         }
 
         if (librarySnap && librarySnap.exists()) {
-          //
           setLibrary(librarySnap.data());
         } else {
           setError(
@@ -73,7 +69,7 @@ function JoinPageContent() {
         }
       } catch (e) {
         setError("Could not verify the library link.");
-        console.error("Error fetching library info:", e); // Log the actual error
+        console.error("Error fetching library info:", e);
       } finally {
         setLoading(false);
       }
@@ -127,7 +123,6 @@ function JoinPageContent() {
   );
 }
 
-// The main page component that uses Suspense
 export default function Join() {
   return (
     <div className='min-h-screen bg-slate-100 flex items-center justify-center p-4'>

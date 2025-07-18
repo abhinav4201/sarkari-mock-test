@@ -6,14 +6,14 @@ import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import {
-  addDoc, // Import increment
+  addDoc,
   arrayUnion,
   collection,
   doc,
-  getDoc, // Import updateDoc
+  getDoc,
   increment,
   serverTimestamp,
-  updateDoc, // Import updateDoc
+  updateDoc,
 } from "firebase/firestore";
 import { Lock } from "lucide-react";
 import Link from "next/link";
@@ -53,7 +53,13 @@ export default function TakeDynamicTestPage() {
   const [lastQuestionWarningShown, setLastQuestionWarningShown] =
     useState(false);
 
-  const { user, loading: authLoading, isPremium, isLibraryUser, libraryId, ownerId } = useAuth();
+  const {
+    user,
+    loading: authLoading,
+    isPremium,
+    isLibraryUser,
+    userProfile,
+  } = useAuth();
   const router = useRouter();
   const params = useParams();
   const { instanceId } = params;
@@ -71,7 +77,6 @@ export default function TakeDynamicTestPage() {
           (finalTimePerQuestion[lastQuestionId] || 0) + timeSpent;
       }
 
-      // --- RESTORED: Your original, correct logic for building the answers object ---
       const finalAnswers = {};
       for (const qId in selectedOptions) {
         finalAnswers[qId] = {
@@ -79,7 +84,6 @@ export default function TakeDynamicTestPage() {
           timeTaken: finalTimePerQuestion[qId] || 0,
         };
       }
-      // This second loop ensures unanswered questions are also recorded.
       for (const q of questions) {
         if (!finalAnswers[q.id]) {
           finalAnswers[q.id] = {
@@ -105,7 +109,6 @@ export default function TakeDynamicTestPage() {
         0
       );
 
-      // --- BEHAVIORAL ANALYSIS LOGIC ---
       const estimatedTimeInSeconds = instanceData.estimatedTime * 60;
       const suspiciousTimeThreshold = estimatedTimeInSeconds * 0.15;
       const resultData = {
@@ -126,12 +129,11 @@ export default function TakeDynamicTestPage() {
         totalTimeTaken: totalTimeTaken,
       };
 
-      // --- THIS IS THE FIX ---
-       if (isLibraryUser && libraryId && ownerId) {
-         resultData.libraryId = libraryId;
-         resultData.ownerId = ownerId;
-       }
-      // --- END OF FIX ---
+      // Correctly add library info if the user is a library student
+      if (isLibraryUser && userProfile?.libraryId) {
+        resultData.libraryId = userProfile.libraryId;
+        resultData.ownerId = userProfile.ownerId;
+      }
 
       try {
         const resultDocRef = await addDoc(
@@ -139,7 +141,6 @@ export default function TakeDynamicTestPage() {
           resultData
         );
 
-        // Step 2: Update the dedicated analytics document for the original test
         const analyticsRef = doc(
           db,
           "testAnalytics",
@@ -150,7 +151,7 @@ export default function TakeDynamicTestPage() {
           uniqueTakers: arrayUnion(user.uid),
         });
 
-        toast.success("Test submitted!");
+        toast.success("Test submitted successfully!");
         router.push(`/mock-tests/results/results-dynamic/${resultDocRef.id}`);
       } catch (error) {
         console.error("Error writing test results:", error);
@@ -169,7 +170,8 @@ export default function TakeDynamicTestPage() {
       user,
       instanceId,
       testState,
-      libraryId,
+      isLibraryUser,
+      userProfile,
     ]
   );
 

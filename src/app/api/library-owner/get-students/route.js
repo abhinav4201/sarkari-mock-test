@@ -19,40 +19,39 @@ export async function POST(request) {
       );
     }
 
-    // 1. Verify the user is a valid, logged-in user
     const decodedToken = await adminAuth.verifyIdToken(userToken);
     const userId = decodedToken.uid;
 
-    // 2. Use the Admin SDK to verify they OWN the requested library
     const userDocSnap = await adminDb.collection("users").doc(userId).get();
 
-    // --- THIS IS THE FIX ---
-    // The Admin SDK uses '.exists' as a property, not a function.
     if (!userDocSnap.exists) {
       return NextResponse.json(
         { message: "Forbidden: User profile not found" },
         { status: 403 }
       );
     }
-    // --- END OF FIX ---
 
-    const ownedLibraries = userDocSnap.data().libraryOwnerOf || [];
-    if (!ownedLibraries.includes(libraryId)) {
+    const userData = userDocSnap.data();
+    const ownedLibraries = userData.libraryOwnerOf || [];
+    if (
+      userData.role !== "library-owner" ||
+      !ownedLibraries.includes(libraryId)
+    ) {
       return NextResponse.json(
         { message: "Forbidden: You do not own this library" },
         { status: 403 }
       );
     }
 
-    // 3. If authorized, fetch the student data using Admin privileges
+    // Fetch students from the 'users' collection
     const studentsQuery = adminDb
-      .collection("libraryUsers")
+      .collection("users")
       .where("libraryId", "==", libraryId)
+      .where("role", "==", "library-student")
       .orderBy("createdAt", "desc");
 
     const studentsSnapshot = await studentsQuery.get();
 
-    // Convert Firestore Timestamps to a serializable format (milliseconds)
     const students = studentsSnapshot.docs.map((doc) => {
       const data = doc.data();
       return {

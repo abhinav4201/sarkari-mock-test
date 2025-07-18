@@ -12,40 +12,26 @@ export async function POST(request) {
     const decodedToken = await adminAuth.verifyIdToken(token);
     const uid = decodedToken.uid;
 
-    // Check the 'users' collection first (for regular users and owners)
     const userDocRef = adminDb.collection("users").doc(uid);
     const userDocSnap = await userDocRef.get();
 
     if (userDocSnap.exists) {
       const userData = userDocSnap.data();
-      const ownedLibraries = userData.libraryOwnerOf || [];
-      const isOwner = ownedLibraries.length > 0;
+      // Determine the user type based on the 'role' field
+      const userType = userData.role || "regular"; // Default to 'regular' if role is not set
 
       return NextResponse.json({
         status: "found",
-        type: isOwner ? "library-owner" : "regular-user",
+        type: userType,
         data: {
           ...userData,
           // Ensure owned libraries are sent, default to empty array
-          ownedLibraryIds: ownedLibraries,
+          ownedLibraryIds: userData.libraryOwnerOf || [],
         },
       });
     }
 
-    // If not in 'users', check the 'libraryUsers' collection
-    const libraryUserDocRef = adminDb.collection("libraryUsers").doc(uid);
-    const libraryUserSnap = await libraryUserDocRef.get();
-
-    if (libraryUserSnap.exists) {
-      const libraryUserData = libraryUserSnap.data();
-      return NextResponse.json({
-        status: "found",
-        type: "library-student",
-        data: libraryUserData,
-      });
-    }
-
-    // If user is authenticated but not in either collection, they are a new user
+    // If user is authenticated but not in the collection, they are a new user
     return NextResponse.json({
       status: "not-found",
       type: "new-user",

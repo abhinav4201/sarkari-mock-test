@@ -1,4 +1,3 @@
-// src/app/layout.js
 "use client";
 
 import "./globals.css";
@@ -16,27 +15,21 @@ const inter = Inter({ subsets: ["latin"] });
 
 function AppLayout({ children }) {
   const pathname = usePathname();
-  const {
-    user,
-    isLibraryUser,
-    isLibraryOwner,
-    ownedLibraryIds,
-    loading: authLoading,
-  } = useAuth();
+  const { user, userProfile, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  // Redirect logic for library owners
   useEffect(() => {
-    // Only attempt redirection if authentication has finished loading
-    // and the user is a library owner with at least one owned library.
-    // Ensure this doesn't cause a redirect loop if already on the target page.
-    if (!authLoading && isLibraryOwner && ownedLibraryIds.length > 0) {
-      const targetPath = `/library-owner/${ownedLibraryIds[0]}`;
+    if (
+      !authLoading &&
+      userProfile?.role === "library-owner" &&
+      userProfile.libraryOwnerOf?.length > 0
+    ) {
+      const targetPath = `/library-owner/${userProfile.libraryOwnerOf[0]}`;
       if (pathname !== targetPath) {
         router.push(targetPath);
       }
     }
-  }, [authLoading, isLibraryOwner, ownedLibraryIds, router, pathname]); // Added pathname to dependencies
+  }, [authLoading, userProfile, router, pathname]);
 
   let layoutContent;
 
@@ -48,16 +41,13 @@ function AppLayout({ children }) {
     );
   } else {
     const isAdminPage = pathname.startsWith("/admin");
-    const isLibraryOwnerPage = pathname.startsWith("/library-owner"); // NEW: Check for library owner page
+    const isLibraryPage =
+      userProfile?.role === "library-student" ||
+      userProfile?.role === "library-owner";
 
-    // Don't render any default navbar/footer for admin pages
     if (isAdminPage) {
       layoutContent = <main>{children}</main>;
-    }
-    // If the user is a library user (student) OR a library owner, show the dedicated library navbar
-    // The library owner page will use LibraryNavbar.
-    else if (isLibraryUser || isLibraryOwnerPage) {
-      // Updated condition
+    } else if (isLibraryPage) {
       layoutContent = (
         <>
           <LibraryNavbar />
@@ -65,9 +55,7 @@ function AppLayout({ children }) {
           <Footer />
         </>
       );
-    }
-    // Otherwise, show the default public navbar and footer
-    else {
+    } else {
       layoutContent = (
         <>
           <Navbar />

@@ -35,7 +35,7 @@ const TabButton = ({ label, icon, isActive, onClick }) => (
 );
 
 export default function TestHub({ initialTests }) {
-  const { user, favoriteTests, isLibraryUser } = useAuth();
+  const { user, favoriteTests, userProfile } = useAuth(); // Using userProfile for role check
   const [activeTab, setActiveTab] = useState("all");
   const [tests, setTests] = useState(initialTests);
   const [searchTerm, setSearchTerm] = useState("");
@@ -103,10 +103,7 @@ export default function TestHub({ initialTests }) {
     [user, lastDoc, hasMore, favoriteTests]
   );
 
-  // --- THE useEffect FIX ---
-  // This effect runs when the component first mounts and whenever the active tab changes.
   useEffect(() => {
-    // We clear the tests and reset pagination state for a clean fetch.
     setTests([]);
     setLastDoc(null);
     setHasMore(true);
@@ -147,7 +144,6 @@ export default function TestHub({ initialTests }) {
 
   return (
     <div>
-      {/* Search Bar */}
       <div className='mb-8 max-w-2xl mx-auto'>
         <div className='relative'>
           <Search className='absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400' />
@@ -161,7 +157,6 @@ export default function TestHub({ initialTests }) {
         </div>
       </div>
 
-      {/* Tabs */}
       <div className='flex flex-col sm:flex-row gap-2 mb-8 p-2 bg-slate-100 rounded-lg'>
         <TabButton
           label='All Tests'
@@ -169,8 +164,8 @@ export default function TestHub({ initialTests }) {
           isActive={activeTab === "all"}
           onClick={() => setActiveTab("all")}
         />
-        {/* --- UPDATE: Hide tabs for library users --- */}
-        {user && !isLibraryUser && (
+        {/* --- CHANGE: Removed the conditional rendering to show tabs for all users --- */}
+        {user && (
           <>
             <TabButton
               label='My Created Tests'
@@ -186,27 +181,23 @@ export default function TestHub({ initialTests }) {
             />
           </>
         )}
-        {/* --- END OF UPDATE --- */}
+        {/* --- END OF CHANGE --- */}
       </div>
 
-      {/* Test Grid */}
       {loading ? (
         <div className='text-center py-16'>Loading...</div>
       ) : filteredTests.length > 0 ? (
         <>
           <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
-            {/* --- UPDATE: Pass dbLibraryUser prop --- */}
             {filteredTests.map((test) => (
               <TestCard
                 key={test.id}
                 test={test}
                 hasTaken={takenTestIds.has(test.id)}
-                isLibraryUser={isLibraryUser}
+                isLibraryUser={userProfile?.role === "library-student"}
               />
             ))}
-            {/* --- END OF UPDATE --- */}
           </div>
-          {/* Load More Button */}
           {hasMore && (
             <div className='text-center mt-16'>
               <button

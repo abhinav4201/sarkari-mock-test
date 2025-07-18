@@ -11,16 +11,16 @@ export async function POST(request) {
     const decodedToken = await adminAuth.verifyIdToken(userToken);
     const userId = decodedToken.uid;
 
-    // Get the student's library profile
-    const libraryUserSnap = await adminDb
-      .collection("libraryUsers")
-      .doc(userId)
-      .get();
-    if (!libraryUserSnap.exists) {
+    // Get the student's user profile from the 'users' collection
+    const userSnap = await adminDb.collection("users").doc(userId).get();
+    if (!userSnap.exists || userSnap.data().role !== "library-student") {
       // Not a library user, so no limit applies. Allow test.
       return NextResponse.json({ allowed: true });
     }
-    const libraryId = libraryUserSnap.data().libraryId;
+
+    const userData = userSnap.data();
+    const libraryId = userData.libraryId;
+
     if (!libraryId) {
       return NextResponse.json({ allowed: true }); // Failsafe
     }
@@ -41,8 +41,10 @@ export async function POST(request) {
     const yearMonth = `${new Date().getFullYear()}-${
       new Date().getMonth() + 1
     }`;
+
+    // The monthly counts are now in a subcollection of the user document
     const countRef = adminDb
-      .collection("libraryUsers")
+      .collection("users")
       .doc(userId)
       .collection("monthlyTestCounts")
       .doc(yearMonth);

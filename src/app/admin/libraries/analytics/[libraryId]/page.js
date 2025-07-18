@@ -1,4 +1,3 @@
-// src/app/admin/libraries/analytics/[libraryId]/page.js
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -11,152 +10,111 @@ import {
   getDocs,
   doc,
   getDoc,
-  limit,
-  startAfter,
-  orderBy, // NEW: Import orderBy for pagination
+  Timestamp,
 } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { Library, User, FileText } from "lucide-react";
-
-const PAGE_SIZE = 10; // Number of users to load per page
 
 export default function LibraryAnalyticsPage() {
   const params = useParams();
   const libraryId = params.libraryId;
 
   const [libraryName, setLibraryName] = useState("Loading Library...");
-  const [allLibraryUsers, setAllLibraryUsers] = useState([]); // All users for client-side filtering
-//   const [displayUsers, setDisplayUsers] = useState([]); // Users currently displayed (paginated)
+  const [libraryUsers, setLibraryUsers] = useState([]);
+  const [monthlyTestCounts, setMonthlyTestCounts] = useState({});
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false); // NEW: For pagination
-  const [lastDoc, setLastDoc] = useState(null); // NEW: For pagination
-  const [hasMore, setHasMore] = useState(true); // NEW: For pagination
   const [error, setError] = useState(null);
 
-  // NEW: State for month filter
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1); // 1-indexed
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
-  const fetchLibraryAnalytics = useCallback(
-    async (loadMore = false) => {
-      setLoading(true);
-      setError(null);
-      try {
-        // 1. Fetch library details to get its name
-        const libraryRef = doc(db, "libraries", libraryId);
-        const librarySnap = await getDoc(libraryRef);
-        if (!librarySnap.exists()) {
-          notFound();
-          return;
-        }
-        setLibraryName(librarySnap.data().libraryName);
-
-        // 2. Fetch all users onboarded through this library (paginated)
-        const libraryUsersCollection = collection(db, "libraryUsers");
-        let libraryUsersQueryConstraints = [
-          where("libraryId", "==", libraryId),
-          orderBy("createdAt", "desc"), // Order by creation date for consistent pagination
-          limit(PAGE_SIZE),
-        ];
-
-        if (loadMore && lastDoc) {
-          libraryUsersQueryConstraints.push(startAfter(lastDoc));
-        }
-
-        const libraryUsersQuery = query(
-          libraryUsersCollection,
-          ...libraryUsersQueryConstraints
-        );
-        const libraryUsersSnapshot = await getDocs(libraryUsersQuery);
-
-        const newUsersData = libraryUsersSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-
-        // Update allLibraryUsers for client-side filtering
-        setAllLibraryUsers((prev) =>
-          loadMore ? [...prev, ...newUsersData] : newUsersData
-        );
-
-        setLastDoc(
-          libraryUsersSnapshot.docs[libraryUsersSnapshot.docs.length - 1]
-        );
-        setHasMore(newUsersData.length === PAGE_SIZE);
-      } catch (err) {
-        console.error("Error fetching library analytics:", err);
-        setError("Failed to load analytics data.");
-        toast.error("Failed to load analytics data.");
-      } finally {
-        setLoading(false);
-        setLoadingMore(false); // Reset loadingMore
+  const fetchLibraryAnalytics = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // 1. Fetch library details
+      const libraryRef = doc(db, "libraries", libraryId);
+      const librarySnap = await getDoc(libraryRef);
+      if (!librarySnap.exists()) {
+        notFound();
+        return;
       }
-    },
-    [libraryId, lastDoc, hasMore]
-  );
+      setLibraryName(librarySnap.data().libraryName);
 
-  useEffect(() => {
-    if (libraryId) {
-      fetchLibraryAnalytics(false); // Initial load
+      // 2. Fetch all users for this library from the 'users' collection
+      const usersQuery = query(
+        collection(db, "users"),
+        where("libraryId", "==", libraryId),
+        where("role", "==", "library-student")
+      );
+      const usersSnapshot = await getDocs(usersQuery);
+      const usersData = usersSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setLibraryUsers(usersData);
+    } catch (err) {
+      console.error("Error fetching library users:", err);
+      setError("Failed to load library data.");
+      toast.error("Failed to load library data.");
+    } finally {
+      setLoading(false);
     }
   }, [libraryId]);
 
-  // NEW: Memoize filtered and aggregated data for current month/year
-  const filteredAndAggregatedUsers = useMemo(async () => {
-    if (!allLibraryUsers.length) return [];
+  // Fetch test counts for the selected month whenever the month, year, or user list changes
+  useEffect(() => {
+    const fetchMonthlyCounts = async () => {
+      if (libraryUsers.length === 0) {
+        setMonthlyTestCounts({});
+        return;
+      }
 
-    const userUids = allLibraryUsers.map((user) => user.uid);
-    const aggregatedData = {};
+      setLoading(true);
+      const userUids = libraryUsers.map((user) => user.uid);
+      const counts = {};
 
-    // Calculate start and end of the selected month
-    const startDate = new Date(selectedYear, selectedMonth - 1, 1);
-    const endDate = new Date(selectedYear, selectedMonth, 0, 23, 59, 59);
-
-    // Fetch all test results for all relevant users within the selected month
-    // This part is still fetching all results for all users, then filtering by date.
-    // For very large datasets, a Cloud Function for aggregation would be necessary.
-    const allTestResults = [];
-    // Chunk userUids for 'in' query limit (max 10)
-    for (let i = 0; i < userUids.length; i += 10) {
-      const chunk = userUids.slice(i, i + 10);
-      const resultsQuery = query(
-        collection(db, "mockTestResults"),
-        where("userId", "in", chunk),
-        where("completedAt", ">=", startDate),
-        where("completedAt", "<=", endDate)
+      const startDate = Timestamp.fromDate(
+        new Date(selectedYear, selectedMonth - 1, 1)
       );
-      const resultsSnapshot = await getDocs(resultsQuery);
-      resultsSnapshot.forEach((doc) => allTestResults.push(doc.data()));
-    }
+      const endDate = Timestamp.fromDate(
+        new Date(selectedYear, selectedMonth, 0, 23, 59, 59)
+      );
 
-    // Aggregate test counts per user for the filtered results
-    allTestResults.forEach((result) => {
-      aggregatedData[result.userId] = (aggregatedData[result.userId] || 0) + 1;
-    });
+      // Fetch results in chunks to stay within 'in' query limits
+      for (let i = 0; i < userUids.length; i += 10) {
+        const chunk = userUids.slice(i, i + 10);
+        const resultsQuery = query(
+          collection(db, "mockTestResults"),
+          where("userId", "in", chunk),
+          where("completedAt", ">=", startDate),
+          where("completedAt", "<=", endDate)
+        );
+        const resultsSnapshot = await getDocs(resultsQuery);
+        resultsSnapshot.forEach((doc) => {
+          const result = doc.data();
+          counts[result.userId] = (counts[result.userId] || 0) + 1;
+        });
+      }
+      setMonthlyTestCounts(counts);
+      setLoading(false);
+    };
 
-    // Combine user details with their aggregated test counts
-    return allLibraryUsers.map((user) => ({
-      uid: user.uid,
-      name: user.name || "N/A",
-      email: user.email || "N/A",
-      testsTaken: aggregatedData[user.uid] || 0, // Tests taken in the selected month
-    }));
-  }, [allLibraryUsers, selectedMonth, selectedYear]);
-
-  // Use another state to hold the resolved promise value
-  const [displayedFilteredUsers, setDisplayedFilteredUsers] = useState([]);
+    fetchMonthlyCounts();
+  }, [libraryUsers, selectedMonth, selectedYear]);
 
   useEffect(() => {
-    const updateDisplayedUsers = async () => {
-      setDisplayedFilteredUsers(await filteredAndAggregatedUsers);
-    };
-    updateDisplayedUsers();
-  }, [filteredAndAggregatedUsers]);
+    if (libraryId) {
+      fetchLibraryAnalytics();
+    }
+  }, [libraryId, fetchLibraryAnalytics]);
 
-  const handleLoadMore = () => {
-    setLoadingMore(true);
-    fetchLibraryAnalytics(true);
-  };
+  const displayedUsers = useMemo(() => {
+    return libraryUsers.map((user) => ({
+      ...user,
+      testsTaken: monthlyTestCounts[user.uid] || 0,
+    }));
+  }, [libraryUsers, monthlyTestCounts]);
 
   const months = Array.from({ length: 12 }, (v, i) => ({
     value: i + 1,
@@ -165,9 +123,9 @@ export default function LibraryAnalyticsPage() {
   const years = Array.from(
     { length: 5 },
     (v, i) => new Date().getFullYear() - i
-  ); // Last 5 years
+  );
 
-  if (loading) {
+  if (loading && libraryUsers.length === 0) {
     return (
       <div className='text-center p-12 text-lg font-medium'>
         Loading Library Analytics...
@@ -195,7 +153,6 @@ export default function LibraryAnalyticsPage() {
           activity.
         </p>
 
-        {/* NEW: Month-wise filter */}
         <div className='bg-white p-6 rounded-2xl shadow-lg border mb-6'>
           <h2 className='text-xl font-bold text-slate-800 mb-4'>
             Filter by Month
@@ -246,9 +203,9 @@ export default function LibraryAnalyticsPage() {
 
         <div className='bg-white p-6 rounded-2xl shadow-lg border'>
           <h2 className='text-xl font-bold text-slate-800 mb-4'>
-            Onboarded Users ({displayedFilteredUsers.length})
+            Onboarded Users ({displayedUsers.length})
           </h2>
-          {displayedFilteredUsers.length > 0 ? (
+          {displayedUsers.length > 0 ? (
             <div className='overflow-x-auto'>
               <table className='min-w-full divide-y divide-slate-200'>
                 <thead className='bg-slate-50'>
@@ -265,7 +222,7 @@ export default function LibraryAnalyticsPage() {
                   </tr>
                 </thead>
                 <tbody className='bg-white divide-y divide-slate-200'>
-                  {displayedFilteredUsers.map((user) => (
+                  {displayedUsers.map((user) => (
                     <tr key={user.uid}>
                       <td className='px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900'>
                         <div className='flex items-center'>
@@ -291,25 +248,11 @@ export default function LibraryAnalyticsPage() {
             <div className='text-center py-12'>
               <User className='mx-auto h-12 w-12 text-slate-400' />
               <h3 className='mt-2 text-lg font-semibold text-slate-900'>
-                No users onboarded through this library yet or no tests taken in
-                the selected month.
+                No users onboarded through this library yet.
               </h3>
               <p className='mt-1 text-sm text-slate-500'>
                 Share the join link or QR code to onboard students.
               </p>
-            </div>
-          )}
-
-          {/* NEW: Pagination controls */}
-          {hasMore && (
-            <div className='text-center mt-6'>
-              <button
-                onClick={handleLoadMore}
-                disabled={loadingMore}
-                className='px-6 py-2 bg-slate-200 text-slate-800 font-semibold rounded-lg hover:bg-slate-300 disabled:opacity-50'
-              >
-                {loadingMore ? "Loading More..." : "Load More Users"}
-              </button>
             </div>
           )}
         </div>

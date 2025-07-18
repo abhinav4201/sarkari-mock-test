@@ -13,9 +13,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import LikeButton from "./LikeButton";
-import ShareButton from "./ShareButton"; // Import the new ShareButton
+import ShareButton from "./ShareButton";
 
-export default function TestCard({ test, hasTaken, isLibraryUser }) {
+export default function TestCard({ test, hasTaken }) {
   const impressionRef = useImpression(test.id);
   const buttonText = hasTaken
     ? "View Details & Retake"
@@ -66,15 +66,11 @@ export default function TestCard({ test, hasTaken, isLibraryUser }) {
           <Tag className='h-5 w-5 mr-3 text-indigo-500' /> {test.topic}
         </div>
       </div>
-
-      {/* --- THIS IS THE UPDATED SECTION --- */}
       <div className='mt-auto flex justify-between items-center'>
         <div className='flex items-center gap-2'>
-          {/* <LikeButton testId={test.id} initialLikeCount={test.likeCount} /> */}
-          {!isLibraryUser && (
-            <LikeButton testId={test.id} initialLikeCount={test.likeCount} />
-          )}
-
+          {/* --- CHANGE: Removed the conditional rendering --- */}
+          <LikeButton testId={test.id} initialLikeCount={test.likeCount} />
+          {/* --- END OF CHANGE --- */}
           <ShareButton testId={test.id} title={test.title} />
         </div>
         <Link
@@ -84,7 +80,6 @@ export default function TestCard({ test, hasTaken, isLibraryUser }) {
           {buttonText}
         </Link>
       </div>
-      {/* --- END OF UPDATE --- */}
     </div>
   );
 }
