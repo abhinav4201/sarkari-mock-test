@@ -11,6 +11,7 @@ import PaymentModal from "@/components/dashboard/PaymentModal";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 import toast from "react-hot-toast";
+import LibraryUserStatsCard from "@/components/dashboard/LibraryUserStatsCard";
 
 async function getDailyVocabulary() {
   const q = query(
@@ -46,7 +47,6 @@ async function getDailyGk() {
   return null;
 }
 
-
 export default function LibraryDashboardPage() {
   const [vocabulary, setVocabulary] = useState(null);
   const [gk, setGk] = useState(null);
@@ -80,6 +80,10 @@ export default function LibraryDashboardPage() {
       />
       <div className='container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12'>
         <WelcomeHeader />
+
+        <div className='mt-8'>
+          <LibraryUserStatsCard />
+        </div>
 
         <div className='mt-8'>
           <SubscriptionStatusCard
