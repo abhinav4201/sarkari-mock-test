@@ -3,7 +3,7 @@ import StartTestButton from "@/components/mock-tests/StartTestButton";
 import TestReviews from "@/components/mock-tests/TestReviews";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
-import { Book, Clock, FileText, Tag } from "lucide-react";
+import { Book, Clock, FileText, ShieldCheck, Tag } from "lucide-react";
 import { notFound } from "next/navigation";
 
 async function getTestDetails(testId) {
@@ -80,6 +80,18 @@ export default async function PreTestStartPage({ params }) {
               Topic:{" "}
               <span className='font-medium text-slate-900'>{test.topic}</span>
             </span>
+          </div>
+        </div>
+        <div className='p-4 mb-8 bg-blue-50 border-2 border-blue-200 rounded-lg flex items-center gap-4'>
+          <ShieldCheck className='h-10 w-10 text-blue-600 flex-shrink-0' />
+          <div>
+            <h3 className='font-bold text-blue-800'>
+              AI-Powered Proctoring Enabled
+            </h3>
+            <p className='text-sm text-blue-700 mt-1'>
+              To ensure a fair testing environment, the test will be submitted
+              automatically if you switch tabs or minimize the browser.
+            </p>
           </div>
         </div>
         <PreviousResult testId={test.id} />

@@ -2,21 +2,21 @@
 
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import {
   collection,
-  query,
-  where,
   getDocs,
-  orderBy,
   limit,
+  orderBy,
+  query,
   startAfter,
+  where,
 } from "firebase/firestore";
+import { CheckCircle, Heart, History, Search, ShieldCheck } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import TestCard from "./TestCard";
-import { Search, History, Heart, CheckCircle } from "lucide-react";
 
 const PAGE_SIZE = 9;
 
@@ -182,6 +182,20 @@ export default function TestHub({ initialTests }) {
           </>
         )}
         {/* --- END OF CHANGE --- */}
+      </div>
+
+      <div className='p-4 mb-8 bg-blue-50 border-2 border-blue-200 rounded-lg flex items-center gap-4'>
+        <ShieldCheck className='h-10 w-10 text-blue-600 flex-shrink-0' />
+        <div>
+          <h3 className='font-bold text-blue-800'>
+            AI-Powered Proctoring Enabled
+          </h3>
+          <p className='text-sm text-blue-700 mt-1'>
+            To ensure a fair testing environment, all tests will be submitted
+            automatically if you switch tabs or minimize the browser during the
+            attempt.
+          </p>
+        </div>
       </div>
 
       {loading ? (
