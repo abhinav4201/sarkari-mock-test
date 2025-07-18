@@ -1,25 +1,22 @@
-// src/components/mock-tests/TestReviews.js
-
 "use client";
 
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { useEffect, useState, useCallback } from "react";
-import ReviewModal from "./ReviewModal"; // Import the new modal
+import ReviewModal from "./ReviewModal";
 import { MessageSquare } from "lucide-react";
 
 export default function TestReviews({ testId }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [reviewCount, setReviewCount] = useState(0);
 
-  // Fetch only the count of reviews to display on the button
+  // This function is now the single source of truth for the count
   const fetchReviewCount = useCallback(async () => {
     try {
       const q = query(collection(db, "reviews"), where("testId", "==", testId));
       const snapshot = await getDocs(q);
       setReviewCount(snapshot.size);
     } catch (error) {
-      // It's okay to fail silently here as it's not critical
       console.error("Could not load review count:", error);
     }
   }, [testId]);
@@ -28,12 +25,18 @@ export default function TestReviews({ testId }) {
     fetchReviewCount();
   }, [fetchReviewCount]);
 
+  // This handler is now called for both new reviews and new replies
+  const handleUpdate = () => {
+    fetchReviewCount();
+  };
+
   return (
     <>
       <ReviewModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         testId={testId}
+        onReviewSubmitSuccess={handleUpdate}
       />
       <div className='mt-10 pt-8 border-t border-slate-200'>
         <div className='flex justify-between items-center'>

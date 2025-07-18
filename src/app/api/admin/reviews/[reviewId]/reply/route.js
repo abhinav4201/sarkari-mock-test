@@ -1,5 +1,3 @@
-// src/app/api/admin/reviews/[reviewId]/reply/route.js
-
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
@@ -14,18 +12,14 @@ export async function POST(request, { params }) {
       return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
     }
     const decodedToken = await adminAuth.verifyIdToken(userToken);
-    const adminUser = await adminAuth.getUser(decodedToken.uid);
+    const replierUser = await adminAuth.getUser(decodedToken.uid);
 
-    if (adminUser.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
-      return NextResponse.json({ message: "Forbidden." }, { status: 403 });
-    }
     if (!reviewId || !replyText) {
       return NextResponse.json({ message: "Missing data." }, { status: 400 });
     }
 
     const reviewRef = adminDb.collection("reviews").doc(reviewId);
 
-    // Use a transaction to ensure atomicity
     await adminDb.runTransaction(async (transaction) => {
       const reviewDoc = await transaction.get(reviewRef);
       if (!reviewDoc.exists) {
@@ -33,26 +27,37 @@ export async function POST(request, { params }) {
       }
       const reviewData = reviewDoc.data();
 
-      // 1. Add the reply to the review document
-      transaction.update(reviewRef, {
-        replies: FieldValue.arrayUnion({
-          text: replyText,
-          repliedBy: adminUser.displayName,
-          createdAt: FieldValue.serverTimestamp(),
-        }),
-      });
-
-      // 2. Create a notification for the original poster
-      const notificationRef = adminDb.collection("notifications").doc();
-      transaction.set(notificationRef, {
-        userId: reviewData.userId,
-        message: `Admin replied to your review on the test: "${
-          reviewData.testTitle || "a test"
-        }"`,
-        link: `/mock-tests/${reviewData.testId}`,
-        isRead: false,
+      // 1. Add the new reply to the subcollection
+      const replyRef = reviewRef.collection("replies").doc();
+      transaction.set(replyRef, {
+        text: replyText,
+        userId: replierUser.uid,
+        authorName: replierUser.displayName,
         createdAt: FieldValue.serverTimestamp(),
       });
+
+      // 2. Atomically increment the replyCount on the parent review document
+      transaction.update(reviewRef, {
+        replyCount: FieldValue.increment(1),
+      });
+
+      // 3. Create a notification for the original poster (if they aren't replying to themselves)
+      if (reviewData.userId !== replierUser.uid) {
+        const testSnap = await adminDb
+          .collection("mockTests")
+          .doc(reviewData.testId)
+          .get();
+        const testTitle = testSnap.exists() ? testSnap.data().title : "a test";
+
+        const notificationRef = adminDb.collection("notifications").doc();
+        transaction.set(notificationRef, {
+          userId: reviewData.userId,
+          message: `${replierUser.displayName} replied to your review on the test: "${testTitle}"`,
+          link: `/mock-tests/${reviewData.testId}`,
+          isRead: false,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
     });
 
     return NextResponse.json({ message: "Reply posted successfully." });

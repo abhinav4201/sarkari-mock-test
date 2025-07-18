@@ -1,5 +1,3 @@
-// src/components/mock-tests/ReviewModal.js
-
 "use client";
 
 import Modal from "@/components/ui/Modal";
@@ -8,20 +6,21 @@ import { db } from "@/lib/firebase";
 import {
   addDoc,
   collection,
+  deleteDoc,
+  doc,
   getDocs,
+  limit,
   orderBy,
   query,
   serverTimestamp,
-  where,
-  limit,
   startAfter,
-  doc, // Import doc
-  deleteDoc, // Import deleteDoc
+  updateDoc,
+  where,
 } from "firebase/firestore";
-import { Star, Trash2 } from "lucide-react"; // Import Trash2 for delete icon
-import { useEffect, useState, useCallback } from "react";
+import { Star, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import ConfirmationModal from "../ui/ConfirmationModal"; // Assuming you have a generic confirmation modal
+import ConfirmationModal from "../ui/ConfirmationModal";
 
 const PAGE_SIZE = 5;
 
@@ -38,14 +37,20 @@ const ReplyForm = ({ reviewId, onReplySuccess }) => {
 
     setIsSubmitting(true);
     try {
-      // Directly add the reply to the subcollection
-      const repliesRef = collection(db, "reviews", reviewId, "replies");
-      await addDoc(repliesRef, {
-        text: replyText,
-        userId: user.uid,
-        authorName: user.displayName,
-        createdAt: serverTimestamp(),
+      const idToken = await user.getIdToken();
+      const res = await fetch(`/api/admin/reviews/${reviewId}/reply`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ replyText }),
       });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Server error");
+      }
 
       toast.success("Reply posted!");
       setReplyText("");
@@ -58,7 +63,6 @@ const ReplyForm = ({ reviewId, onReplySuccess }) => {
     }
   };
 
-  // The form is shown if the user is logged in
   if (!user) {
     return (
       <div className='mt-4 text-center'>
@@ -129,9 +133,6 @@ const ReviewItem = ({ review, onReplySuccess, onReviewDeleted }) => {
     if (!isAdmin) return;
     setIsDeleting(true);
     try {
-      // NOTE: Deleting a document does NOT delete its subcollections (replies) in Firestore automatically.
-      // This requires a Cloud Function for a full cleanup in production.
-      // For this refactor, we are just deleting the main review document.
       await deleteDoc(doc(db, "reviews", review.id));
       toast.success("Review deleted.");
       onReviewDeleted();
@@ -148,6 +149,10 @@ const ReviewItem = ({ review, onReplySuccess, onReviewDeleted }) => {
     setIsDeleting(true);
     try {
       await deleteDoc(doc(db, `reviews/${review.id}/replies`, replyId));
+      // Decrement replyCount in the parent review
+      await updateDoc(doc(db, "reviews", review.id), {
+        replyCount: (review.replyCount || 0) - 1,
+      });
       toast.success("Reply deleted.");
       fetchReplies(); // Re-fetch replies to update the UI
     } catch (error) {
@@ -157,6 +162,9 @@ const ReviewItem = ({ review, onReplySuccess, onReviewDeleted }) => {
       setConfirmDelete({ review: false, replyId: null });
     }
   };
+
+  // Use review.replyCount initially, then localReplyCount after fetch
+  const displayReplyCount = showReplies ? replies.length : review.replyCount || 0;
 
   return (
     <>
@@ -205,8 +213,7 @@ const ReviewItem = ({ review, onReplySuccess, onReviewDeleted }) => {
           onClick={() => setShowReplies(!showReplies)}
           className='text-sm font-semibold text-indigo-600 mt-2'
         >
-          {showReplies ? "Hide" : "View"} Replies ({review.replies?.length || 0}
-          )
+          {showReplies ? "Hide" : "View"} Replies ({displayReplyCount})
         </button>
 
         {/* Display Replies */}
@@ -245,7 +252,12 @@ const ReviewItem = ({ review, onReplySuccess, onReviewDeleted }) => {
 };
 
 // The main modal component
-export default function ReviewModal({ isOpen, onClose, testId }) {
+export default function ReviewModal({
+  isOpen,
+  onClose,
+  testId,
+  onReviewSubmitSuccess,
+}) {
   const { user, openLoginPrompt } = useAuth();
   const [reviews, setReviews] = useState([]);
   const [rating, setRating] = useState(0);
@@ -303,12 +315,21 @@ export default function ReviewModal({ isOpen, onClose, testId }) {
     [testId, user, hasMore, lastDoc]
   );
 
-  const refreshAndFetch = () => {
+  useEffect(() => {
+    if (isOpen) {
+      setReviews([]);
+      setLastDoc(null);
+      setHasMore(true);
+      fetchReviews();
+    }
+  }, [isOpen]);
+
+  const refreshAndFetch = useCallback(() => {
     setReviews([]);
     setLastDoc(null);
     setHasMore(true);
-    fetchReviews();
-  };
+    if (onReviewSubmitSuccess) onReviewSubmitSuccess();
+  }, [onReviewSubmitSuccess]);
 
   useEffect(() => {
     if (isOpen) {
@@ -331,11 +352,15 @@ export default function ReviewModal({ isOpen, onClose, testId }) {
         rating,
         comment,
         createdAt: serverTimestamp(),
+        replyCount: 0, // Initialize replyCount
       });
       toast.success("Review submitted successfully!");
       setComment("");
       setRating(0);
       refreshAndFetch();
+      if (onReviewSubmitSuccess) {
+        onReviewSubmitSuccess();
+      }
     } catch (error) {
       toast.error("Failed to submit review.");
     } finally {
@@ -346,7 +371,6 @@ export default function ReviewModal({ isOpen, onClose, testId }) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='Reviews & Ratings'>
       <div className='flex flex-col max-h-[80vh]'>
-        {/* Review Submission Form - moved to top for better UX */}
         {user && !loading && !hasUserReviewed && (
           <div className='flex-shrink-0 p-4 border-b border-slate-200 bg-slate-50'>
             <h4 className='font-semibold text-lg text-slate-900 mb-3'>
