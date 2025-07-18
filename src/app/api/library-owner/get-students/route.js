@@ -33,17 +33,17 @@ export async function POST(request) {
 
     const userData = userDocSnap.data();
     const ownedLibraries = userData.libraryOwnerOf || [];
-    if (
-      userData.role !== "library-owner" ||
-      !ownedLibraries.includes(libraryId)
-    ) {
+    const isOwner =
+      userData.role === "library-owner" ||
+      (Array.isArray(ownedLibraries) && ownedLibraries.length > 0);
+
+    if (!isOwner || !ownedLibraries.includes(libraryId)) {
       return NextResponse.json(
         { message: "Forbidden: You do not own this library" },
         { status: 403 }
       );
     }
 
-    // Fetch students from the 'users' collection
     const studentsQuery = adminDb
       .collection("users")
       .where("libraryId", "==", libraryId)
@@ -52,16 +52,36 @@ export async function POST(request) {
 
     const studentsSnapshot = await studentsQuery.get();
 
-    const students = studentsSnapshot.docs.map((doc) => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        ...data,
-        createdAt: data.createdAt ? data.createdAt.toMillis() : null,
-      };
-    });
+    // --- NEW LOGIC TO FETCH TEST COUNTS ---
+    const yearMonth = `${new Date().getFullYear()}-${
+      new Date().getMonth() + 1
+    }`;
 
-    return NextResponse.json(students, { status: 200 });
+    const studentsWithCounts = await Promise.all(
+      studentsSnapshot.docs.map(async (doc) => {
+        const data = doc.data();
+        const countRef = adminDb
+          .collection("users")
+          .doc(doc.id)
+          .collection("monthlyTestCounts")
+          .doc(yearMonth);
+
+        const countSnap = await countRef.get();
+        const testsTakenThisMonth = countSnap.exists
+          ? countSnap.data().count
+          : 0;
+
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt ? data.createdAt.toMillis() : null,
+          testsTakenThisMonth: testsTakenThisMonth,
+        };
+      })
+    );
+    // --- END OF NEW LOGIC ---
+
+    return NextResponse.json(studentsWithCounts, { status: 200 });
   } catch (error) {
     console.error("API Error fetching students:", error);
     if (error.code === "auth/id-token-expired") {

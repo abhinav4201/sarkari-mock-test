@@ -3,7 +3,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
-import { Library, User } from "lucide-react";
+import { Library, User, FileText } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
@@ -17,7 +17,7 @@ export default function LibraryOwnerAnalyticsPage() {
     ownedLibraryIds,
   } = useAuth();
 
-  const [libraryName, setLibraryName] = useState("Loading...");
+  const [libraryDetails, setLibraryDetails] = useState(null);
   const [onboardedUsers, setOnboardedUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -47,12 +47,10 @@ export default function LibraryOwnerAnalyticsPage() {
       }
 
       const usersData = await response.json();
-
       const formattedUsers = usersData.map((u) => ({
         ...u,
         createdAt: u.createdAt ? new Date(u.createdAt) : null,
       }));
-
       setOnboardedUsers(formattedUsers);
     } catch (err) {
       console.error("[PAGE FETCH ERROR]", err);
@@ -75,7 +73,7 @@ export default function LibraryOwnerAnalyticsPage() {
       const libraryRef = doc(db, "libraries", libraryId);
       const librarySnap = await getDoc(libraryRef);
       if (librarySnap.exists()) {
-        setLibraryName(librarySnap.data().libraryName);
+        setLibraryDetails(librarySnap.data());
       }
     };
 
@@ -89,7 +87,7 @@ export default function LibraryOwnerAnalyticsPage() {
     fetchLibraryUsers,
   ]);
 
-  if (loading || authLoading) {
+  if (loading || authLoading || !libraryDetails) {
     return (
       <div className='text-center p-12 text-lg font-medium'>
         Loading Analytics...
@@ -108,7 +106,7 @@ export default function LibraryOwnerAnalyticsPage() {
       <div className='container mx-auto px-4'>
         <h1 className='text-3xl font-bold text-slate-900 mb-2 flex items-center gap-3'>
           <Library className='h-8 w-8 text-indigo-600' />
-          Student List for {libraryName}
+          Student List for {libraryDetails.libraryName}
         </h1>
         <p className='text-lg text-slate-600 mb-6'>
           A list of all students who have joined using this library's code.
@@ -118,23 +116,55 @@ export default function LibraryOwnerAnalyticsPage() {
             Onboarded Users ({onboardedUsers.length})
           </h2>
           {onboardedUsers.length > 0 ? (
-            <div className='space-y-3'>
-              {onboardedUsers.map((student) => (
-                <div
-                  key={student.uid}
-                  className='flex items-center justify-between p-4 rounded-lg bg-slate-50 border'
-                >
-                  <div>
-                    <p className='font-semibold text-slate-800'>
-                      {student.name}
-                    </p>
-                    <p className='text-sm text-slate-600'>{student.email}</p>
-                  </div>
-                  <p className='text-xs text-slate-500'>
-                    Joined: {student.createdAt?.toLocaleDateString()}
-                  </p>
-                </div>
-              ))}
+            <div className='overflow-x-auto'>
+              <table className='min-w-full divide-y divide-slate-200'>
+                <thead className='bg-slate-50'>
+                  <tr>
+                    <th className='px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider'>
+                      Student Name
+                    </th>
+                    <th className='px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider'>
+                      Email
+                    </th>
+                    <th className='px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider'>
+                      Remaining Tests (This Month)
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className='bg-white divide-y divide-slate-200'>
+                  {onboardedUsers.map((student) => {
+                    const limit = libraryDetails.monthlyTestLimit || 0;
+                    const taken = student.testsTakenThisMonth || 0;
+                    const remaining = limit - taken;
+
+                    return (
+                      <tr key={student.uid}>
+                        <td className='px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900'>
+                          {student.name}
+                        </td>
+                        <td className='px-6 py-4 whitespace-nowrap text-sm text-slate-600'>
+                          {student.email}
+                        </td>
+                        <td className='px-6 py-4 whitespace-nowrap text-sm font-semibold'>
+                          {limit > 0 ? (
+                            <span
+                              className={
+                                remaining > 5
+                                  ? "text-green-600"
+                                  : "text-amber-600"
+                              }
+                            >
+                              {remaining < 0 ? 0 : remaining} / {limit}
+                            </span>
+                          ) : (
+                            <span className='text-indigo-600'>Unlimited</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           ) : (
             <div className='text-center py-12'>

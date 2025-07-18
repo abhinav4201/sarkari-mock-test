@@ -73,7 +73,6 @@ export const AuthContextProvider = ({ children }) => {
         const userSnap = await getDoc(userRef);
         const visitorId = await getFingerprint();
 
-        // 1. Owner Join Flow
         if (ownerJoinCode) {
           const librariesQuery = query(
             collection(db, "libraries"),
@@ -109,7 +108,6 @@ export const AuthContextProvider = ({ children }) => {
           return;
         }
 
-        // 2. Student Join Flow
         if (joinLibraryId) {
           if (
             userSnap.exists() &&
@@ -151,13 +149,10 @@ export const AuthContextProvider = ({ children }) => {
           return;
         }
 
-        // 3. Regular Sign-in / Sign-up Flow
         if (userSnap.exists()) {
           const userData = userSnap.data();
           await updateDoc(userRef, { lastLogin: serverTimestamp() });
 
-          // --- THIS IS THE ROBUST FIX ---
-          // Check for role OR for the legacy libraryOwnerOf array
           const isOwner =
             userData.role === "library-owner" ||
             (Array.isArray(userData.libraryOwnerOf) &&
@@ -171,7 +166,6 @@ export const AuthContextProvider = ({ children }) => {
             router.push(redirectUrl);
           }
         } else {
-          // Handle new regular user sign-up
           await setDoc(userRef, {
             uid: loggedInUser.uid,
             name: loggedInUser.displayName,
@@ -250,8 +244,15 @@ export const AuthContextProvider = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
-  const value = useMemo(
-    () => ({
+  const value = useMemo(() => {
+    // --- THIS IS THE ROBUST FIX ---
+    // It checks for the role OR the existence of the libraryOwnerOf array.
+    const isOwner =
+      userProfile?.role === "library-owner" ||
+      (Array.isArray(userProfile?.libraryOwnerOf) &&
+        userProfile.libraryOwnerOf.length > 0);
+
+    return {
       user,
       userProfile,
       loading,
@@ -260,7 +261,7 @@ export const AuthContextProvider = ({ children }) => {
       freeTrialCount,
       favoriteTests,
       isLibraryUser: userProfile?.role === "library-student",
-      isLibraryOwner: userProfile?.role === "library-owner",
+      isLibraryOwner: isOwner, // Use the new robust check
       ownedLibraryIds: userProfile?.libraryOwnerOf || [],
       libraryId: userProfile?.libraryId || null,
       googleSignIn,
@@ -270,22 +271,21 @@ export const AuthContextProvider = ({ children }) => {
       openLoginPrompt,
       closeLoginPrompt,
       isLoginPromptOpen,
-    }),
-    [
-      user,
-      userProfile,
-      loading,
-      isPremium,
-      premiumExpires,
-      freeTrialCount,
-      favoriteTests,
-      googleSignIn,
-      logOut,
-      googleSignInForLibrary,
-      googleSignInForLibraryOwner,
-      isLoginPromptOpen,
-    ]
-  );
+    };
+  }, [
+    user,
+    userProfile,
+    loading,
+    isPremium,
+    premiumExpires,
+    freeTrialCount,
+    favoriteTests,
+    googleSignIn,
+    logOut,
+    googleSignInForLibrary,
+    googleSignInForLibraryOwner,
+    isLoginPromptOpen,
+  ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
