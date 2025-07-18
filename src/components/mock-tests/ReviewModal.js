@@ -334,9 +334,9 @@ export default function ReviewModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title='Reviews & Ratings'>
-      <div className='flex flex-col max-h-[80vh]'>
+      <div className='flex flex-col  max-h-[80vh]'>
         {user && !loading && !hasUserReviewed && (
-          <div className='flex-shrink-0 p-4 border-b border-slate-200 bg-slate-50'>
+          <div className='flex-shrink-0 p-4 border-b border-slate-200 text-slate-900 bg-slate-50'>
             <h4 className='font-semibold text-lg'>Leave a Review</h4>
             <form onSubmit={handleSubmit} className='space-y-4 mt-3'>
               <div className='flex items-center gap-2'>
