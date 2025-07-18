@@ -14,6 +14,7 @@ import {
   getDocs,
   increment,
   query,
+  runTransaction,
   serverTimestamp,
   updateDoc,
   where,
@@ -63,7 +64,7 @@ export default function TestTakingPage() {
     loading: authLoading,
     isPremium,
     isLibraryUser,
-    libraryId,
+    // libraryId,
     userProfile, // Get the full userProfile
   } = useAuth();
   const router = useRouter();
@@ -74,84 +75,95 @@ export default function TestTakingPage() {
     async (reason = "user_submitted") => {
       if (testState === "submitting" || !user) return;
       setTestState("submitting");
+      const resultDocRef = doc(collection(db, "mockTestResults"));
 
-      const lastQuestionId = questions[currentQuestionIndex]?.id;
-      let finalTimePerQuestion = { ...timePerQuestion };
-      if (lastQuestionId) {
-        const timeSpent = (Date.now() - questionStartTime) / 1000;
-        finalTimePerQuestion[lastQuestionId] =
-          (finalTimePerQuestion[lastQuestionId] || 0) + timeSpent;
-      }
+       try {
+        await runTransaction(db, async (transaction) => {
+          const lastQuestionId = questions[currentQuestionIndex]?.id;
+          let finalTimePerQuestion = { ...timePerQuestion };
+          if (lastQuestionId) {
+            const timeSpent = (Date.now() - questionStartTime) / 1000;
+            finalTimePerQuestion[lastQuestionId] =
+              (finalTimePerQuestion[lastQuestionId] || 0) + timeSpent;
+          }
 
-      const finalAnswers = {};
-      for (const qId in selectedOptions) {
-        finalAnswers[qId] = {
-          answer: selectedOptions[qId],
-          timeTaken: finalTimePerQuestion[qId] || 0,
-        };
-      }
-      for (const q of questions) {
-        if (!finalAnswers[q.id]) {
-          finalAnswers[q.id] = {
-            answer: null,
-            timeTaken: finalTimePerQuestion[q.id] || 0,
+          const finalAnswers = {};
+          for (const qId in selectedOptions) {
+            finalAnswers[qId] = {
+              answer: selectedOptions[qId],
+              timeTaken: finalTimePerQuestion[qId] || 0,
+            };
+          }
+          for (const q of questions) {
+            if (!finalAnswers[q.id]) {
+              finalAnswers[q.id] = {
+                answer: null,
+                timeTaken: finalTimePerQuestion[q.id] || 0,
+              };
+            }
+          }
+
+          let score = 0;
+          const correctAnswersMap = new Map(
+            questions.map((q) => [q.id, q.correctAnswer])
+          );
+          for (const qId in selectedOptions) {
+            if (selectedOptions[qId] === correctAnswersMap.get(qId)) {
+              score++;
+            }
+          }
+          const totalQuestions = questions.length;
+          const incorrectAnswers = totalQuestions - score;
+
+          const totalTimeTaken = Object.values(finalTimePerQuestion).reduce(
+            (acc, time) => acc + time,
+            0
+          );
+
+          const estimatedTimeInSeconds = testDetails.estimatedTime * 60;
+          const suspiciousTimeThreshold = estimatedTimeInSeconds * 0.15;
+
+          const resultData = {
+            userId: user.uid,
+            testId,
+            answers: finalAnswers,
+            score,
+            totalQuestions,
+            incorrectAnswers,
+            submissionReason: reason,
+            isDynamic: false,
+            completedAt: serverTimestamp(),
+            reviewFlag:
+              totalTimeTaken < suspiciousTimeThreshold
+                ? "low_completion_time"
+                : null,
+            totalTimeTaken: totalTimeTaken,
           };
-        }
-      }
 
-      let score = 0;
-      const correctAnswersMap = new Map(
-        questions.map((q) => [q.id, q.correctAnswer])
-      );
-      for (const qId in selectedOptions) {
-        if (selectedOptions[qId] === correctAnswersMap.get(qId)) {
-          score++;
-        }
-      }
-      const totalQuestions = questions.length;
-      const incorrectAnswers = totalQuestions - score;
+          // Correctly add library info if the user is a library student
+          if (isLibraryUser && userProfile?.libraryId) {
+            resultData.libraryId = userProfile.libraryId;
+            resultData.ownerId = userProfile.ownerId; // Assuming ownerId is on the profile
+          }
 
-      const totalTimeTaken = Object.values(finalTimePerQuestion).reduce(
-        (acc, time) => acc + time,
-        0
-      );
+          transaction.set(resultDocRef, resultData);
 
-      const estimatedTimeInSeconds = testDetails.estimatedTime * 60;
-      const suspiciousTimeThreshold = estimatedTimeInSeconds * 0.15;
+          const analyticsRef = doc(db, "testAnalytics", testId);
+          transaction.update(analyticsRef, {
+            takenCount: increment(1),
+            uniqueTakers: arrayUnion(user.uid),
+          });
 
-      const resultData = {
-        userId: user.uid,
-        testId,
-        answers: finalAnswers,
-        score,
-        totalQuestions,
-        incorrectAnswers,
-        submissionReason: reason,
-        isDynamic: false,
-        completedAt: serverTimestamp(),
-        reviewFlag:
-          totalTimeTaken < suspiciousTimeThreshold
-            ? "low_completion_time"
-            : null,
-        totalTimeTaken: totalTimeTaken,
-      };
-
-      // Correctly add library info if the user is a library student
-      if (isLibraryUser && userProfile?.libraryId) {
-        resultData.libraryId = userProfile.libraryId;
-        resultData.ownerId = userProfile.ownerId; // Assuming ownerId is on the profile
-      }
-
-      try {
-        const resultDocRef = await addDoc(
-          collection(db, "mockTestResults"),
-          resultData
-        );
-
-        const analyticsRef = doc(db, "testAnalytics", testId);
-        await updateDoc(analyticsRef, {
-          takenCount: increment(1),
-          uniqueTakers: arrayUnion(user.uid),
+          if (isLibraryUser && userProfile?.libraryId) {
+            const libraryRef = doc(db, "libraries", userProfile?.libraryId);
+            transaction.update(libraryRef, {
+              testCompletions: arrayUnion({
+                takerId: user.uid,
+                testId: testId,
+                completedAt: serverTimestamp(),
+              }),
+            });
+          }
         });
 
         toast.success("Test submitted successfully!");

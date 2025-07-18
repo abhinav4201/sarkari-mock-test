@@ -11,111 +11,150 @@ import {
   doc,
   getDoc,
   Timestamp,
+  orderBy,
+  limit,
+  startAfter,
 } from "firebase/firestore";
 import toast from "react-hot-toast";
-import { Library, User, FileText } from "lucide-react";
+import { Library, User, FileText, IndianRupee, Banknote } from "lucide-react";
+import AnalyticsStatCard from "@/components/dashboard/AnalyticsStatCard";
+import UserTestHistoryModal from "@/components/admin/UserTestHistoryModal";
+
+const PAGE_SIZE = 10;
 
 export default function LibraryAnalyticsPage() {
   const params = useParams();
   const libraryId = params.libraryId;
 
-  const [libraryName, setLibraryName] = useState("Loading Library...");
-  const [libraryUsers, setLibraryUsers] = useState([]);
+  const [libraryDetails, setLibraryDetails] = useState(null);
+  const [allLibraryUsers, setAllLibraryUsers] = useState([]); // Holds all users for this library
+  const [displayedUsers, setDisplayedUsers] = useState([]); // Paginated users for display
   const [monthlyTestCounts, setMonthlyTestCounts] = useState({});
+  const [totalEarnings, setTotalEarnings] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const [lastDoc, setLastDoc] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
 
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
-  const fetchLibraryAnalytics = useCallback(async () => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+
+  // --- THIS IS THE COMBINED AND CORRECTED DATA FETCHING LOGIC ---
+  const fetchAndProcessData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      // 1. Fetch library details
+      // 1. Fetch Core Library and All User Data
       const libraryRef = doc(db, "libraries", libraryId);
-      const librarySnap = await getDoc(libraryRef);
-      if (!librarySnap.exists()) {
-        notFound();
-        return;
-      }
-      setLibraryName(librarySnap.data().libraryName);
-
-      // 2. Fetch all users for this library from the 'users' collection
       const usersQuery = query(
         collection(db, "users"),
         where("libraryId", "==", libraryId),
         where("role", "==", "library-student")
       );
-      const usersSnapshot = await getDocs(usersQuery);
+
+      const [librarySnap, usersSnapshot] = await Promise.all([
+        getDoc(libraryRef),
+        getDocs(usersQuery),
+      ]);
+
+      if (!librarySnap.exists()) {
+        notFound();
+        return;
+      }
+      const libData = librarySnap.data();
+      setLibraryDetails(libData);
+
       const usersData = usersSnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
-      setLibraryUsers(usersData);
-    } catch (err) {
-      console.error("Error fetching library users:", err);
-      setError("Failed to load library data.");
-      toast.error("Failed to load library data.");
-    } finally {
-      setLoading(false);
-    }
-  }, [libraryId]);
+      setAllLibraryUsers(usersData);
+      setDisplayedUsers(usersData.slice(0, PAGE_SIZE)); // Set initial page
 
-  // Fetch test counts for the selected month whenever the month, year, or user list changes
-  useEffect(() => {
-    const fetchMonthlyCounts = async () => {
-      if (libraryUsers.length === 0) {
-        setMonthlyTestCounts({});
-        return;
-      }
+      // 2. Decide Calculation Strategy ("Plan A" vs "Plan B")
+      const commission = libData.commissionPerTest || 0;
+      const allUserUids = usersData.map((user) => user.uid);
 
-      setLoading(true);
-      const userUids = libraryUsers.map((user) => user.uid);
-      const counts = {};
+      if (libData.testCompletions) {
+        // --- PLAN A: New, efficient method from denormalized data ---
+        const completions = libData.testCompletions || [];
+        setTotalEarnings(completions.length * commission);
 
-      const startDate = Timestamp.fromDate(
-        new Date(selectedYear, selectedMonth - 1, 1)
-      );
-      const endDate = Timestamp.fromDate(
-        new Date(selectedYear, selectedMonth, 0, 23, 59, 59)
-      );
+        const monthlyCompletions = completions.filter((c) => {
+          if (!c.completedAt) return false;
+          const date = c.completedAt.toDate();
+          return (
+            date.getFullYear() === selectedYear &&
+            date.getMonth() + 1 === selectedMonth
+          );
+        });
 
-      // Fetch results in chunks to stay within 'in' query limits
-      for (let i = 0; i < userUids.length; i += 10) {
-        const chunk = userUids.slice(i, i + 10);
-        const resultsQuery = query(
+        const counts = {};
+        monthlyCompletions.forEach((c) => {
+          counts[c.takerId] = (counts[c.takerId] || 0) + 1;
+        });
+        setMonthlyTestCounts(counts);
+      } else if (allUserUids.length > 0) {
+        // --- PLAN B: Backward compatibility for old data by querying results ---
+        const allResultsQuery = query(
           collection(db, "mockTestResults"),
-          where("userId", "in", chunk),
+          where("libraryId", "==", libraryId)
+        );
+        const allResultsSnap = await getDocs(allResultsQuery);
+        setTotalEarnings(allResultsSnap.size * commission);
+
+        const startDate = Timestamp.fromDate(
+          new Date(selectedYear, selectedMonth - 1, 1)
+        );
+        const endDate = Timestamp.fromDate(
+          new Date(selectedYear, selectedMonth, 0, 23, 59, 59)
+        );
+
+        const monthlyResultsQuery = query(
+          collection(db, "mockTestResults"),
+          where("libraryId", "==", libraryId),
           where("completedAt", ">=", startDate),
           where("completedAt", "<=", endDate)
         );
-        const resultsSnapshot = await getDocs(resultsQuery);
-        resultsSnapshot.forEach((doc) => {
-          const result = doc.data();
-          counts[result.userId] = (counts[result.userId] || 0) + 1;
-        });
-      }
-      setMonthlyTestCounts(counts);
-      setLoading(false);
-    };
+        const monthlyResultsSnap = await getDocs(monthlyResultsQuery);
 
-    fetchMonthlyCounts();
-  }, [libraryUsers, selectedMonth, selectedYear]);
+        const counts = {};
+        monthlyResultsSnap.forEach((doc) => {
+          const userId = doc.data().userId;
+          counts[userId] = (counts[userId] || 0) + 1;
+        });
+        setMonthlyTestCounts(counts);
+      }
+    } catch (err) {
+      console.error("Error fetching library analytics:", err);
+      setError("Failed to load analytics data.");
+      toast.error("Failed to load analytics data.");
+    } finally {
+      setLoading(false);
+    }
+  }, [libraryId, selectedMonth, selectedYear]);
 
   useEffect(() => {
-    if (libraryId) {
-      fetchLibraryAnalytics();
-    }
-  }, [libraryId, fetchLibraryAnalytics]);
+    fetchAndProcessData();
+  }, [fetchAndProcessData]);
 
-  const displayedUsers = useMemo(() => {
-    return libraryUsers.map((user) => ({
+  const handleUserClick = (user) => {
+    setSelectedUser(user);
+    setIsModalOpen(true);
+  };
+
+  const finalDisplayedUsers = useMemo(() => {
+    return displayedUsers.map((user) => ({
       ...user,
       testsTaken: monthlyTestCounts[user.uid] || 0,
     }));
-  }, [libraryUsers, monthlyTestCounts]);
+  }, [displayedUsers, monthlyTestCounts]);
 
+  // Months and years arrays remain the same...
   const months = Array.from({ length: 12 }, (v, i) => ({
     value: i + 1,
     name: new Date(0, i).toLocaleString("en-US", { month: "long" }),
@@ -125,7 +164,7 @@ export default function LibraryAnalyticsPage() {
     (v, i) => new Date().getFullYear() - i
   );
 
-  if (loading && libraryUsers.length === 0) {
+  if (loading) {
     return (
       <div className='text-center p-12 text-lg font-medium'>
         Loading Library Analytics...
@@ -133,130 +172,174 @@ export default function LibraryAnalyticsPage() {
     );
   }
 
-  if (error) {
-    return (
-      <div className='text-center p-12 text-red-600 font-semibold'>
-        Error: {error}
-      </div>
-    );
-  }
-
   return (
-    <div className='bg-slate-100 min-h-screen py-8'>
-      <div className='container mx-auto px-4'>
-        <h1 className='text-3xl font-bold text-slate-900 mb-2 flex items-center gap-3'>
-          <Library className='h-8 w-8 text-indigo-600' />
-          Analytics for {libraryName}
-        </h1>
-        <p className='text-lg text-slate-600 mb-6'>
-          Overview of users onboarded through this library and their test
-          activity.
-        </p>
+    <>
+      <UserTestHistoryModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        userId={selectedUser?.uid}
+        userName={selectedUser?.name}
+        selectedMonth={selectedMonth}
+        selectedYear={selectedYear}
+      />
+      <div className='bg-slate-100 min-h-screen py-8'>
+        <div className='container mx-auto px-4'>
+          <h1 className='text-3xl font-bold text-slate-900 mb-2 flex items-center gap-3'>
+            <Library className='h-8 w-8 text-indigo-600' />
+            Analytics for {libraryDetails?.libraryName || "..."}
+          </h1>
+          <p className='text-lg text-slate-600 mb-6'>
+            Overview of users and earnings for this library partner.
+          </p>
 
-        <div className='bg-white p-6 rounded-2xl shadow-lg border mb-6'>
-          <h2 className='text-xl font-bold text-slate-800 mb-4'>
-            Filter by Month
-          </h2>
-          <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
-            <div>
-              <label
-                htmlFor='month-select'
-                className='block text-sm font-medium text-slate-700'
-              >
-                Month
-              </label>
-              <select
-                id='month-select'
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                className='mt-1 block w-full p-2 border text-slate-900 border-slate-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500'
-              >
-                {months.map((month) => (
-                  <option key={month.value} value={month.value}>
-                    {month.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label
-                htmlFor='year-select'
-                className='block text-sm font-medium text-slate-700'
-              >
-                Year
-              </label>
-              <select
-                id='year-select'
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className='mt-1 block w-full p-2 border text-slate-900 border-slate-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500'
-              >
-                {years.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
+          <div className='mb-6 grid grid-cols-1 md:grid-cols-3 gap-6'>
+            <AnalyticsStatCard
+              title='Total Onboarded Students'
+              value={allLibraryUsers.length}
+              icon={<User />}
+              isLoading={loading}
+            />
+            <AnalyticsStatCard
+              title='Total Gross Earnings'
+              value={`₹${totalEarnings.toLocaleString()}`}
+              icon={<IndianRupee />}
+              isLoading={loading}
+            />
+            <AnalyticsStatCard
+              title='Tests Taken This Month'
+              value={Object.values(monthlyTestCounts).reduce(
+                (a, b) => a + b,
+                0
+              )}
+              icon={<FileText />}
+              isLoading={loading}
+            />
+          </div>
+
+          <div className='bg-white p-6 rounded-2xl shadow-lg border mb-6'>
+            <h2 className='text-xl font-bold text-slate-800 mb-4'>
+              Filter Activity by Month
+            </h2>
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+              {/* Month and Year Selectors */}
+              <div>
+                <label
+                  htmlFor='month-select'
+                  className='block text-sm font-medium text-slate-700'
+                >
+                  Month
+                </label>
+                <select
+                  id='month-select'
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                  className='mt-1 block w-full p-2 border text-slate-900 border-slate-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500'
+                >
+                  {months.map((month) => (
+                    <option key={month.value} value={month.value}>
+                      {month.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label
+                  htmlFor='year-select'
+                  className='block text-sm font-medium text-slate-700'
+                >
+                  Year
+                </label>
+                <select
+                  id='year-select'
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                  className='mt-1 block w-full p-2 border text-slate-900 border-slate-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500'
+                >
+                  {years.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className='bg-white p-6 rounded-2xl shadow-lg border'>
-          <h2 className='text-xl font-bold text-slate-800 mb-4'>
-            Onboarded Users ({displayedUsers.length})
-          </h2>
-          {displayedUsers.length > 0 ? (
-            <div className='overflow-x-auto'>
-              <table className='min-w-full divide-y divide-slate-200'>
-                <thead className='bg-slate-50'>
-                  <tr>
-                    <th className='px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider'>
-                      User Name
-                    </th>
-                    <th className='px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider'>
-                      Email
-                    </th>
-                    <th className='px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider'>
-                      Tests Taken (Selected Month)
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className='bg-white divide-y divide-slate-200'>
-                  {displayedUsers.map((user) => (
-                    <tr key={user.uid}>
-                      <td className='px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900'>
-                        <div className='flex items-center'>
-                          <User className='h-4 w-4 mr-2 text-slate-500' />
-                          {user.name}
-                        </div>
-                      </td>
-                      <td className='px-6 py-4 whitespace-nowrap text-sm text-indigo-600'>
-                        {user.email}
-                      </td>
-                      <td className='px-6 py-4 whitespace-nowrap text-sm text-slate-800 font-semibold'>
-                        <div className='flex items-center'>
-                          <FileText className='h-4 w-4 mr-2 text-green-500' />
-                          {user.testsTaken}
-                        </div>
-                      </td>
+          <div className='bg-white p-6 rounded-2xl shadow-lg border'>
+            <h2 className='text-xl font-bold text-slate-800 mb-4'>
+              Onboarded Users
+            </h2>
+            {finalDisplayedUsers.length > 0 ? (
+              <div className='overflow-x-auto'>
+                <table className='min-w-full divide-y divide-slate-200'>
+                  <thead className='bg-slate-50'>
+                    <tr>
+                      <th className='px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider'>
+                        Student Name
+                      </th>
+                      <th className='px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider'>
+                        Email
+                      </th>
+                      <th className='px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider'>
+                        Tests Taken (Selected Month)
+                      </th>
+                      <th className='px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider'>
+                        Remaining Tests
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className='text-center py-12'>
-              <User className='mx-auto h-12 w-12 text-slate-400' />
-              <h3 className='mt-2 text-lg font-semibold text-slate-900'>
-                No users onboarded through this library yet.
-              </h3>
-              <p className='mt-1 text-sm text-slate-500'>
-                Share the join link or QR code to onboard students.
-              </p>
-            </div>
-          )}
+                  </thead>
+                  <tbody className='bg-white divide-y divide-slate-200'>
+                    {finalDisplayedUsers.map((student) => {
+                      const limit = libraryDetails.monthlyTestLimit || 0;
+                      const taken = student.testsTaken;
+                      const remaining = limit - taken;
+                      return (
+                        <tr
+                          key={student.uid}
+                          onClick={() => handleUserClick(student)}
+                          className='cursor-pointer hover:bg-slate-50'
+                        >
+                          <td className='px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900'>
+                            {student.name}
+                          </td>
+                          <td className='px-6 py-4 whitespace-nowrap text-sm text-slate-600'>
+                            {student.email}
+                          </td>
+                          <td className='px-6 py-4 whitespace-nowrap text-sm text-slate-800 font-semibold'>
+                            {taken}
+                          </td>
+                          <td className='px-6 py-4 whitespace-nowrap text-sm font-semibold'>
+                            {limit > 0 ? (
+                              <span
+                                className={
+                                  remaining > 5
+                                    ? "text-green-600"
+                                    : "text-amber-600"
+                                }
+                              >
+                                {remaining < 0 ? 0 : remaining} / {limit}
+                              </span>
+                            ) : (
+                              <span className='text-indigo-600'>Unlimited</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className='text-center py-12'>
+                <User className='mx-auto h-12 w-12 text-slate-400' />
+                <h3 className='mt-2 text-lg font-semibold text-slate-900'>
+                  No users onboarded through this library yet.
+                </h3>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

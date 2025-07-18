@@ -12,6 +12,7 @@ import {
   doc,
   getDoc,
   increment,
+  runTransaction,
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
@@ -69,86 +70,97 @@ export default function TakeDynamicTestPage() {
       if (testState === "submitting" || !user || !instanceData) return;
       setTestState("submitting");
 
-      const lastQuestionId = questions[currentQuestionIndex]?.id;
-      let finalTimePerQuestion = { ...timePerQuestion };
-      if (lastQuestionId) {
-        const timeSpent = (Date.now() - questionStartTime) / 1000;
-        finalTimePerQuestion[lastQuestionId] =
-          (finalTimePerQuestion[lastQuestionId] || 0) + timeSpent;
-      }
-
-      const finalAnswers = {};
-      for (const qId in selectedOptions) {
-        finalAnswers[qId] = {
-          answer: selectedOptions[qId],
-          timeTaken: finalTimePerQuestion[qId] || 0,
-        };
-      }
-      for (const q of questions) {
-        if (!finalAnswers[q.id]) {
-          finalAnswers[q.id] = {
-            answer: null,
-            timeTaken: finalTimePerQuestion[q.id] || 0,
-          };
-        }
-      }
-
-      let score = 0;
-      const correctAnswersMap = new Map(
-        questions.map((q) => [q.id, q.correctAnswer])
-      );
-      for (const qId in selectedOptions) {
-        if (selectedOptions[qId] === correctAnswersMap.get(qId)) {
-          score++;
-        }
-      }
-      const totalQuestions = questions.length;
-      const incorrectAnswers = totalQuestions - score;
-      const totalTimeTaken = Object.values(finalTimePerQuestion).reduce(
-        (acc, time) => acc + time,
-        0
-      );
-
-      const estimatedTimeInSeconds = instanceData.estimatedTime * 60;
-      const suspiciousTimeThreshold = estimatedTimeInSeconds * 0.15;
-      const resultData = {
-        userId: user.uid,
-        testId: instanceData.originalTestId,
-        instanceId: instanceId,
-        answers: finalAnswers,
-        score,
-        totalQuestions,
-        incorrectAnswers,
-        submissionReason: reason,
-        isDynamic: true,
-        completedAt: serverTimestamp(),
-        reviewFlag:
-          totalTimeTaken < suspiciousTimeThreshold
-            ? "low_completion_time"
-            : null,
-        totalTimeTaken: totalTimeTaken,
-      };
-
-      // Correctly add library info if the user is a library student
-      if (isLibraryUser && userProfile?.libraryId) {
-        resultData.libraryId = userProfile.libraryId;
-        resultData.ownerId = userProfile.ownerId;
-      }
+      const resultDocRef = doc(collection(db, "mockTestResults"));
 
       try {
-        const resultDocRef = await addDoc(
-          collection(db, "mockTestResults"),
-          resultData
-        );
+        await runTransaction(db, async (transaction) => {
+          const lastQuestionId = questions[currentQuestionIndex]?.id;
+          let finalTimePerQuestion = { ...timePerQuestion };
+          if (lastQuestionId) {
+            const timeSpent = (Date.now() - questionStartTime) / 1000;
+            finalTimePerQuestion[lastQuestionId] =
+              (finalTimePerQuestion[lastQuestionId] || 0) + timeSpent;
+          }
 
-        const analyticsRef = doc(
-          db,
-          "testAnalytics",
-          instanceData.originalTestId
-        );
-        await updateDoc(analyticsRef, {
-          takenCount: increment(1),
-          uniqueTakers: arrayUnion(user.uid),
+          const finalAnswers = {};
+          for (const qId in selectedOptions) {
+            finalAnswers[qId] = {
+              answer: selectedOptions[qId],
+              timeTaken: finalTimePerQuestion[qId] || 0,
+            };
+          }
+          for (const q of questions) {
+            if (!finalAnswers[q.id]) {
+              finalAnswers[q.id] = {
+                answer: null,
+                timeTaken: finalTimePerQuestion[q.id] || 0,
+              };
+            }
+          }
+
+          let score = 0;
+          const correctAnswersMap = new Map(
+            questions.map((q) => [q.id, q.correctAnswer])
+          );
+          for (const qId in selectedOptions) {
+            if (selectedOptions[qId] === correctAnswersMap.get(qId)) {
+              score++;
+            }
+          }
+          const totalQuestions = questions.length;
+          const incorrectAnswers = totalQuestions - score;
+          const totalTimeTaken = Object.values(finalTimePerQuestion).reduce(
+            (acc, time) => acc + time,
+            0
+          );
+
+          const estimatedTimeInSeconds = instanceData.estimatedTime * 60;
+          const suspiciousTimeThreshold = estimatedTimeInSeconds * 0.15;
+          const resultData = {
+            userId: user.uid,
+            testId: instanceData.originalTestId,
+            instanceId: instanceId,
+            answers: finalAnswers,
+            score,
+            totalQuestions,
+            incorrectAnswers,
+            submissionReason: reason,
+            isDynamic: true,
+            completedAt: serverTimestamp(),
+            reviewFlag:
+              totalTimeTaken < suspiciousTimeThreshold
+                ? "low_completion_time"
+                : null,
+            totalTimeTaken: totalTimeTaken,
+          };
+
+          // Correctly add library info if the user is a library student
+          if (isLibraryUser && userProfile?.libraryId) {
+            resultData.libraryId = userProfile.libraryId;
+            resultData.ownerId = userProfile.ownerId;
+          }
+
+          transaction.set(resultDocRef, resultData);
+
+          const analyticsRef = doc(
+            db,
+            "testAnalytics",
+            instanceData.originalTestId
+          );
+          transaction.update(analyticsRef, {
+            takenCount: increment(1),
+            uniqueTakers: arrayUnion(user.uid),
+          });
+          if (isLibraryUser && userProfile?.libraryId) {
+            const libraryRef = doc(db, "libraries", userProfile?.libraryId);
+            transaction.update(libraryRef, {
+              testCompletions: arrayUnion({
+                takerId: user.uid,
+                testId: instanceData.originalTestId,
+                completedAt: serverTimestamp(),
+              }),
+            });
+          }
         });
 
         toast.success("Test submitted successfully!");
