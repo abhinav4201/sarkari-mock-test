@@ -73,6 +73,7 @@ export const AuthContextProvider = ({ children }) => {
         const userSnap = await getDoc(userRef);
         const visitorId = await getFingerprint();
 
+        // 1. Owner Join Flow
         if (ownerJoinCode) {
           const librariesQuery = query(
             collection(db, "libraries"),
@@ -108,14 +109,13 @@ export const AuthContextProvider = ({ children }) => {
           return;
         }
 
+        // 2. Student Join Flow
         if (joinLibraryId) {
-          if (userSnap.exists()) {
-            if (userSnap.data().role === "library-student") {
-              // If they are already a library student, just update login time and redirect.
-              await updateDoc(userRef, { lastLogin: serverTimestamp() });
-              router.push("/library-dashboard");
-              return;
-            }
+          if (
+            userSnap.exists() &&
+            userSnap.data().role &&
+            userSnap.data().role !== "library-student"
+          ) {
             toast.error("This email is already registered as a regular user.", {
               duration: 8000,
             });
@@ -151,9 +151,27 @@ export const AuthContextProvider = ({ children }) => {
           return;
         }
 
+        // 3. Regular Sign-in / Sign-up Flow
         if (userSnap.exists()) {
+          const userData = userSnap.data();
           await updateDoc(userRef, { lastLogin: serverTimestamp() });
+
+          // --- THIS IS THE ROBUST FIX ---
+          // Check for role OR for the legacy libraryOwnerOf array
+          const isOwner =
+            userData.role === "library-owner" ||
+            (Array.isArray(userData.libraryOwnerOf) &&
+              userData.libraryOwnerOf.length > 0);
+
+          if (isOwner) {
+            router.push(`/library-owner/${userData.libraryOwnerOf[0]}`);
+          } else if (userData.role === "library-student") {
+            router.push("/library-dashboard");
+          } else {
+            router.push(redirectUrl);
+          }
         } else {
+          // Handle new regular user sign-up
           await setDoc(userRef, {
             uid: loggedInUser.uid,
             name: loggedInUser.displayName,
@@ -163,9 +181,10 @@ export const AuthContextProvider = ({ children }) => {
             initialVisitorId: visitorId,
             libraryOwnerOf: [],
           });
+          router.push(redirectUrl);
         }
-        window.location.href = redirectUrl;
       } catch (error) {
+        console.error("Sign-in Error:", error);
         if (error.code !== "auth/popup-closed-by-user")
           toast.error("Sign-in failed. Please try again.");
       }
@@ -191,12 +210,12 @@ export const AuthContextProvider = ({ children }) => {
     try {
       await signOut(auth);
       toast.success("Logged out successfully.");
-      router.push("/");
+      window.location.href = "/";
     } catch (error) {
       console.error("Logout Error:", error);
       toast.error("Logout failed. Please try again.");
     }
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
