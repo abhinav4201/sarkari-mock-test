@@ -1,24 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { useParams, notFound } from "next/navigation";
+import UserTestHistoryModal from "@/components/admin/UserTestHistoryModal";
+import AnalyticsStatCard from "@/components/dashboard/AnalyticsStatCard";
 import { db } from "@/lib/firebase";
 import {
   collection,
-  query,
-  where,
-  getDocs,
   doc,
   getDoc,
+  getDocs,
+  query,
   Timestamp,
-  orderBy,
-  limit,
-  startAfter,
+  where,
 } from "firebase/firestore";
+import { FileText, IndianRupee, Library, User } from "lucide-react";
+import { notFound, useParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { Library, User, FileText, IndianRupee, Banknote } from "lucide-react";
-import AnalyticsStatCard from "@/components/dashboard/AnalyticsStatCard";
-import UserTestHistoryModal from "@/components/admin/UserTestHistoryModal";
 
 const PAGE_SIZE = 10;
 
@@ -63,7 +60,6 @@ export default function LibraryAnalyticsPage() {
 
       if (!librarySnap.exists()) {
         notFound();
-        return;
       }
       const libData = librarySnap.data();
       setLibraryDetails(libData);
@@ -293,6 +289,15 @@ export default function LibraryAnalyticsPage() {
                       const limit = libraryDetails.monthlyTestLimit || 0;
                       const taken = student.testsTaken;
                       const remaining = limit - taken;
+                      const usagePercentage = limit > 0 ? taken / limit : 0;
+                      let statusColorClass = "text-green-600"; // Default to green
+
+                      if (usagePercentage >= 0.9) {
+                        statusColorClass = "text-red-600"; // 90% or more used
+                      } else if (usagePercentage >= 0.7) {
+                        statusColorClass = "text-amber-600"; // 70% - 89% used
+                      }
+
                       return (
                         <tr
                           key={student.uid}
@@ -306,17 +311,11 @@ export default function LibraryAnalyticsPage() {
                             {student.email}
                           </td>
                           <td className='px-6 py-4 whitespace-nowrap text-sm text-slate-800 font-semibold'>
-                            {taken}
+                            <span className={statusColorClass}>{taken}</span>
                           </td>
                           <td className='px-6 py-4 whitespace-nowrap text-sm font-semibold'>
                             {limit > 0 ? (
-                              <span
-                                className={
-                                  remaining > 5
-                                    ? "text-green-600"
-                                    : "text-amber-600"
-                                }
-                              >
+                              <span className={statusColorClass}>
                                 {remaining < 0 ? 0 : remaining} / {limit}
                               </span>
                             ) : (

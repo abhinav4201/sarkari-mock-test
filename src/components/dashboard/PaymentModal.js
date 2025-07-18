@@ -40,8 +40,8 @@ const FreeTrialContent = ({ onActivate, isLoading }) => (
   </div>
 );
 
-// This is the content shown when the user has used all their trials and must pay.
-const SubscribeContent = () => (
+// --- UPDATED: This now contains the Razorpay integration ---
+const SubscribeContent = ({ onSubscribe, isLoading }) => (
   <div>
     <h3 className='text-2xl font-bold text-slate-900'>
       Your Free Trials Have Ended
@@ -55,13 +55,18 @@ const SubscribeContent = () => (
         ₹10 <span className='text-lg font-medium text-slate-500'>/ month</span>
       </p>
     </div>
-    <button className='w-full px-8 py-4 bg-indigo-600 text-white font-bold rounded-lg text-lg hover:bg-indigo-700'>
+    <button
+      onClick={onSubscribe}
+      disabled={isLoading}
+      className='w-full px-8 py-4 bg-indigo-600 text-white font-bold rounded-lg text-lg hover:bg-indigo-700 disabled:bg-indigo-400'
+    >
       <span className='flex justify-center items-center gap-2'>
-        <ShoppingCart size={20} /> Subscribe Now
+        <ShoppingCart size={20} />
+        {isLoading ? "Processing..." : "Subscribe Now"}
       </span>
     </button>
     <p className='text-xs text-slate-500 mt-4'>
-      Future Home of Your Payment Gateway
+      Payments are securely processed by Razorpay.
     </p>
   </div>
 );
@@ -84,11 +89,9 @@ const ActiveSubscriptionContent = () => (
 );
 
 export default function PaymentModal({ isOpen, onClose }) {
-  // --- UPDATED: Get all necessary status flags from the context ---
   const { user, isPremium, freeTrialCount } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
 
-  // This function now also increments the trial count
   const handleActivateTrial = async () => {
     if (!user) return toast.error("You must be logged in.");
     if (freeTrialCount >= 2)
@@ -102,12 +105,11 @@ export default function PaymentModal({ isOpen, onClose }) {
       expiryDate.setDate(expiryDate.getDate() + 30);
       const userDocRef = doc(db, "users", user.uid);
 
-      // Using setDoc with merge to update both fields at once
       await setDoc(
         userDocRef,
         {
           premiumAccessExpires: expiryDate,
-          freeTrialCount: increment(1), // Securely increment the count on the server
+          freeTrialCount: increment(1),
         },
         { merge: true }
       );
@@ -122,7 +124,68 @@ export default function PaymentModal({ isOpen, onClose }) {
     }
   };
 
-  // --- NEW: Conditionally render content based on user status ---
+  // --- NEW: Function to handle payment ---
+  const handlePayment = async () => {
+    if (!user) return toast.error("You must be logged in.");
+    setIsLoading(true);
+
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch("/api/payment/create-order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ amount: 10 }), // Amount in INR
+      });
+
+      if (!res.ok) throw new Error("Failed to create payment order.");
+
+      const { order } = await res.json();
+
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        amount: order.amount,
+        currency: order.currency,
+        name: "Sarkari Mock Test",
+        description: "Premium Subscription",
+        order_id: order.id,
+        handler: async function (response) {
+          const verificationRes = await fetch("/api/payment/verify-signature", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify(response),
+          });
+
+          if (verificationRes.ok) {
+            toast.success("Payment successful! Premium access granted.");
+            onClose();
+          } else {
+            toast.error("Payment verification failed. Please contact support.");
+          }
+        },
+        prefill: {
+          name: user.displayName,
+          email: user.email,
+        },
+        theme: {
+          color: "#4f46e5", // Indigo color
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    } catch (error) {
+      toast.error(error.message || "Something went wrong.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const renderContent = () => {
     if (isPremium) {
       return <ActiveSubscriptionContent />;
@@ -135,8 +198,9 @@ export default function PaymentModal({ isOpen, onClose }) {
         />
       );
     }
-    // This is the space for your future payment gateway button
-    return <SubscribeContent />;
+    return (
+      <SubscribeContent onSubscribe={handlePayment} isLoading={isLoading} />
+    );
   };
 
   return (
