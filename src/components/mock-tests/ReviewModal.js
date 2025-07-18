@@ -6,23 +6,24 @@ import { db } from "@/lib/firebase";
 import {
   addDoc,
   collection,
+  deleteDoc,
+  doc,
   getDocs,
+  limit,
   orderBy,
   query,
   serverTimestamp,
-  where,
-  limit,
   startAfter,
-  doc,
-  deleteDoc,
+  where,
 } from "firebase/firestore";
 import { Star, Trash2 } from "lucide-react";
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import ConfirmationModal from "../ui/ConfirmationModal";
 
 const PAGE_SIZE = 5;
 
+// Reply Form - No changes needed here.
 const ReplyForm = ({ reviewId, onActionCompletes }) => {
   const { user, openLoginPrompt } = useAuth();
   const [replyText, setReplyText] = useState("");
@@ -89,9 +90,17 @@ const ReplyForm = ({ reviewId, onActionCompletes }) => {
   );
 };
 
+// ReviewItem with Admin Delete Logic Restored
 const ReviewItem = ({ review, onRefreshNeeded }) => {
-  const [showReplies, setShowReplies] = useState(false);
+  const { user } = useAuth();
+  const isAdmin = user && user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
   const [replies, setReplies] = useState([]);
+  const [showReplies, setShowReplies] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState({
+    review: false,
+    replyId: null,
+  });
 
   const fetchReplies = useCallback(async () => {
     if (!review.id) return;
@@ -109,41 +118,117 @@ const ReviewItem = ({ review, onRefreshNeeded }) => {
     }
   }, [showReplies, fetchReplies]);
 
+  const handleDeleteReview = async () => {
+    if (!isAdmin) return;
+    setIsDeleting(true);
+    try {
+      await deleteDoc(doc(db, "reviews", review.id));
+      toast.success("Review deleted.");
+      if (onRefreshNeeded) onRefreshNeeded();
+    } catch (error) {
+      toast.error("Failed to delete review.");
+    } finally {
+      setIsDeleting(false);
+      setConfirmDelete({ review: false, replyId: null });
+    }
+  };
+
+  const handleDeleteReply = async (replyId) => {
+    if (!isAdmin) return;
+    setIsDeleting(true);
+    try {
+      // This is a simplified client-side delete. For full accuracy,
+      // a server-side function should decrement the count.
+      await deleteDoc(doc(db, `reviews/${review.id}/replies`, replyId));
+      toast.success("Reply deleted.");
+      if (onRefreshNeeded) onRefreshNeeded();
+    } catch (error) {
+      toast.error("Failed to delete reply.");
+    } finally {
+      setIsDeleting(false);
+      setConfirmDelete({ review: false, replyId: null });
+    }
+  };
+
   return (
-    <div className='p-4 border-b border-slate-100'>
-      <p className='font-bold text-slate-900'>{review.userName}</p>
-      <div className='flex mt-1'>
-        {[...Array(review.rating)].map((_, i) => (
-          <Star key={i} className='h-4 w-4 text-amber-400 fill-amber-400' />
-        ))}
-      </div>
-      <p className='text-xs text-slate-500 mt-0.5'>
-        {new Date(review.createdAt?.seconds * 1000).toLocaleDateString()}
-      </p>
-      <p className='text-slate-700 mt-2'>{review.comment}</p>
-      <button
-        onClick={() => setShowReplies(!showReplies)}
-        className='text-sm font-semibold text-indigo-600 mt-2'
-      >
-        {showReplies ? "Hide" : "View"} Replies ({review.replyCount || 0})
-      </button>
-      {showReplies && (
-        <div className='mt-4 pl-6 border-l-2 border-slate-200 space-y-3'>
-          {replies.map((reply) => (
-            <div key={reply.id} className='relative group'>
-              <p className='font-bold text-sm text-slate-800'>
-                {reply.authorName}
-              </p>
-              <p className='text-xs text-slate-500'>
-                {new Date(reply.createdAt?.seconds * 1000).toLocaleDateString()}
-              </p>
-              <p className='text-slate-600 text-sm mt-1'>{reply.text}</p>
+    <>
+      <ConfirmationModal
+        isOpen={confirmDelete.review || !!confirmDelete.replyId}
+        onClose={() => setConfirmDelete({ review: false, replyId: null })}
+        onConfirm={() => {
+          if (confirmDelete.review) handleDeleteReview();
+          if (confirmDelete.replyId) handleDeleteReply(confirmDelete.replyId);
+        }}
+        title={`Delete ${confirmDelete.replyId ? "Reply" : "Review"}`}
+        message={`Are you sure you want to permanently delete this ${
+          confirmDelete.replyId ? "reply" : "review"
+        }?`}
+        confirmText='Delete'
+        isLoading={isDeleting}
+      />
+      <div className='p-4 border-b border-slate-100'>
+        <div className='flex justify-between items-start'>
+          <div>
+            <p className='font-bold text-slate-900'>{review.userName}</p>
+            <div className='flex mt-1'>
+              {[...Array(review.rating)].map((_, i) => (
+                <Star
+                  key={i}
+                  className='h-4 w-4 text-amber-400 fill-amber-400'
+                />
+              ))}
             </div>
-          ))}
-          <ReplyForm reviewId={review.id} onActionCompletes={onRefreshNeeded} />
+          </div>
+          {isAdmin && (
+            <button
+              onClick={() => setConfirmDelete({ review: true })}
+              className='p-1 text-red-500 hover:text-red-700'
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
         </div>
-      )}
-    </div>
+        <p className='text-xs text-slate-500 mt-0.5'>
+          {new Date(review.createdAt?.seconds * 1000).toLocaleDateString()}
+        </p>
+        <p className='text-slate-700 mt-2'>{review.comment}</p>
+        <button
+          onClick={() => setShowReplies(!showReplies)}
+          className='text-sm font-semibold text-indigo-600 mt-2'
+        >
+          {showReplies ? "Hide" : "View"} Replies ({review.replyCount || 0})
+        </button>
+        {showReplies && (
+          <div className='mt-4 pl-6 border-l-2 border-slate-200 space-y-3'>
+            {replies.map((reply) => (
+              <div key={reply.id} className='relative group'>
+                <p className='font-bold text-sm text-slate-800'>
+                  {reply.authorName}
+                </p>
+                <p className='text-xs text-slate-500'>
+                  {new Date(
+                    reply.createdAt?.seconds * 1000
+                  ).toLocaleDateString()}
+                </p>
+                <p className='text-slate-600 text-sm mt-1'>{reply.text}</p>
+                {isAdmin && (
+                  <button
+                    onClick={() => setConfirmDelete({ replyId: reply.id })}
+                    className='absolute top-0 right-0 p-1 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100'
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+            ))}
+            <ReplyForm
+              reviewId={review.id}
+              onActionCompletes={onRefreshNeeded}
+            />
+          </div>
+        )}
+      </div>
+    </>
   );
 };
 
@@ -299,6 +384,7 @@ export default function ReviewModal({
                 key={review.id}
                 review={review}
                 onRefreshNeeded={handleRefresh}
+                onReviewDeleted={handleRefresh}
               />
             ))
           ) : (
