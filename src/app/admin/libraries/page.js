@@ -293,7 +293,7 @@ export default function LibrariesPage() {
                 {libraries.map((lib) => (
                   <div
                     key={lib.id}
-                    className='p-3 border rounded-lg flex justify-between items-center'
+                    className='p-3 border rounded-lg flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4'
                   >
                     <div>
                       <p className='font-semibold text-slate-800'>
@@ -304,11 +304,10 @@ export default function LibrariesPage() {
                         {lib.commissionPerTest}/test
                       </p>
                       <p className='text-sm text-slate-500'>
-                        {lib.monthlyTestLimit || "No"}{" "}
-                        limit
+                        {lib.monthlyTestLimit || "No"} limit
                       </p>
                     </div>
-                    <div className='flex gap-2'>
+                    <div className='flex gap-2 justify-end'>
                       {/* New button for analytics */}
                       <Link
                         href={`/admin/libraries/analytics/${lib.id}`}

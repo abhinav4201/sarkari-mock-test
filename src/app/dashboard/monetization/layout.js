@@ -34,7 +34,7 @@ export default function MonetizationLayout({ children }) {
       <div className='container mx-auto px-4 sm:px-6 lg:px-8 py-8'>
         <div className='bg-white p-4 rounded-xl shadow-md border mb-8'>
           <div className='flex flex-col sm:flex-row justify-between items-center gap-4'>
-            <div className='flex items-center gap-2'>
+            <div className='flex flex-col sm:flex-row gap-2 w-full sm:w-auto items-stretch sm:items-center'>
               {subNavLinks.map((link) => {
                 // This logic correctly highlights parent paths as well
                 const isActive =
@@ -45,7 +45,7 @@ export default function MonetizationLayout({ children }) {
                   <Link
                     key={link.name}
                     href={link.href}
-                    className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                    className={`flex items-center justify-center sm:justify-start gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
                       isActive
                         ? "bg-indigo-600 text-white"
                         : "text-slate-700 hover:bg-slate-100"

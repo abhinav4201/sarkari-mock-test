@@ -175,7 +175,7 @@ export default function AdminMockTestsPage() {
                   tests.map((test) => (
                     <div
                       key={test.id}
-                      className='flex justify-between items-center p-4 border rounded-lg hover:bg-slate-50 transition-colors'
+                      className='flex flex-col sm:flex-row sm:justify-between sm:items-center p-4 border rounded-lg hover:bg-slate-50 transition-colors gap-3'
                     >
                       <div>
                         <p className='font-semibold text-slate-800'>
@@ -198,7 +198,7 @@ export default function AdminMockTestsPage() {
                           </p>
                         )}
                       </div>
-                      <div className='flex items-center gap-1'>
+                      <div className='flex items-center gap-2 w-full sm:w-auto justify-end'>
                         {/* --- PRESERVED: Your original "Manage Questions" button logic --- */}
                         {!test.isDynamic ? (
                           <Link

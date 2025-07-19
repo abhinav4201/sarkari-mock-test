@@ -61,28 +61,28 @@ export default function RecordPayoutModal({
     >
       <form onSubmit={handleSubmit} className='p-6 space-y-4'>
         <div>
-          <label className='block text-sm font-medium text-slate-700'>
+          <label className='block text-sm font-medium text-slate-900'>
             Amount Paid (₹)
           </label>
           <input
             type='number'
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className='mt-1 w-full p-2 border border-slate-300 rounded-md'
+            className='mt-1 w-full p-2 border border-slate-300 text-slate-900 rounded-md'
             placeholder={`Pending: ₹${creator.pendingAmount.toLocaleString()}`}
             required
             min='1'
           />
         </div>
         <div>
-          <label className='block text-sm font-medium text-slate-700'>
+          <label className='block text-sm font-medium text-slate-900'>
             Transaction ID (Optional)
           </label>
           <input
             type='text'
             value={transactionId}
             onChange={(e) => setTransactionId(e.target.value)}
-            className='mt-1 w-full p-2 border border-slate-300 rounded-md'
+            className='mt-1 w-full p-2 border border-slate-300 text-slate-900 rounded-md'
             placeholder='e.g., UTR number'
           />
         </div>
