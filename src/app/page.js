@@ -1,9 +1,17 @@
-import Link from "next/link";
-import { db } from "@/lib/firebase";
-import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 import BlogPostCard from "@/components/blog/BlogPostCard";
 import SignUpButton from "@/components/home/SignUpButton";
-import { PenSquare, Target, Timer, ArrowRight } from "lucide-react";
+import { db } from "@/lib/firebase";
+import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
+import {
+  ArrowRight,
+  PenSquare,
+  Target,
+  Timer,
+  ShieldCheck,
+  BrainCircuit,
+  Shuffle,
+} from "lucide-react";
+import Link from "next/link";
 
 // This data fetching function is updated to convert the date correctly.
 async function getRecentPosts() {
@@ -15,9 +23,6 @@ async function getRecentPosts() {
     return {
       id: doc.id,
       ...data,
-      // --- THIS IS THE FIX ---
-      // We convert the Firestore Timestamp object to a simple number (milliseconds).
-      // This makes the 'post' object "plain" and safe to pass to a Client Component.
       createdAt: data.createdAt.toMillis(),
     };
   });
@@ -92,6 +97,35 @@ export default async function HomePage() {
               <p className='mt-2 text-slate-700'>
                 Get detailed performance analysis after every test and access
                 our library of expert-written notes.
+              </p>
+            </div>
+            <div className='p-8 bg-slate-50 rounded-xl shadow-sm'>
+              <ShieldCheck className='h-10 w-10 text-indigo-600' />
+              <h3 className='mt-4 text-xl font-bold'>AI-Powered Proctoring</h3>
+              <p className='mt-2 text-slate-700'>
+                Ensure exam integrity with our advanced AI proctoring for a fair
+                and secure testing environment.
+              </p>
+            </div>
+
+            {/* --- NEW BLOCK 2: AI RECOMMENDATIONS --- */}
+            <div className='p-8 bg-slate-50 rounded-xl shadow-sm'>
+              <BrainCircuit className='h-10 w-10 text-indigo-600' />
+              <h3 className='mt-4 text-xl font-bold'>
+                AI-Based Recommendations
+              </h3>
+              <p className='mt-2 text-slate-700'>
+                Receive personalized test suggestions and study plans based on
+                your performance analysis.
+              </p>
+            </div>
+            <div className='p-8 bg-slate-50 rounded-xl shadow-sm'>
+              <Shuffle className='h-10 w-10 text-indigo-600' />
+              <h3 className='mt-4 text-xl font-bold'>Dynamic Question Sets</h3>
+              <p className='mt-2 text-slate-700'>
+                Never take the same test twice. Our randomized tests pull from a
+                vast question bank, with future AI recommendations to target
+                your weak spots.
               </p>
             </div>
           </div>
@@ -177,8 +211,9 @@ export default async function HomePage() {
           <div className='bg-indigo-700 text-white rounded-2xl shadow-xl p-10 md:p-16 text-center'>
             <h2 className='text-3xl font-bold'>Ready to Achieve Your Goals?</h2>
             <p className='mt-4 max-w-xl mx-auto'>
-              Join thousands of successful students. Your journey to a
-              government job starts today.
+              Join thousands of successful students. From NEET and IIT-JEE to
+              UPSC, SSC CGL, and Banking exams, we provide advanced mock tests
+              for every ambition. Prepare smarter, achieve more.
             </p>
             <div className='mt-8'>
               <SignUpButton />
