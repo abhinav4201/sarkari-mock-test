@@ -2,17 +2,30 @@
 
 import UserTestHistoryModal from "@/components/admin/UserTestHistoryModal";
 import AnalyticsStatCard from "@/components/dashboard/AnalyticsStatCard";
+import Modal from "@/components/ui/Modal";
 import { db } from "@/lib/firebase";
 import {
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
   query,
   Timestamp,
+  updateDoc,
   where,
+  limit,
+  orderBy,
+  startAfter,
 } from "firebase/firestore";
-import { FileText, IndianRupee, Library, User } from "lucide-react";
+import {
+  FileText,
+  History,
+  IndianRupee,
+  Library,
+  User,
+  XCircle,
+} from "lucide-react";
 import { notFound, useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
@@ -24,8 +37,9 @@ export default function LibraryAnalyticsPage() {
   const libraryId = params.libraryId;
 
   const [libraryDetails, setLibraryDetails] = useState(null);
-  const [allLibraryUsers, setAllLibraryUsers] = useState([]); // Holds all users for this library
-  const [displayedUsers, setDisplayedUsers] = useState([]); // Paginated users for display
+  const [allLibraryUsers, setAllLibraryUsers] = useState([]);
+  const [removedLibraryUsers, setRemovedLibraryUsers] = useState([]);
+  const [displayedUsers, setDisplayedUsers] = useState([]);
   const [monthlyTestCounts, setMonthlyTestCounts] = useState({});
   const [totalEarnings, setTotalEarnings] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -40,6 +54,42 @@ export default function LibraryAnalyticsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
 
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [userToRemove, setUserToRemove] = useState(null);
+
+  // --- ADDED FOR PAGINATION ---
+  // Function to fetch the next page of users
+  const fetchNextPage = useCallback(async () => {
+    if (!hasMore) return;
+
+    setLoading(true);
+    try {
+      const usersQuery = query(
+        collection(db, "users"),
+        where("libraryId", "==", libraryId),
+        where("role", "==", "library-student"),
+        orderBy("name"), // Order by name for consistent pagination
+        startAfter(lastDoc),
+        limit(PAGE_SIZE)
+      );
+
+      const usersSnapshot = await getDocs(usersQuery);
+      const newUsers = usersSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      setDisplayedUsers((prev) => [...prev, ...newUsers]);
+      setLastDoc(usersSnapshot.docs[usersSnapshot.docs.length - 1] || null);
+      setHasMore(newUsers.length === PAGE_SIZE);
+    } catch (err) {
+      console.error("Error fetching next page:", err);
+      toast.error("Failed to load more users.");
+    } finally {
+      setLoading(false);
+    }
+  }, [lastDoc, hasMore, libraryId]);
+
   // --- THIS IS THE COMBINED AND CORRECTED DATA FETCHING LOGIC ---
   const fetchAndProcessData = useCallback(async () => {
     setLoading(true);
@@ -50,7 +100,9 @@ export default function LibraryAnalyticsPage() {
       const usersQuery = query(
         collection(db, "users"),
         where("libraryId", "==", libraryId),
-        where("role", "==", "library-student")
+        where("role", "==", "library-student"),
+        orderBy("name"), // --- ADDED FOR PAGINATION --- Ensure consistent ordering
+        limit(PAGE_SIZE) // --- ADDED FOR PAGINATION --- Limit initial fetch
       );
 
       const [librarySnap, usersSnapshot] = await Promise.all([
@@ -68,8 +120,24 @@ export default function LibraryAnalyticsPage() {
         id: doc.id,
         ...doc.data(),
       }));
-      setAllLibraryUsers(usersData);
-      setDisplayedUsers(usersData.slice(0, PAGE_SIZE)); // Set initial page
+
+      const activeUsers = usersData.filter(
+        (user) =>
+          user.libraryId === libraryId && user.role === "library-student"
+      );
+      setAllLibraryUsers(activeUsers);
+      setDisplayedUsers(activeUsers); // --- MODIFIED FOR PAGINATION --- Set initial page
+      setLastDoc(usersSnapshot.docs[usersSnapshot.docs.length - 1] || null); // --- ADDED FOR PAGINATION ---
+      setHasMore(usersSnapshot.size === PAGE_SIZE); // --- ADDED FOR PAGINATION ---
+
+      const removedUsers = usersData.filter(
+        (user) =>
+          user.removedLibraryAssociations &&
+          user.removedLibraryAssociations.some(
+            (assoc) => assoc.libraryId === libraryId
+          )
+      );
+      setRemovedLibraryUsers(removedUsers);
 
       // 2. Decide Calculation Strategy ("Plan A" vs "Plan B")
       const commission = libData.commissionPerTest || 0;
@@ -78,9 +146,12 @@ export default function LibraryAnalyticsPage() {
       if (libData.testCompletions) {
         // --- PLAN A: New, efficient method from denormalized data ---
         const completions = libData.testCompletions || [];
-        setTotalEarnings(completions.length * commission);
+        const activeUserCompletions = completions.filter((c) =>
+          activeUsers.some((au) => au.uid === c.takerId)
+        );
+        setTotalEarnings(activeUserCompletions.length * commission);
 
-        const monthlyCompletions = completions.filter((c) => {
+        const monthlyCompletions = activeUserCompletions.filter((c) => {
           if (!c.completedAt) return false;
           const date = c.completedAt.toDate();
           return (
@@ -98,7 +169,8 @@ export default function LibraryAnalyticsPage() {
         // --- PLAN B: Backward compatibility for old data by querying results ---
         const allResultsQuery = query(
           collection(db, "mockTestResults"),
-          where("libraryId", "==", libraryId)
+          where("libraryId", "==", libraryId),
+          where("userId", "in", allUserUids)
         );
         const allResultsSnap = await getDocs(allResultsQuery);
         setTotalEarnings(allResultsSnap.size * commission);
@@ -114,7 +186,8 @@ export default function LibraryAnalyticsPage() {
           collection(db, "mockTestResults"),
           where("libraryId", "==", libraryId),
           where("completedAt", ">=", startDate),
-          where("completedAt", "<=", endDate)
+          where("completedAt", "<=", endDate),
+          where("userId", "in", allUserUids)
         );
         const monthlyResultsSnap = await getDocs(monthlyResultsQuery);
 
@@ -124,6 +197,9 @@ export default function LibraryAnalyticsPage() {
           counts[userId] = (counts[userId] || 0) + 1;
         });
         setMonthlyTestCounts(counts);
+      } else {
+        setTotalEarnings(0);
+        setMonthlyTestCounts({});
       }
     } catch (err) {
       console.error("Error fetching library analytics:", err);
@@ -143,6 +219,67 @@ export default function LibraryAnalyticsPage() {
     setIsModalOpen(true);
   };
 
+  const handleRemoveClick = (userId, userName) => {
+    setUserToRemove({ id: userId, name: userName });
+    setIsConfirmModalOpen(true);
+  };
+
+  const confirmAndRemoveUser = async () => {
+    if (!userToRemove) return;
+
+    const { id: userId, name: userName } = userToRemove;
+
+    setIsConfirmModalOpen(false);
+    toast.loading(`Removing ${userName}...`);
+
+    try {
+      const userRef = doc(db, "users", userId);
+      const userSnap = await getDoc(userRef);
+
+      if (!userSnap.exists()) {
+        toast.error("User not found.");
+        return;
+      }
+
+      const userData = userSnap.data();
+      const currentLibraryId = userData.libraryId;
+      const currentOwnerId = userData.ownerId;
+
+      const associationToRemove = {};
+      if (currentLibraryId) associationToRemove.libraryId = currentLibraryId;
+      if (currentOwnerId) associationToRemove.ownerId = currentOwnerId;
+      associationToRemove.removedAt = serverTimestamp();
+
+      const updatePayload = {
+        role: "regular",
+        premiumAccessExpires: deleteField(),
+        removedLibraryAssociations: arrayUnion(associationToRemove),
+      };
+
+      if (userData.libraryId) {
+        updatePayload.libraryId = deleteField();
+      }
+      if (userData.ownerId) {
+        updatePayload.ownerId = deleteField();
+      }
+
+      await updateDoc(userRef, updatePayload);
+
+      setAllLibraryUsers((prev) => prev.filter((user) => user.uid !== userId));
+      setDisplayedUsers((prev) => prev.filter((user) => user.uid !== userId));
+      await fetchAndProcessData();
+
+      toast.dismiss();
+      toast.success(`${userName} has been removed and premium access revoked.`);
+    } catch (error) {
+      toast.dismiss();
+      console.error("Error removing user:", error);
+      toast.error("Failed to remove user. Please try again.");
+    } finally {
+      setUserToRemove(null);
+    }
+  };
+
   const finalDisplayedUsers = useMemo(() => {
     return displayedUsers.map((user) => ({
       ...user,
@@ -150,7 +287,12 @@ export default function LibraryAnalyticsPage() {
     }));
   }, [displayedUsers, monthlyTestCounts]);
 
-  // Months and years arrays remain the same...
+  const finalRemovedUsers = useMemo(() => {
+    return removedLibraryUsers.map((user) => ({
+      ...user,
+    }));
+  }, [removedLibraryUsers]);
+
   const months = Array.from({ length: 12 }, (v, i) => ({
     value: i + 1,
     name: new Date(0, i).toLocaleString("en-US", { month: "long" }),
@@ -217,7 +359,6 @@ export default function LibraryAnalyticsPage() {
               Filter Activity by Month
             </h2>
             <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
-              {/* Month and Year Selectors */}
               <div>
                 <label
                   htmlFor='month-select'
@@ -263,7 +404,7 @@ export default function LibraryAnalyticsPage() {
 
           <div className='bg-white p-6 rounded-2xl shadow-lg border'>
             <h2 className='text-xl font-bold text-slate-800 mb-4'>
-              Onboarded Users
+              Active Onboarded Users
             </h2>
             {finalDisplayedUsers.length > 0 ? (
               <div className='overflow-x-auto'>
@@ -282,6 +423,9 @@ export default function LibraryAnalyticsPage() {
                       <th className='px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider'>
                         Remaining Tests
                       </th>
+                      <th className='px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider'>
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody className='bg-white divide-y divide-slate-200'>
@@ -290,30 +434,38 @@ export default function LibraryAnalyticsPage() {
                       const taken = student.testsTaken;
                       const remaining = limit - taken;
                       const usagePercentage = limit > 0 ? taken / limit : 0;
-                      let statusColorClass = "text-green-600"; // Default to green
+                      let statusColorClass = "text-green-600";
 
                       if (usagePercentage >= 0.9) {
-                        statusColorClass = "text-red-600"; // 90% or more used
+                        statusColorClass = "text-red-600";
                       } else if (usagePercentage >= 0.7) {
-                        statusColorClass = "text-amber-600"; // 70% - 89% used
+                        statusColorClass = "text-amber-600";
                       }
 
                       return (
-                        <tr
-                          key={student.uid}
-                          onClick={() => handleUserClick(student)}
-                          className='cursor-pointer hover:bg-slate-50'
-                        >
-                          <td className='px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900'>
+                        <tr key={student.uid} className='hover:bg-slate-50'>
+                          <td
+                            onClick={() => handleUserClick(student)}
+                            className='px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900 cursor-pointer'
+                          >
                             {student.name}
                           </td>
-                          <td className='px-6 py-4 whitespace-nowrap text-sm text-slate-600'>
+                          <td
+                            onClick={() => handleUserClick(student)}
+                            className='px-6 py-4 whitespace-nowrap text-sm text-slate-600 cursor-pointer'
+                          >
                             {student.email}
                           </td>
-                          <td className='px-6 py-4 whitespace-nowrap text-sm text-slate-800 font-semibold'>
+                          <td
+                            onClick={() => handleUserClick(student)}
+                            className='px-6 py-4 whitespace-nowrap text-sm text-slate-800 font-semibold cursor-pointer'
+                          >
                             <span className={statusColorClass}>{taken}</span>
                           </td>
-                          <td className='px-6 py-4 whitespace-nowrap text-sm font-semibold'>
+                          <td
+                            onClick={() => handleUserClick(student)}
+                            className='px-6 py-4 whitespace-nowrap text-sm font-semibold cursor-pointer'
+                          >
                             {limit > 0 ? (
                               <span className={statusColorClass}>
                                 {remaining < 0 ? 0 : remaining} / {limit}
@@ -322,11 +474,40 @@ export default function LibraryAnalyticsPage() {
                               <span className='text-indigo-600'>Unlimited</span>
                             )}
                           </td>
+                          <td className='px-6 py-4 whitespace-nowrap text-center text-sm font-medium'>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveClick(student.uid, student.name);
+                              }}
+                              className='inline-flex items-center gap-2 text-red-600 hover:text-red-800 transition-colors'
+                              title={`Remove ${student.name}`}
+                            >
+                              <XCircle className='h-4 w-4' />
+                              Remove
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
+                {/* --- ADDED FOR PAGINATION --- Load More Button */}
+                {hasMore && (
+                  <div className='mt-6 text-center'>
+                    <button
+                      onClick={fetchNextPage}
+                      disabled={loading}
+                      className={`px-5 py-2 font-semibold rounded-lg transition-colors ${
+                        loading
+                          ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                          : "bg-indigo-600 text-white hover:bg-indigo-700"
+                      }`}
+                    >
+                      {loading ? "Loading..." : "Load More Users"}
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <div className='text-center py-12'>
@@ -337,8 +518,100 @@ export default function LibraryAnalyticsPage() {
               </div>
             )}
           </div>
+          <div className='bg-white p-6 rounded-2xl shadow-lg border'>
+            <h2 className='text-xl font-bold text-slate-800 mb-4 flex items-center gap-2'>
+              <History className='h-6 w-6 text-slate-600' />
+              Previously Onboarded (Removed) Users
+            </h2>
+            {finalRemovedUsers.length > 0 ? (
+              <div className='overflow-x-auto'>
+                <table className='min-w-full divide-y divide-slate-200'>
+                  <thead className='bg-slate-50'>
+                    <tr>
+                      <th className='px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider'>
+                        Student Name
+                      </th>
+                      <th className='px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider'>
+                        Email
+                      </th>
+                      <th className='px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider'>
+                        Date Removed
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className='bg-white divide-y divide-slate-200'>
+                    {finalRemovedUsers.map((student) => {
+                      const removalEntry =
+                        student.removedLibraryAssociations.find(
+                          (assoc) => assoc.libraryId === libraryId
+                        );
+                      const removedDate =
+                        removalEntry?.removedAt
+                          ?.toDate()
+                          .toLocaleDateString() || "N/A";
+
+                      return (
+                        <tr key={student.uid} className='hover:bg-slate-50'>
+                          <td className='px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900'>
+                            {student.name}
+                          </td>
+                          <td className='px-6 py-4 whitespace-nowrap text-sm text-slate-600'>
+                            {student.email}
+                          </td>
+                          <td className='px-6 py-4 whitespace-nowrap text-sm text-slate-600'>
+                            {removedDate}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className='text-center py-8'>
+                <User className='mx-auto h-10 w-10 text-slate-400' />
+                <p className='mt-2 text-md text-slate-500'>
+                  No users have been removed from this library yet.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+      <Modal
+        isOpen={isConfirmModalOpen}
+        onClose={() => setIsConfirmModalOpen(false)}
+        title='Confirm User Removal'
+        size='md'
+      >
+        <div>
+          <p className='text-slate-700 text-base'>
+            Are you sure you want to remove{" "}
+            <span className='font-bold text-slate-900'>
+              {userToRemove?.name}
+            </span>
+            ?
+          </p>
+          <p className='mt-2 text-sm text-slate-500'>
+            Their role will be reverted to 'regular', and they will lose all
+            library-associated access. This action cannot be undone.
+          </p>
+        </div>
+        <div className='mt-6 flex justify-end gap-3'>
+          <button
+            onClick={() => setIsConfirmModalOpen(false)}
+            className='px-5 py-2 bg-slate-100 text-slate-800 font-semibold rounded-lg hover:bg-slate-200 transition-colors'
+          >
+            Cancel
+          </button>
+          <button
+            onClick={confirmAndRemoveUser}
+            className='px-5 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors'
+          >
+            Remove User
+          </button>
+        </div>
+      </Modal>
     </>
   );
 }

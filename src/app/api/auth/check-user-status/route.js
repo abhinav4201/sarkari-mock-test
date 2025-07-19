@@ -1,3 +1,4 @@
+// route.js
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { NextResponse } from "next/server";
 
@@ -27,6 +28,8 @@ export async function POST(request) {
           ...userData,
           // Ensure owned libraries are sent, default to empty array
           ownedLibraryIds: userData.libraryOwnerOf || [],
+          // Include removed library associations
+          removedLibraryAssociations: userData.removedLibraryAssociations || [],
         },
       });
     }

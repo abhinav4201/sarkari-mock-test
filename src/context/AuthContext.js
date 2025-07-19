@@ -256,6 +256,9 @@ export const AuthContextProvider = ({ children }) => {
       (Array.isArray(userProfile?.libraryOwnerOf) &&
         userProfile.libraryOwnerOf.length > 0);
 
+    const isCurrentlyLibraryStudent =
+      userProfile?.role === "library-student" && userProfile?.libraryId;
+
     return {
       user,
       userProfile,
@@ -264,10 +267,12 @@ export const AuthContextProvider = ({ children }) => {
       premiumExpires,
       freeTrialCount,
       favoriteTests,
-      isLibraryUser: userProfile?.role === "library-student",
+      // isLibraryUser: userProfile?.role === "library-student",
+      isLibraryUser: isCurrentlyLibraryStudent,
       isLibraryOwner: isOwner, // Use the new robust check
       ownedLibraryIds: userProfile?.libraryOwnerOf || [],
       libraryId: userProfile?.libraryId || null,
+      removedLibraryAssociations: userProfile?.removedLibraryAssociations || [],
       googleSignIn,
       logOut,
       googleSignInForLibrary,
