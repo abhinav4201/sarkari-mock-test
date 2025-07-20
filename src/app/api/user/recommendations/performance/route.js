@@ -2,6 +2,7 @@ import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { NextResponse } from "next/server";
 
 const WEAK_SCORE_THRESHOLD = 0.6; // 60%
+const RECOMMENDATION_COUNT = 5;
 
 export async function GET(request) {
   try {
@@ -12,12 +13,14 @@ export async function GET(request) {
     const decodedToken = await adminAuth.verifyIdToken(userToken);
     const userId = decodedToken.uid;
 
-    // 1. Get all of the user's past results
+    // --- Step 1: Get all of the user's past results ---
     const resultsQuery = adminDb
       .collection("mockTestResults")
       .where("userId", "==", userId);
     const resultsSnap = await resultsQuery.get();
+
     if (resultsSnap.empty) {
+      // No history, so no performance recommendations are possible.
       return NextResponse.json([], { status: 200 });
     }
     const results = resultsSnap.docs.map((doc) => ({
@@ -25,9 +28,10 @@ export async function GET(request) {
       ...doc.data(),
     }));
 
-    // 2. Analyze results to find topic performance
+    // --- Step 2: Analyze results to find topics and performance ---
     const topicStats = {};
     const takenTestIds = new Set();
+    const takenTopics = new Set();
 
     for (const result of results) {
       takenTestIds.add(result.testId);
@@ -36,12 +40,11 @@ export async function GET(request) {
         .doc(result.testId)
         .get();
 
-      // --- THIS IS THE FIX ---
-      // Changed from testSnap.exists() to the correct property: testSnap.exists
       if (!testSnap.exists) continue;
-      // --- END OF FIX ---
 
       const topic = testSnap.data().topic;
+      takenTopics.add(topic); // Keep track of all topics user has taken
+
       if (!topicStats[topic]) {
         topicStats[topic] = { score: 0, total: 0 };
       }
@@ -49,36 +52,69 @@ export async function GET(request) {
       topicStats[topic].total += result.totalQuestions;
     }
 
-    // 3. Identify weak topics
+    // --- Step 3: Identify weak topics ---
     const weakTopics = Object.keys(topicStats).filter(
       (topic) =>
-        topicStats[topic].total > 0 && // Avoid division by zero
+        topicStats[topic].total > 0 &&
         topicStats[topic].score / topicStats[topic].total < WEAK_SCORE_THRESHOLD
     );
 
-    if (weakTopics.length === 0) {
-      return NextResponse.json([], { status: 200 });
+    let recommendedTests = [];
+
+    // --- Step 4: PRIMARY LOGIC - Find recommendations in weak topics ---
+    if (weakTopics.length > 0) {
+      const recsQuery = adminDb
+        .collection("mockTests")
+        .where("topic", "in", weakTopics)
+        .where("status", "==", "approved")
+        .orderBy("createdAt", "desc")
+        .limit(10);
+
+      const recsSnap = await recsQuery.get();
+      recommendedTests = recsSnap.docs
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt.toMillis(),
+        }))
+        .filter((test) => !takenTestIds.has(test.id));
     }
 
-    // 4. Find untaken tests in those weak topics
-    const recsQuery = adminDb
-      .collection("mockTests")
-      .where("topic", "in", weakTopics)
-      .where("status", "==", "approved")
-      .orderBy("createdAt", "desc")
-      .limit(10); // Limit to 10 recommendations
+    // --- Step 5: FALLBACK LOGIC - If not enough recs, find in similar topics ---
+    if (
+      recommendedTests.length < RECOMMENDATION_COUNT &&
+      takenTopics.size > 0
+    ) {
+      const existingRecIds = new Set(recommendedTests.map((test) => test.id));
+      const similarTopicsQuery = adminDb
+        .collection("mockTests")
+        .where("topic", "in", Array.from(takenTopics))
+        .where("status", "==", "approved")
+        .orderBy("createdAt", "desc")
+        .limit(10);
 
-    const recsSnap = await recsQuery.get();
-    const recommendedTests = recsSnap.docs
-      .map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt.toMillis(),
-      }))
-      .filter((test) => !takenTestIds.has(test.id)) // Filter out already taken tests
-      .slice(0, 2); // Return a maximum of 2 performance-based recs
+      const similarSnap = await similarTopicsQuery.get();
+      const similarTests = similarSnap.docs
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt.toMillis(),
+        }))
+        .filter(
+          (test) => !takenTestIds.has(test.id) && !existingRecIds.has(test.id)
+        );
 
-    return NextResponse.json(recommendedTests, { status: 200 });
+      // Combine and ensure no duplicates
+      recommendedTests.push(...similarTests);
+      const uniqueTestsMap = new Map(
+        recommendedTests.map((test) => [test.id, test])
+      );
+      recommendedTests = Array.from(uniqueTestsMap.values());
+    }
+
+    return NextResponse.json(recommendedTests.slice(0, RECOMMENDATION_COUNT), {
+      status: 200,
+    });
   } catch (error) {
     console.error("Performance Recommendation Error:", error);
     return NextResponse.json(

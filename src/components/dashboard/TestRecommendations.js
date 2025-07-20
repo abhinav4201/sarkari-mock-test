@@ -28,6 +28,7 @@ export default function TestRecommendations() {
   const { user } = useAuth();
   const [performanceRecs, setPerformanceRecs] = useState([]);
   const [popularRecs, setPopularRecs] = useState([]);
+  const [collaborativeRecs, setCollaborativeRecs] = useState([]); // New state for collaborative recommendations
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,21 +42,24 @@ export default function TestRecommendations() {
         const idToken = await user.getIdToken();
         const headers = { Authorization: `Bearer ${idToken}` };
 
-        // Fetch both sets of recommendations in parallel
-        const [perfRes, popRes] = await Promise.all([
+        // Fetch all three sets of recommendations in parallel
+        const [perfRes, popRes, collabRes] = await Promise.all([
           fetch("/api/user/recommendations/performance", { headers }),
           fetch("/api/tests/recommendations/popular", { headers }),
+          fetch("/api/user/recommendations/collaborative", { headers }), // Fetch collaborative recommendations
         ]);
 
-        if (!perfRes.ok || !popRes.ok) {
+        if (!perfRes.ok || !popRes.ok || !collabRes.ok) {
           throw new Error("Failed to fetch recommendations.");
         }
 
         const perfData = await perfRes.json();
         const popData = await popRes.json();
+        const collabData = await collabRes.json(); // Get collaborative recommendations data
 
         setPerformanceRecs(perfData);
         setPopularRecs(popData);
+        setCollaborativeRecs(collabData); // Set the new state
       } catch (error) {
         toast.error(error.message);
       } finally {
@@ -67,12 +71,25 @@ export default function TestRecommendations() {
   }, [user]);
 
   // Don't render the component if there's nothing to show
-  if (!loading && performanceRecs.length === 0 && popularRecs.length === 0) {
+  if (
+    !loading &&
+    performanceRecs.length === 0 &&
+    popularRecs.length === 0 &&
+    collaborativeRecs.length === 0
+  ) {
     return null;
   }
 
   return (
     <div className='space-y-12'>
+      {/* New Section for Collaborative Recommendations */}
+      {collaborativeRecs.length > 0 && (
+        <RecommendationSection
+          title='Users Like You Also Took...'
+          tests={collaborativeRecs}
+          loading={loading}
+        />
+      )}
       {performanceRecs.length > 0 && (
         <RecommendationSection
           title='Improve Your Weak Areas'
