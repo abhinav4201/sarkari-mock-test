@@ -2,18 +2,22 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
 import DailyDose from "@/components/dashboard/DailyDose";
-import TestHistory from "@/components/dashboard/TestHistory";
-import WelcomeHeader from "@/components/dashboard/WelcomeHeader";
-import SubscriptionStatusCard from "@/components/dashboard/SubscriptionStatusCard";
-import PaymentModal from "@/components/dashboard/PaymentModal";
-import { db } from "@/lib/firebase";
-import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
-import toast from "react-hot-toast";
+import LazyProgressChart from "@/components/dashboard/LazyProgressChart";
 import LibraryUserStatsCard from "@/components/dashboard/LibraryUserStatsCard";
-import Link from "next/link"; // Import Link
+import PaymentModal from "@/components/dashboard/PaymentModal";
+import PlatformTrends from "@/components/dashboard/PlatformTrends";
+// import ProgressChart from "@/components/dashboard/ProgressChart";
+import SubscriptionStatusCard from "@/components/dashboard/SubscriptionStatusCard";
+import LazyTestHistory from "@/components/dashboard/LazyTestHistory";
+import WelcomeHeader from "@/components/dashboard/WelcomeHeader";
+import { db } from "@/lib/firebase";
+import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
 import { ArrowRight, TrendingUp } from "lucide-react"; // Import TrendingUp icon
+import Link from "next/link"; // Import Link
+import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
+import ReferralCard from "@/components/dashboard/ReferralCard";
 
 async function getDailyVocabulary() {
   const q = query(
@@ -88,6 +92,16 @@ export default function LibraryDashboardPage() {
         </div>
 
         <div className='mt-8'>
+          <LazyProgressChart />
+        </div>
+        <div className='mt-8'>
+          <ReferralCard />
+        </div>
+        <div className='mt-8'>
+          <PlatformTrends />
+        </div>
+
+        <div className='mt-8'>
           <SubscriptionStatusCard
             onUpgradeClick={() => setIsPaymentModalOpen(true)}
           />
@@ -118,7 +132,9 @@ export default function LibraryDashboardPage() {
               <h2 className='text-2xl font-bold text-slate-900 mb-6'>
                 Your Test History
               </h2>
-              <TestHistory />
+              <div className='lg:col-span-2'>
+                <LazyTestHistory />
+              </div>
             </div>
           </div>
 

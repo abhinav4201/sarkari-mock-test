@@ -51,6 +51,13 @@ export default function Navbar() {
       >
         Tests
       </Link>
+      <Link
+        href='/leaderboard'
+        className={linkClasses}
+        onClick={closeMobileMenu}
+      >
+        Leaderboard
+      </Link>
       <Link href='/contact' className={linkClasses} onClick={closeMobileMenu}>
         Contact
       </Link>

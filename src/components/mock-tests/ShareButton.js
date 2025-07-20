@@ -2,19 +2,30 @@
 
 "use client";
 
-import { Share2 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { Share2, Gift } from "lucide-react";
 import toast from "react-hot-toast";
+import { usePathname } from "next/navigation";
 
 export default function ShareButton({ testId, title }) {
+  const { user, isPremium, userProfile } = useAuth();
+  const pathname = usePathname();
+
   const handleShare = async () => {
-    const shareUrl = `${window.location.origin}/mock-tests/${testId}`;
+    let shareUrl = `${window.location.origin}${pathname}`;
+    let shareText = `Check out this mock test on Sarkari Mock Test: "${title}"`;
+
+    if (isPremium && userProfile?.referralCode) {
+      shareUrl = `${window.location.origin}${pathname}?ref=${userProfile.referralCode}`;
+      shareText = `Join me on Sarkari Mock Test! I'm preparing with this platform and you should too. Use my link to sign up!`;
+    }
+
     const shareData = {
       title: `Sarkari Mock Test: ${title}`,
-      text: `Check out this mock test: "${title}"`,
+      text: shareText,
       url: shareUrl,
     };
 
-    // Use the native Web Share API if available
     if (navigator.share) {
       try {
         await navigator.share(shareData);
@@ -22,23 +33,36 @@ export default function ShareButton({ testId, title }) {
         console.error("Error using Web Share API:", error);
       }
     } else {
-      // Fallback for desktop browsers: copy link to clipboard
       try {
         await navigator.clipboard.writeText(shareUrl);
-        toast.success("Test link copied to clipboard!");
+        toast.success(
+          isPremium && userProfile?.referralCode
+            ? "Your referral link has been copied!"
+            : "Test link copied to clipboard!"
+        );
       } catch (error) {
         toast.error("Could not copy link.");
       }
     }
   };
 
+  const isReferral = isPremium && userProfile?.referralCode;
+
   return (
     <button
       onClick={handleShare}
-      title='Share Test'
-      className='p-2 rounded-full text-slate-600 hover:bg-slate-200 hover:text-indigo-600 transition-colors'
+      title={isReferral ? "Share your Referral Link" : "Share Test"}
+      className={`p-2 rounded-full transition-colors ${
+        isReferral
+          ? "text-pink-600 hover:bg-pink-100"
+          : "text-slate-600 hover:bg-slate-200"
+      }`}
     >
-      <Share2 className='h-5 w-5' />
+      {isReferral ? (
+        <Gift className='h-5 w-5' />
+      ) : (
+        <Share2 className='h-5 w-5' />
+      )}
     </button>
   );
 }

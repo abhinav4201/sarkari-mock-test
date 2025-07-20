@@ -71,6 +71,12 @@ export default function LibraryNavbar() {
                   Tests
                 </Link>
                 <Link
+                  href='/leaderboard'
+                  className='px-3 py-2 text-indigo-100 font-medium hover:text-white rounded-md text-sm'
+                >
+                  Leaderboard
+                </Link>
+                <Link
                   href='/contact'
                   className='px-3 py-2 text-indigo-100 font-medium hover:text-white rounded-md text-sm'
                 >
@@ -128,6 +134,7 @@ export default function LibraryNavbar() {
                   Dashboard
                 </MobileNavLink>
                 <MobileNavLink href='/mock-tests'>Tests</MobileNavLink>
+                <MobileNavLink href='/leaderboard'>Leaderboard</MobileNavLink>
                 <MobileNavLink href='/contact'>Contact</MobileNavLink>
               </>
             )}

@@ -3,8 +3,6 @@
 import DailyDose from "@/components/dashboard/DailyDose";
 import PaymentModal from "@/components/dashboard/PaymentModal";
 import SubscriptionStatusCard from "@/components/dashboard/SubscriptionStatusCard";
-import TestHistory from "@/components/dashboard/TestHistory";
-import TestRecommendations from "@/components/dashboard/TestRecommendations";
 import UserStats from "@/components/dashboard/UserStats";
 import WelcomeHeader from "@/components/dashboard/WelcomeHeader";
 import { db } from "@/lib/firebase";
@@ -13,6 +11,10 @@ import { ArrowRight, PenSquare, TrendingUp, X } from "lucide-react";
 import Link from "next/link"; // Import Link
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import ReferralCard from "@/components/dashboard/ReferralCard";
+import PlatformTrends from "@/components/dashboard/PlatformTrends";
+import LazyProgressChart from "@/components/dashboard/LazyProgressChart";
+import LazyTestHistory from "@/components/dashboard/LazyTestHistory";
 
 async function getDailyVocabulary() {
   const q = query(
@@ -89,6 +91,11 @@ export default function DashboardPage() {
             <UserStats />
           </div>
 
+          <div className='mt-8'>
+            <LazyProgressChart />
+          </div>
+
+
           {/* --- NEW: The "Go Premium" card --- */}
           <SubscriptionStatusCard
             onUpgradeClick={() => setIsPaymentModalOpen(true)}
@@ -112,7 +119,6 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-
           <div className='mt-8'>
             <Link href='/dashboard/monetization' className='block group'>
               <div className='bg-white p-6 rounded-2xl shadow-lg border border-slate-200 hover:border-indigo-400 hover:shadow-xl transition-all flex justify-between items-center'>
@@ -130,13 +136,18 @@ export default function DashboardPage() {
             </Link>
           </div>
 
+          <ReferralCard />
+          <PlatformTrends />
+
           <div className='mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8 items-start'>
             <div className='lg:col-span-2 space-y-8'>
               <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-slate-200'>
                 <h2 className='text-2xl font-bold text-slate-900 mb-6'>
                   Your Test History
                 </h2>
-                <TestHistory />
+                <div className='lg:col-span-2'>
+                  <LazyTestHistory />
+                </div>
               </div>
             </div>
 

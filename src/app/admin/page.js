@@ -24,6 +24,8 @@ import TestListModal from "@/components/admin/TestListModal";
 import RestrictedTestsModal from "@/components/admin/RestrictedTestsModal";
 import TestAttemptsModal from "@/components/admin/TestAttemptsModal";
 import AttemptDetailsModal from "@/components/admin/AttemptDetailsModal";
+import DataCalculationManager from "@/components/admin/DataCalculationManager";
+
 
 const getCollectionCount = (collectionName) => {
   return getDocs(collection(db, collectionName)).then((snap) => snap.size);
@@ -199,6 +201,7 @@ export default function AdminDashboardPage() {
             isLoading={loading}
           />
         </div>
+        <DataCalculationManager />
         <div className='mt-8 bg-white p-6 rounded-2xl shadow-lg'>
           <h2 className='text-xl font-semibold text-slate-900'>
             Welcome, Admin!

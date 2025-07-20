@@ -19,9 +19,12 @@ export async function POST(request, { params }) {
     // and correctly point to the testAnalytics collection.
     const analyticsRef = adminDb.collection("testAnalytics").doc(testId);
 
-    await analyticsRef.update({
-      impressionCount: FieldValue.increment(1),
-    });
+     await analyticsRef.set(
+       {
+         impressionCount: FieldValue.increment(1),
+       },
+       { merge: true }
+     );
 
     return NextResponse.json(
       { success: true, message: "Impression tracked." },

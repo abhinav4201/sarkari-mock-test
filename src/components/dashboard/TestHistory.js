@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -16,104 +16,133 @@ import {
 } from "firebase/firestore";
 import UserAttemptDetailsModal from "./UserAttemptDetailsModal";
 
+const PAGE_SIZE = 5;
+
 export default function TestHistory() {
   const { user } = useAuth();
   const [aggregatedHistory, setAggregatedHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [lastResultTimestamp, setLastResultTimestamp] = useState(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedDetails, setSelectedDetails] = useState(null);
 
-  useEffect(() => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
+  const fetchHistoryAndProcess = useCallback(
+    async (loadMore = false) => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
-    const fetchAndProcessHistory = async () => {
-      setLoading(true);
+      if (loadMore) {
+        if (!hasMore) return;
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+        setAggregatedHistory([]);
+      }
+
       try {
-        // **THE FIX: Call the new API route instead of querying Firestore directly**
         const idToken = await user.getIdToken();
-        const response = await fetch("/api/user/test-history", {
-          headers: {
-            Authorization: `Bearer ${idToken}`,
-          },
-        });
+        const cursorQueryParam =
+          loadMore && lastResultTimestamp
+            ? `?cursor=${lastResultTimestamp}`
+            : "";
+        const response = await fetch(
+          `/api/user/test-history${cursorQueryParam}`,
+          {
+            headers: { Authorization: `Bearer ${idToken}` },
+          }
+        );
 
         if (!response.ok) {
           throw new Error("Failed to fetch test history");
         }
 
-        const allResults = await response.json();
+        const newResults = await response.json();
 
-        if (allResults.length === 0) {
-          setAggregatedHistory([]);
-          setLoading(false);
-          return;
+        if (newResults.length < PAGE_SIZE) {
+          setHasMore(false);
         }
 
-        // --- The rest of the processing logic remains the same ---
-        const summary = new Map();
-        allResults.forEach((res) => {
-          const key = res.testId;
-          if (!summary.has(key)) {
-            summary.set(key, {
-              testId: res.testId,
-              attemptCount: 0,
-              mostRecentAttempt: res,
-              allAttemptsForTest: [],
+        if (newResults.length > 0) {
+          const lastDoc = newResults[newResults.length - 1];
+          setLastResultTimestamp(lastDoc.completedAt);
+
+          const summary = new Map();
+          const currentResults = aggregatedHistory.flatMap(
+            (h) => h.allAttemptsForTest
+          );
+          const allFetchedResults = loadMore
+            ? [...currentResults, ...newResults]
+            : newResults;
+
+          allFetchedResults.forEach((res) => {
+            const key = res.testId;
+            if (!summary.has(key)) {
+              summary.set(key, {
+                testId: res.testId,
+                attemptCount: 0,
+                mostRecentAttempt: res,
+                allAttemptsForTest: [],
+              });
+            }
+            const entry = summary.get(key);
+            entry.attemptCount += 1;
+            entry.allAttemptsForTest.push({
+              ...res,
+              completedAt: new Date(res.completedAt),
             });
-          }
-          const entry = summary.get(key);
-          entry.attemptCount += 1;
-          entry.allAttemptsForTest.push({
-            ...res,
-            completedAt: new Date(res.completedAt), // Convert milliseconds back to Date
+            if (res.completedAt > entry.mostRecentAttempt.completedAt) {
+              entry.mostRecentAttempt = res;
+            }
           });
-        });
 
-        const testIds = [...summary.keys()];
-        if (testIds.length === 0) {
-          setAggregatedHistory([]);
-          setLoading(false);
-          return;
+          const testIds = [
+            ...new Set(allFetchedResults.map((res) => res.testId)),
+          ];
+
+          if (testIds.length > 0) {
+            const testsQuery = query(
+              collection(db, "mockTests"),
+              where(documentId(), "in", testIds)
+            );
+            const testsSnapshot = await getDocs(testsQuery);
+            const testsMap = new Map(
+              testsSnapshot.docs.map((doc) => [doc.id, doc.data()])
+            );
+
+            const finalData = [...summary.values()].map((item) => ({
+              ...item,
+              testTitle: testsMap.get(item.testId)?.title || "Unknown Test",
+            }));
+
+            finalData.sort(
+              (a, b) =>
+                new Date(b.mostRecentAttempt.completedAt) -
+                new Date(a.mostRecentAttempt.completedAt)
+            );
+
+            setAggregatedHistory(finalData);
+          }
         }
-
-        const fetchedTests = [];
-        for (let i = 0; i < testIds.length; i += 10) {
-          const chunk = testIds.slice(i, i + 10);
-          const testsQuery = query(
-            collection(db, "mockTests"),
-            where(documentId(), "in", chunk)
-          );
-          const testsSnapshot = await getDocs(testsQuery);
-          testsSnapshot.forEach((doc) =>
-            fetchedTests.push({ id: doc.id, ...doc.data() })
-          );
-        }
-        const testsMap = new Map(fetchedTests.map((test) => [test.id, test]));
-
-        const finalData = [...summary.values()].map((item) => ({
-          ...item,
-          testTitle: testsMap.get(item.testId)?.title || "Unknown Test",
-        }));
-
-        // Sort the aggregated history by the most recent attempt's completion date
-        finalData.sort(
-          (a, b) =>
-            b.mostRecentAttempt.completedAt - a.mostRecentAttempt.completedAt
-        );
-
-        setAggregatedHistory(finalData);
       } catch (error) {
-        console.error("Test History Fetch Error:", error);
-        toast.error("Could not load your test history.");
+        toast.error(error.message);
       } finally {
         setLoading(false);
+        setLoadingMore(false);
       }
-    };
+    },
+    [user, hasMore, lastResultTimestamp, aggregatedHistory]
+  );
 
-    fetchAndProcessHistory();
+  useEffect(() => {
+    if (user) {
+      fetchHistoryAndProcess(false);
+    } else {
+      setLoading(false);
+    }
   }, [user]);
 
   const handleItemClick = (item) => {
@@ -123,10 +152,15 @@ export default function TestHistory() {
         allAttempts: item.allAttemptsForTest,
       });
       setIsDetailsModalOpen(true);
+    } else {
+      const resultPath = item.mostRecentAttempt.isDynamic
+        ? `/mock-tests/results/results-dynamic/${item.mostRecentAttempt.id}`
+        : `/mock-tests/results/${item.mostRecentAttempt.id}`;
+      window.location.href = resultPath; // Use router if available
     }
   };
 
-  if (loading) {
+  if (loading && aggregatedHistory.length === 0) {
     return (
       <p className='mt-2 text-lg text-slate-800'>
         Loading your test history...
@@ -215,6 +249,17 @@ export default function TestHistory() {
           })
         )}
       </div>
+      {hasMore && (
+        <div className='text-center mt-6'>
+          <button
+            onClick={() => fetchHistoryAndProcess(true)}
+            disabled={loadingMore}
+            className='px-6 py-2 bg-green-500 rounded-lg text-white font-semibold hover:bg-blue-500'
+          >
+            {loadingMore ? "Loading..." : "Load More"}
+          </button>
+        </div>
+      )}
     </>
   );
 }

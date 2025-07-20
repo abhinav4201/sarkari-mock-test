@@ -1,5 +1,8 @@
+// src/app/api/payment/verify-signature/route.js
+
 import { NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import crypto from "crypto";
 
 export async function POST(request) {
@@ -28,13 +31,56 @@ export async function POST(request) {
       );
     }
 
-    // --- Payment is verified, now grant premium access ---
-    const expiryDate = new Date();
-    expiryDate.setDate(expiryDate.getDate() + 30); // Grant 30 days of access
-
     const userRef = adminDb.collection("users").doc(userId);
-    await userRef.update({
-      premiumAccessExpires: expiryDate,
+
+    await adminDb.runTransaction(async (transaction) => {
+      const userSnap = await transaction.get(userRef);
+      const userData = userSnap.data();
+
+      if (userData.referredBy && !userData.hasMadeFirstPurchase) {
+        const referrerRef = adminDb
+          .collection("users")
+          .doc(userData.referredBy);
+        const referrerSnap = await transaction.get(referrerRef);
+
+        if (referrerSnap.exists) {
+          const referrerData = referrerSnap.data();
+          const newReferralCount = (referrerData.referralCount || 0) + 1;
+
+          if (newReferralCount >= 10) {
+            const isReferrerPremium =
+              referrerData.premiumAccessExpires &&
+              referrerData.premiumAccessExpires.toDate() > new Date();
+
+            if (isReferrerPremium) {
+              const currentExpiry = referrerData.premiumAccessExpires.toDate();
+              const newExpiry = new Date(
+                currentExpiry.setDate(currentExpiry.getDate() + 30)
+              );
+              transaction.update(referrerRef, {
+                referralCount: 0,
+                premiumAccessExpires: newExpiry,
+              });
+            } else {
+              transaction.update(referrerRef, {
+                referralCount: 0,
+                premiumCredits: FieldValue.increment(1),
+              });
+            }
+          } else {
+            transaction.update(referrerRef, {
+              referralCount: newReferralCount,
+            });
+          }
+          transaction.update(userRef, { hasMadeFirstPurchase: true });
+        }
+      }
+
+      const expiryDate = new Date();
+      expiryDate.setDate(expiryDate.getDate() + 30);
+      transaction.update(userRef, {
+        premiumAccessExpires: expiryDate,
+      });
     });
 
     return NextResponse.json(

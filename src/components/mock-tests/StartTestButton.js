@@ -13,12 +13,15 @@ import {
   doc,
   getDoc,
   Timestamp,
+  updateDoc,
+  increment,
 } from "firebase/firestore";
 import { Crown, Loader2, PlayCircle } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import TestStartConfirmModal from "./TestStartConfirmModal";
+import Cookies from "js-cookie";
 
 export default function StartTestButton({ test }) {
   const { user, googleSignIn, isPremium, isLibraryUser, userProfile } =
@@ -29,10 +32,18 @@ export default function StartTestButton({ test }) {
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [userTestStats, setUserTestStats] = useState(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const handleLogin = () => {
     googleSignIn({ redirectUrl: pathname });
   };
+
+  useEffect(() => {
+    const refCode = searchParams.get("ref");
+    if (refCode) {
+      Cookies.set("referral_code", refCode, { expires: 7 });
+    }
+  }, [searchParams]);
 
   // This function contains the logic to actually start the test,
   // and is only called after all checks and confirmations are complete.
@@ -42,8 +53,19 @@ export default function StartTestButton({ test }) {
     setIsPreparing(true);
     const loadingToast = toast.loading("Preparing your test...");
 
+    
+
     try {
       const idToken = await user.getIdToken();
+
+      if (test.isPremium && !isPremium && userProfile?.premiumCredits > 0) {
+        const userRef = doc(db, "users", user.uid);
+        await updateDoc(userRef, {
+          premiumCredits: increment(-1),
+        });
+        toast.success("Free premium test credit used!");
+      }
+
       // The API call now only increments the counter, as the check is done client-side
       await fetch("/api/library-users/start-test", {
         method: "POST",
@@ -192,6 +214,20 @@ export default function StartTestButton({ test }) {
         className='w-full sm:w-auto inline-flex items-center justify-center px-12 py-4 bg-indigo-600 text-white rounded-lg text-lg font-bold hover:bg-indigo-700'
       >
         Login to Start Test
+      </button>
+    );
+  }
+
+  if (test.isPremium && !isPremium && userProfile?.premiumCredits > 0) {
+    return (
+      <button
+        onClick={handleStartClick}
+        disabled={isPreparing}
+        className='w-full sm:w-auto inline-flex items-center justify-center px-12 py-4 text-lg font-bold text-white bg-teal-600 rounded-lg hover:bg-teal-700 disabled:bg-teal-400'
+      >
+        {isPreparing
+          ? "Starting..."
+          : `Use 1 Free Credit (${userProfile.premiumCredits} left)`}
       </button>
     );
   }

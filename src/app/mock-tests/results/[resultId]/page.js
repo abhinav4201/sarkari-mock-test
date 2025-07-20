@@ -18,6 +18,8 @@ import BackButton from "@/components/BackButton";
 import AdvancedAnalysis from "@/components/results/AdvancedAnalysis";
 import SvgDisplayer from "@/components/ui/SvgDisplayer"; 
 import Explanation from "@/components/results/Explanation"; 
+import ComparativeAnalysis from "@/components/results/ComparativeAnalysis";
+import ActionableInsights from "@/components/results/ActionableInsights";
 
 // Helper function to fetch all necessary data
 async function getResultData(resultId, userId) {
@@ -123,8 +125,14 @@ export default function ResultPage() {
             <p className='text-2xl font-semibold bg-white/20 px-4 py-1 inline-block rounded-full'>
               {percentage}%
             </p>
-            {/* The AdvancedAnalysis component will need to be a client component that fetches its own data */}
+          </div>
+          {/* The AdvancedAnalysis component will need to be a client component that fetches its own data */}
+          <div className='mt-12'>
+            <ComparativeAnalysis resultId={resultId} />
             <AdvancedAnalysis resultId={resultId} />
+            {result && (
+              <ActionableInsights topicPerformance={result.topicPerformance} />
+            )}
           </div>
 
           <div className='mt-12'>

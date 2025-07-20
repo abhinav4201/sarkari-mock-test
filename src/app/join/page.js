@@ -15,6 +15,7 @@ import {
 } from "firebase/firestore";
 import { Library, LogIn, UserCog } from "lucide-react";
 import toast from "react-hot-toast";
+import Cookies from "js-cookie";
 
 function JoinPageContent() {
   const searchParams = useSearchParams();
@@ -23,6 +24,8 @@ function JoinPageContent() {
   const [library, setLibrary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const refCode = searchParams.get("ref");
 
   const libraryId = searchParams.get("libraryId");
   const ownerJoinCode = searchParams.get("ownerJoinCode");
@@ -38,6 +41,12 @@ function JoinPageContent() {
       setLoading(false);
       return;
     }
+
+     useEffect(() => {
+       if (refCode) {
+         Cookies.set("referral_code", refCode, { expires: 7 }); // Store ref code for 7 days
+       }
+     }, [refCode]);
 
     const fetchLibraryInfo = async () => {
       try {

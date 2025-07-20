@@ -1,20 +1,21 @@
+// src/app/mock-tests/results/results-dynamic/[resultId]/page.js
+
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { useParams, notFound } from "next/navigation";
+import BackButton from "@/components/BackButton";
+import ActionableInsights from "@/components/results/ActionableInsights";
+import ComparativeAnalysis from "@/components/results/ComparativeAnalysis";
+import DynamicAdvancedAnalysis from "@/components/results/DynamicAdvancedAnalysis";
+import Explanation from "@/components/results/Explanation";
+import SvgDisplayer from "@/components/ui/SvgDisplayer";
+import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
-import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
-import BackButton from "@/components/BackButton";
-import DynamicAdvancedAnalysis from "@/components/results/DynamicAdvancedAnalysis";
-import SvgDisplayer from "@/components/ui/SvgDisplayer";
-import Explanation from "@/components/results/Explanation";
-import { Check, X } from "lucide-react";
+import { notFound, useParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
-// --- CORRECTED DATA FETCHING LOGIC ---
 async function getDynamicResultData(resultId, userId) {
-  // 1. Fetch the result document
   const resultRef = doc(db, "mockTestResults", resultId);
   const resultSnap = await getDoc(resultRef);
 
@@ -23,7 +24,6 @@ async function getDynamicResultData(resultId, userId) {
   }
   const resultData = { id: resultSnap.id, ...resultSnap.data() };
 
-  // 2. Check for the instanceId and fetch the question snapshot
   if (!resultData.instanceId) {
     throw new Error("Result is not linked to a valid test instance.");
   }
@@ -34,7 +34,6 @@ async function getDynamicResultData(resultId, userId) {
     throw new Error("Could not find the question snapshot for this result.");
   }
 
-  // 3. Combine the data and return it
   const finalData = {
     result: resultData,
     questions: instanceSnap.data().questions,
@@ -58,9 +57,28 @@ export default function DynamicResultPage() {
       .finally(() => setLoading(false));
   }, [resultId, user, authLoading]);
 
+  // --- THIS IS THE FIX ---
+  // The useMemo hook is now called on every render before any early returns.
+  const topicPerformance = useMemo(() => {
+    if (!data || !data.result || !data.questions) return null;
+    const { result, questions } = data;
+    const performance = {};
+    for (const q of questions) {
+      const topic = q.topic || "General";
+      if (!performance[topic]) {
+        performance[topic] = { correct: 0, total: 0 };
+      }
+      performance[topic].total++;
+      if (result.answers[q.id]?.answer === q.correctAnswer) {
+        performance[topic].correct++;
+      }
+    }
+    return performance;
+  }, [data]);
+  // --- END OF FIX ---
+
   if (loading || authLoading)
     return <div className='text-center p-12'>Loading Results...</div>;
-  // This now correctly checks for the error state from the data fetching
   if (error)
     return <div className='text-center p-12 text-red-600'>{error}</div>;
   if (!data) return notFound();
@@ -87,9 +105,18 @@ export default function DynamicResultPage() {
               {percentage}%
             </p>
           </div>
+          <div className='mt-12'>
+            <ComparativeAnalysis resultId={resultId} />
 
-          {/* It passes the fetched data to the analysis component */}
-          <DynamicAdvancedAnalysis resultData={result} questions={questions} />
+            <DynamicAdvancedAnalysis
+              resultData={result}
+              questions={questions}
+            />
+
+            {topicPerformance && (
+              <ActionableInsights topicPerformance={topicPerformance} />
+            )}
+          </div>
 
           <div className='mt-12'>
             <h2 className='text-2xl font-bold mb-6 text-slate-900'>

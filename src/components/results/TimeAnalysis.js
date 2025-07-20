@@ -14,7 +14,7 @@ export default function TimeAnalysis({ data }) {
   }
 
   return (
-    <div className='p-6 bg-slate-50 rounded-lg border'>
+    <div className='p-6 bg-slate-50 rounded-lg border shadow-lg'>
       <h3 className='text-xl font-bold text-slate-800 mb-4'>Time Analysis</h3>
       <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
         <div className='p-4 bg-white rounded-lg shadow-sm text-center'>

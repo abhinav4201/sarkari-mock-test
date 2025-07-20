@@ -30,6 +30,7 @@ import {
   useState,
 } from "react";
 import toast from "react-hot-toast";
+import Cookies from "js-cookie";
 
 const AuthContext = createContext();
 
@@ -170,7 +171,7 @@ export const AuthContextProvider = ({ children }) => {
             router.push(redirectUrl);
           }
         } else {
-          await setDoc(userRef, {
+          const newUserdata = {
             uid: loggedInUser.uid,
             name: loggedInUser.displayName,
             email: loggedInUser.email,
@@ -178,7 +179,25 @@ export const AuthContextProvider = ({ children }) => {
             lastLogin: serverTimestamp(),
             initialVisitorId: visitorId,
             libraryOwnerOf: [],
-          });
+            premiumCredits: 0,
+            referralCount: 0,
+          };
+          const refCode = Cookies.get("referral_code");
+          if (refCode) {
+            const q = query(
+              collection(db, "users"),
+              where("referralCode", "==", refCode),
+              limit(1)
+            );
+            const referrerSnap = await getDocs(q);
+            if (!referrerSnap.empty) {
+              const referrerId = referrerSnap.docs[0].id;
+              newUserdata.referredBy = referrerId;
+              Cookies.remove("referral_code");
+            }
+          }
+
+          await setDoc(userRef, newUserdata);
           router.push(redirectUrl);
         }
       } catch (error) {
