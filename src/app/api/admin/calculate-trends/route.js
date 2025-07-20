@@ -28,36 +28,55 @@ export async function POST(request) {
 
     const topicCounts = {};
     const examCounts = {};
+
     const testIds = [
-      ...new Set(resultsSnap.docs.map((doc) => doc.data().testId)),
+      ...new Set(
+        resultsSnap.docs.map((doc) => doc.data().testId).filter(Boolean)
+      ),
     ];
 
-    if (testIds.length > 0) {
-      const testsQuery = adminDb
-        .collection("mockTests")
-        .where("__name__", "in", testIds);
-      const testsSnap = await testsQuery.get();
-      const testsMap = new Map(
-        testsSnap.docs.map((doc) => [doc.id, doc.data()])
-      );
+    const testsMap = new Map();
 
-      resultsSnap.docs.forEach((doc) => {
-        const test = testsMap.get(doc.data().testId);
-        if (test) {
-          if (test.topic)
-            topicCounts[test.topic] = (topicCounts[test.topic] || 0) + 1;
-          if (test.examName)
-            examCounts[test.examName] = (examCounts[test.examName] || 0) + 1;
-        }
+    if (testIds.length > 0) {
+      const chunks = [];
+      for (let i = 0; i < testIds.length; i += 30) {
+        chunks.push(testIds.slice(i, i + 30));
+      }
+
+      const promises = chunks.map((chunk) =>
+        adminDb.collection("mockTests").where("__name__", "in", chunk).get()
+      );
+      const snapshots = await Promise.all(promises);
+
+      snapshots.forEach((snapshot) => {
+        snapshot.forEach((doc) => {
+          testsMap.set(doc.id, doc.data());
+        });
       });
     }
 
+    resultsSnap.docs.forEach((doc) => {
+      const test = testsMap.get(doc.data().testId);
+      if (test) {
+        if (test.topic)
+          topicCounts[test.topic] = (topicCounts[test.topic] || 0) + 1;
+        if (test.examName)
+          examCounts[test.examName] = (examCounts[test.examName] || 0) + 1;
+      }
+    });
+
+    // --- THIS IS THE FIX ---
+    // Convert the arrays of arrays into arrays of objects.
     const trendingTopics = Object.entries(topicCounts)
       .sort(([, a], [, b]) => b - a)
-      .slice(0, 5);
+      .slice(0, 5)
+      .map(([name, count]) => ({ name, count }));
+
     const popularExams = Object.entries(examCounts)
       .sort(([, a], [, b]) => b - a)
-      .slice(0, 5);
+      .slice(0, 5)
+      .map(([name, count]) => ({ name, count }));
+    // --- END OF FIX ---
 
     await adminDb.collection("platformStats").doc("latest").set({
       trendingTopics,
@@ -66,12 +85,12 @@ export async function POST(request) {
     });
 
     return NextResponse.json({
-      message: "Platform trends have been recalculated and saved.",
+      message: "Platform trends have been recalculated successfully.",
     });
   } catch (error) {
     console.error("Trends Calculation Error:", error);
     return NextResponse.json(
-      { message: "Internal Server Error" },
+      { message: `Internal Server Error: ${error.message}` },
       { status: 500 }
     );
   }

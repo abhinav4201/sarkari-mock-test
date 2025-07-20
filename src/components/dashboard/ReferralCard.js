@@ -12,9 +12,9 @@ export default function ReferralCard() {
   const { user, userProfile, isLibraryUser, isPremium } = useAuth();
   const [referralCode, setReferralCode] = useState(userProfile?.referralCode);
 
-  if (isLibraryUser) {
-    return null;
-  }
+//   if (isLibraryUser) {
+//     return null;
+//   }
 
   useEffect(() => {
     if (user && !referralCode) {

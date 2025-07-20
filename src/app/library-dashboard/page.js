@@ -7,7 +7,6 @@ import LazyProgressChart from "@/components/dashboard/LazyProgressChart";
 import LibraryUserStatsCard from "@/components/dashboard/LibraryUserStatsCard";
 import PaymentModal from "@/components/dashboard/PaymentModal";
 import PlatformTrends from "@/components/dashboard/PlatformTrends";
-// import ProgressChart from "@/components/dashboard/ProgressChart";
 import SubscriptionStatusCard from "@/components/dashboard/SubscriptionStatusCard";
 import LazyTestHistory from "@/components/dashboard/LazyTestHistory";
 import WelcomeHeader from "@/components/dashboard/WelcomeHeader";
@@ -95,17 +94,17 @@ export default function LibraryDashboardPage() {
           <LazyProgressChart />
         </div>
         <div className='mt-8'>
+          <SubscriptionStatusCard
+            onUpgradeClick={() => setIsPaymentModalOpen(true)}
+          />
+        </div>
+        <div className='mt-8'>
           <ReferralCard />
         </div>
         <div className='mt-8'>
           <PlatformTrends />
         </div>
 
-        <div className='mt-8'>
-          <SubscriptionStatusCard
-            onUpgradeClick={() => setIsPaymentModalOpen(true)}
-          />
-        </div>
 
         {/* NEW: Link to the dedicated Trending page for library users */}
         <div className='mt-8'>
