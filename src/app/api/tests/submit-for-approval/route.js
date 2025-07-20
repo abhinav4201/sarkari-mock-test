@@ -78,6 +78,7 @@ export async function POST(request) {
       status: "approved",
       monetizationStatus: "pending_review",
       likeCount: 0,
+      takenCount: 0, // NEW: Initialize takenCount here
       questionCount: 0,
       isPremium: isPremium || false,
       isDynamic: false,
@@ -92,7 +93,7 @@ export async function POST(request) {
       testId: newTestRef.id,
       createdBy: userId,
       impressionCount: 0,
-      takenCount: 0,
+      takenCount: 0, // This is for the analytics document, kept for consistency
       uniqueTakers: [],
     });
 

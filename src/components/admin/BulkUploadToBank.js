@@ -2,7 +2,12 @@
 "use client";
 
 import { db } from "@/lib/firebase";
-import { collection, writeBatch, serverTimestamp, doc } from "firebase/firestore";
+import {
+  collection,
+  writeBatch,
+  serverTimestamp,
+  doc,
+} from "firebase/firestore";
 import Papa from "papaparse";
 import { useState } from "react";
 import toast from "react-hot-toast";
@@ -53,6 +58,10 @@ export default function BulkUploadToBank({ onUploadSuccess }) {
                 "CSV is missing required data in one or more rows. Please use the template."
               );
             }
+
+            // NEW: Parse isPremium from the CSV row
+            const isPremiumQuestion = row.isPremium?.toUpperCase() === "TRUE";
+
             return {
               questionSvgCode: textToSvg(row.questionText),
               options: [row.option1, row.option2, row.option3, row.option4],
@@ -60,6 +69,7 @@ export default function BulkUploadToBank({ onUploadSuccess }) {
               explanation: row.explanation || "",
               topic: row.topic,
               subject: row.subject,
+              isPremium: isPremiumQuestion, // NEW: Include isPremium
             };
           });
 
@@ -95,8 +105,9 @@ export default function BulkUploadToBank({ onUploadSuccess }) {
   };
 
   const downloadTemplate = () => {
+    // UPDATED: Template now includes 'isPremium' column
     const template =
-      'questionText,option1,option2,option3,option4,correctAnswer,explanation,topic,subject\n"What is the capital of France?","Paris","London","Berlin","Rome","Paris","Paris is the capital.","Geography","World Capitals"';
+      'questionText,option1,option2,option3,option4,correctAnswer,explanation,topic,subject,isPremium\n"What is the capital of France?","Paris","London","Berlin","Rome","Paris","Paris is the capital.","Geography","World Capitals","FALSE"\n"Which river flows through Rome?","Tiber","Nile","Thames","Seine","Tiber","The Tiber is the third-longest river in Italy.","Geography","European Rivers","TRUE"';
     const blob = new Blob([template], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);

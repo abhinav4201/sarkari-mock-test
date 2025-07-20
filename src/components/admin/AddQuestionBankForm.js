@@ -31,6 +31,7 @@ export default function AddQuestionBankForm({ onUploadSuccess }) {
   const [explanation, setExplanation] = useState("");
   const [topic, setTopic] = useState("");
   const [subject, setSubject] = useState("");
+  const [isPremium, setIsPremium] = useState(false); // NEW: State for premium status
   const [isLoading, setIsLoading] = useState(false);
 
   const handleOptionChange = (index, value) => {
@@ -64,6 +65,7 @@ export default function AddQuestionBankForm({ onUploadSuccess }) {
         explanation: explanation || "",
         topic,
         subject,
+        isPremium: isPremium, // NEW: Add isPremium to the document
         createdAt: serverTimestamp(),
       });
 
@@ -76,6 +78,7 @@ export default function AddQuestionBankForm({ onUploadSuccess }) {
       setExplanation("");
       setTopic("");
       setSubject("");
+      setIsPremium(false); // NEW: Reset premium status
       if (onUploadSuccess) onUploadSuccess();
     } catch (error) {
       toast.error(`Error: ${error.message}`, { id: loadingToast });
@@ -175,6 +178,26 @@ export default function AddQuestionBankForm({ onUploadSuccess }) {
           rows={3}
         />
       </div>
+
+      {/* NEW: Checkbox for premium status */}
+      <div className='pt-2'>
+        <div className='flex items-center'>
+          <input
+            type='checkbox'
+            id='isPremiumQuestion'
+            checked={isPremium}
+            onChange={(e) => setIsPremium(e.target.checked)}
+            className='h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500'
+          />
+          <label
+            htmlFor='isPremiumQuestion'
+            className='ml-2 block text-sm font-medium text-slate-900'
+          >
+            Mark this as a Premium Question?
+          </label>
+        </div>
+      </div>
+
       <button
         type='submit'
         disabled={isLoading}

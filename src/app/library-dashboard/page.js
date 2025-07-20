@@ -12,6 +12,8 @@ import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 import toast from "react-hot-toast";
 import LibraryUserStatsCard from "@/components/dashboard/LibraryUserStatsCard";
+import Link from "next/link"; // Import Link
+import { ArrowRight, TrendingUp } from "lucide-react"; // Import TrendingUp icon
 
 async function getDailyVocabulary() {
   const q = query(
@@ -89,6 +91,25 @@ export default function LibraryDashboardPage() {
           <SubscriptionStatusCard
             onUpgradeClick={() => setIsPaymentModalOpen(true)}
           />
+        </div>
+
+        {/* NEW: Link to the dedicated Trending page for library users */}
+        <div className='mt-8'>
+          <Link
+            href='/library-dashboard/trending'
+            className='w-full bg-white p-6 rounded-2xl shadow-lg border border-slate-200 hover:border-indigo-400 hover:shadow-xl transition-all flex justify-between items-center group'
+          >
+            <div>
+              <h2 className='text-2xl font-bold text-slate-900 flex items-center gap-3'>
+                <TrendingUp className='text-indigo-500' />
+                Trending Tests
+              </h2>
+              <p className='text-slate-600 mt-1'>
+                See what tests are popular right now.
+              </p>
+            </div>
+            <ArrowRight className='h-8 w-8 text-slate-400 group-hover:text-indigo-500 transition-transform group-hover:translate-x-1' />
+          </Link>
         </div>
 
         <div className='mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8 items-start'>

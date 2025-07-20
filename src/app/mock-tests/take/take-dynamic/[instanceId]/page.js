@@ -1,3 +1,5 @@
+// src/app/mock-tests/take/take-dynamic/[instanceId]/page.js
+
 "use client";
 
 import QuestionPalette from "@/components/mock-tests/QuestionPalette";
@@ -6,15 +8,12 @@ import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import {
-  addDoc,
   arrayUnion,
   collection,
   doc,
   getDoc,
   increment,
   runTransaction,
-  serverTimestamp,
-  updateDoc,
 } from "firebase/firestore";
 import { Lock } from "lucide-react";
 import Link from "next/link";
@@ -48,7 +47,7 @@ export default function TakeDynamicTestPage() {
   const [testState, setTestState] = useState("loading");
   const [timePerQuestion, setTimePerQuestion] = useState({});
   const [questionStartTime, setQuestionStartTime] = useState(0);
-  const [markedForReview, setMarkedForReview] = useState(new Set());
+  const [markedForReview, setMarkedForReview] = useState(new Set()); // FIX: Corrected useState initialization
   const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
   const [warningInfo, setWarningInfo] = useState({ type: null, count: 0 });
   const [lastQuestionWarningShown, setLastQuestionWarningShown] =
@@ -65,15 +64,173 @@ export default function TakeDynamicTestPage() {
   const params = useParams();
   const { instanceId } = params;
 
+  // const forceSubmit = useCallback(
+  //   async (reason = "user_submitted") => {
+  //     // reason defaults to 'user_submitted' if not provided
+  //     if (testState === "submitting" || !user || !instanceData) return;
+  //     setTestState("submitting");
+
+  //     const resultDocRef = doc(collection(db, "mockTestResults"));
+  //     const yearMonth = `${new Date().getFullYear()}-${
+  //       new Date().getMonth() + 1
+  //     }`;
+
+  //     try {
+  //       await runTransaction(db, async (transaction) => {
+  //         const lastQuestionId = questions[currentQuestionIndex]?.id;
+  //         let finalTimePerQuestion = { ...timePerQuestion };
+  //         if (lastQuestionId) {
+  //           const timeSpent = (Date.now() - questionStartTime) / 1000;
+  //           finalTimePerQuestion[lastQuestionId] =
+  //             (finalTimePerQuestion[lastQuestionId] || 0) + timeSpent;
+  //         }
+
+  //         const finalAnswers = {};
+  //         for (const qId in selectedOptions) {
+  //           finalAnswers[qId] = {
+  //             answer: selectedOptions[qId],
+  //             timeTaken: finalTimePerQuestion[qId] || 0,
+  //           };
+  //         }
+  //         for (const q of questions) {
+  //           if (!finalAnswers[q.id]) {
+  //             finalAnswers[q.id] = {
+  //               answer: null,
+  //               timeTaken: finalTimePerQuestion[q.id] || 0,
+  //             };
+  //           }
+  //         }
+
+  //         let score = 0;
+  //         const correctAnswersMap = new Map(
+  //           questions.map((q) => [q.id, q.correctAnswer])
+  //         );
+  //         for (const qId in selectedOptions) {
+  //           if (selectedOptions[qId] === correctAnswersMap.get(qId)) {
+  //             score++;
+  //           }
+  //         }
+  //         const totalQuestions = questions.length;
+  //         const incorrectAnswers = totalQuestions - score;
+  //         const totalTimeTaken = Object.values(finalTimePerQuestion).reduce(
+  //           (acc, time) => acc + time,
+  //           0
+  //         );
+
+  //         const estimatedTimeInSeconds = instanceData.estimatedTime * 60;
+  //         const suspiciousTimeThreshold = estimatedTimeInSeconds * 0.15;
+  //         const resultData = {
+  //           userId: user.uid,
+  //           testId: instanceData.originalTestId,
+  //           instanceId: instanceId,
+  //           answers: finalAnswers,
+  //           score,
+  //           totalQuestions,
+  //           incorrectAnswers,
+  //           submissionReason: reason, // This will now be a string
+  //           isDynamic: true,
+  //           completedAt: serverTimestamp(),
+  //           reviewFlag:
+  //             totalTimeTaken < suspiciousTimeThreshold
+  //               ? "low_completion_time"
+  //               : null,
+  //           totalTimeTaken: totalTimeTaken,
+  //         };
+
+  //         // Correctly add library info if the user is a library student
+  //         if (isLibraryUser && userProfile?.libraryId) {
+  //           resultData.libraryId = userProfile.libraryId;
+  //           resultData.ownerId = userProfile.ownerId;
+  //         }
+
+  //         transaction.set(resultDocRef, resultData);
+
+  //         // Update testAnalytics document
+  //         const analyticsRef = doc(
+  //           db,
+  //           "testAnalytics",
+  //           instanceData.originalTestId
+  //         );
+  //         transaction.update(analyticsRef, {
+  //           takenCount: increment(1),
+  //           uniqueTakers: arrayUnion(user.uid),
+  //         });
+  //         // Increment takenCount on the mockTests document itself
+  //         const mockTestRef = doc(db, "mockTests", instanceData.originalTestId);
+  //         transaction.update(mockTestRef, {
+  //           takenCount: increment(1),
+  //         });
+
+  //         if (isLibraryUser && userProfile?.libraryId) {
+  //           const libraryRef = doc(db, "libraries", userProfile?.libraryId);
+  //           transaction.update(libraryRef, {
+  //             testCompletions: arrayUnion({
+  //               takerId: user.uid,
+  //               testId: instanceData.originalTestId,
+  //               completedAt: new Date(), // Use new Date() instead of serverTimestamp()
+  //             }),
+  //           });
+
+  //           // NEW: Increment monthlyTestCounts for library users upon successful submission
+  //           const yearMonth = `${new Date().getFullYear()}-${
+  //             new Date().getMonth() + 1
+  //           }`;
+  //           const monthlyCountRef = doc(
+  //             db,
+  //             "users",
+  //             user.uid,
+  //             "monthlyTestCounts",
+  //             yearMonth
+  //           );
+  //           transaction.set(
+  //             monthlyCountRef,
+  //             {
+  //               count: increment(1),
+  //             },
+  //             { merge: true }
+  //           );
+  //         }
+  //       });
+
+  //       toast.success("Test submitted successfully!");
+  //       router.push(`/mock-tests/results/results-dynamic/${resultDocRef.id}`);
+  //     } catch (error) {
+  //       console.error("Error writing test results:", error);
+  //       toast.error("Failed to submit test.");
+  //       setTestState("in-progress");
+  //     }
+  //   },
+  //   [
+  //     instanceData,
+  //     selectedOptions,
+  //     timePerQuestion,
+  //     questions,
+  //     currentQuestionIndex,
+  //     questionStartTime,
+  //     router,
+  //     user,
+  //     instanceId,
+  //     testState,
+  //     isLibraryUser,
+  //     userProfile,
+  //   ]
+  // );
+
   const forceSubmit = useCallback(
     async (reason = "user_submitted") => {
       if (testState === "submitting" || !user || !instanceData) return;
       setTestState("submitting");
 
       const resultDocRef = doc(collection(db, "mockTestResults"));
+      const yearMonth = `${new Date().getFullYear()}-${
+        new Date().getMonth() + 1
+      }`;
 
       try {
         await runTransaction(db, async (transaction) => {
+          // ---
+          // Step 1: Finalize timing and answer data (No changes needed here)
+          // ---
           const lastQuestionId = questions[currentQuestionIndex]?.id;
           let finalTimePerQuestion = { ...timePerQuestion };
           if (lastQuestionId) {
@@ -113,9 +270,12 @@ export default function TakeDynamicTestPage() {
             (acc, time) => acc + time,
             0
           );
-
           const estimatedTimeInSeconds = instanceData.estimatedTime * 60;
           const suspiciousTimeThreshold = estimatedTimeInSeconds * 0.15;
+
+          // ---
+          // Step 2: Prepare the main result document (No changes needed here)
+          // ---
           const resultData = {
             userId: user.uid,
             testId: instanceData.originalTestId,
@@ -126,7 +286,7 @@ export default function TakeDynamicTestPage() {
             incorrectAnswers,
             submissionReason: reason,
             isDynamic: true,
-            completedAt: serverTimestamp(),
+            completedAt: new Date(), // Using client-side timestamp
             reviewFlag:
               totalTimeTaken < suspiciousTimeThreshold
                 ? "low_completion_time"
@@ -134,40 +294,49 @@ export default function TakeDynamicTestPage() {
             totalTimeTaken: totalTimeTaken,
           };
 
-          // Correctly add library info if the user is a library student
           if (isLibraryUser && userProfile?.libraryId) {
             resultData.libraryId = userProfile.libraryId;
             resultData.ownerId = userProfile.ownerId;
           }
 
+          // ---
+          // Step 3: Perform the transaction writes
+          // ---
+
+          // Write 1: Create the new test result document.
           transaction.set(resultDocRef, resultData);
 
-          const analyticsRef = doc(
-            db,
-            "testAnalytics",
-            instanceData.originalTestId
-          );
-          transaction.update(analyticsRef, {
-            takenCount: increment(1),
-            uniqueTakers: arrayUnion(user.uid),
-          });
+          // Write 2 & 3 (for library users only): Update library and user's monthly count.
           if (isLibraryUser && userProfile?.libraryId) {
-            const libraryRef = doc(db, "libraries", userProfile?.libraryId);
+            const libraryRef = doc(db, "libraries", userProfile.libraryId);
             transaction.update(libraryRef, {
               testCompletions: arrayUnion({
                 takerId: user.uid,
                 testId: instanceData.originalTestId,
-                completedAt: serverTimestamp(),
+                completedAt: new Date(),
               }),
             });
+
+            const monthlyCountRef = doc(
+              db,
+              `users/${user.uid}/monthlyTestCounts/${yearMonth}`
+            );
+            transaction.set(
+              monthlyCountRef,
+              { count: increment(1) },
+              { merge: true }
+            );
           }
         });
 
+        // ---
+        // Step 4: Redirect upon success (No changes needed here)
+        // ---
         toast.success("Test submitted successfully!");
         router.push(`/mock-tests/results/results-dynamic/${resultDocRef.id}`);
       } catch (error) {
-        console.error("Error writing test results:", error);
-        toast.error("Failed to submit test.");
+        console.error("Full Test Submission Transaction Error:", error);
+        toast.error("Failed to submit your test. Please try again.");
         setTestState("in-progress");
       }
     },
@@ -197,7 +366,7 @@ export default function TakeDynamicTestPage() {
       setWarningInfo({ type: "review", count: marked.length });
       setIsWarningModalOpen(true);
     } else {
-      forceSubmit("user_submitted");
+      forceSubmit("user_submitted"); // Pass the string literal
     }
   };
 
@@ -264,7 +433,7 @@ export default function TakeDynamicTestPage() {
   useEffect(() => {
     if (testState !== "in-progress" || timeLeft <= 0) {
       if (timeLeft <= 0 && testState === "in-progress") {
-        forceSubmit("time_up");
+        forceSubmit("time_up"); // Pass the string literal
       }
       return;
     }
@@ -282,7 +451,7 @@ export default function TakeDynamicTestPage() {
           "You switched tabs. The test will be submitted automatically.",
           { duration: 5000 }
         );
-        forceSubmit("tab_switched");
+        forceSubmit("tab_switched"); // Pass the string literal
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);

@@ -21,6 +21,7 @@ import {
   Mail,
   PenSquare,
   TestTube,
+  BookUser, // NEW: Icon for User Questions
 } from "lucide-react";
 
 const adminLinks = [
@@ -44,16 +45,15 @@ const adminLinks = [
     href: "/admin/mock-tests",
     icon: <TestTube className='mr-3 h-5 w-5' />,
   },
-  // --- NEW ITEM ADDED FOR QUESTION BANK ---
-  // {
-  //   name: "Test Approvals",
-  //   href: "/admin/approvals",
-  //   icon: <CheckSquare className='mr-3 h-5 w-5' />,
-  // },
   {
     name: "Question Bank",
     href: "/admin/question-bank",
     icon: <BookOpenText className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "User Questions Review", // NEW: Entry for user question review
+    href: "/admin/question-review",
+    icon: <BookUser className='mr-3 h-5 w-5' />,
   },
   {
     name: "Daily Content",
@@ -94,7 +94,6 @@ const adminLinks = [
 
 export default function ClientAdminLayout({ children }) {
   const { user, loading } = useAuth();
-  // const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
 

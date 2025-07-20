@@ -1,3 +1,4 @@
+// src/components/admin/MockTestManager.js
 "use client";
 import { useState } from "react";
 import { db } from "@/lib/firebase";
@@ -38,12 +39,13 @@ export default function MockTestManager({ onTestCreated }) {
         title_lowercase: title.toLowerCase(),
         topic,
         subject,
-        examName,
+        examName: examName || "",
         estimatedTime: Number(estimatedTime),
         isPremium,
         createdAt: serverTimestamp(),
         isDynamic: isDynamicTest,
         likeCount: initialLikeCount,
+        takenCount: 0, // NEW: Initialize takenCount here
       };
 
       if (isDynamicTest) {

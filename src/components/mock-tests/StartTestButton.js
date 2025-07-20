@@ -69,7 +69,8 @@ export default function StartTestButton({ test }) {
         const q = query(
           collection(db, "questionBank"),
           where("topic", "==", sourceCriteria.topic),
-          where("subject", "==", sourceCriteria.subject)
+          where("subject", "==", sourceCriteria.subject),
+          ...(test.isPremium ? [where("isPremium", "==", true)] : [])
         );
         const bankSnapshot = await getDocs(q);
         let potentialQuestions = bankSnapshot.docs.map((doc) => ({

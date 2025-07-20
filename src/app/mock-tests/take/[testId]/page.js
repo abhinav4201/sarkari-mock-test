@@ -1,3 +1,5 @@
+// src/app/mock-tests/take/[testId]/page.js
+
 "use client";
 
 import QuestionPalette from "@/components/mock-tests/QuestionPalette";
@@ -6,7 +8,6 @@ import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import {
-  addDoc,
   arrayUnion,
   collection,
   doc,
@@ -16,7 +17,6 @@ import {
   query,
   runTransaction,
   serverTimestamp,
-  updateDoc,
   where,
 } from "firebase/firestore";
 import { Lock } from "lucide-react";
@@ -64,8 +64,7 @@ export default function TestTakingPage() {
     loading: authLoading,
     isPremium,
     isLibraryUser,
-    // libraryId,
-    userProfile, // Get the full userProfile
+    userProfile,
   } = useAuth();
   const router = useRouter();
   const params = useParams();
@@ -77,7 +76,7 @@ export default function TestTakingPage() {
       setTestState("submitting");
       const resultDocRef = doc(collection(db, "mockTestResults"));
 
-       try {
+      try {
         await runTransaction(db, async (transaction) => {
           const lastQuestionId = questions[currentQuestionIndex]?.id;
           let finalTimePerQuestion = { ...timePerQuestion };
@@ -140,36 +139,114 @@ export default function TestTakingPage() {
             totalTimeTaken: totalTimeTaken,
           };
 
-          // Correctly add library info if the user is a library student
           if (isLibraryUser && userProfile?.libraryId) {
             resultData.libraryId = userProfile.libraryId;
-            resultData.ownerId = userProfile.ownerId; // Assuming ownerId is on the profile
+            resultData.ownerId = userProfile.ownerId;
           }
 
-          transaction.set(resultDocRef, resultData);
+          // --- LOGGING START ---
+          console.log("Transaction Step 1: Setting mockTestResults");
+          console.log("Path:", resultDocRef.path);
+          console.log("Data:", resultData);
+          try {
+            transaction.set(resultDocRef, resultData);
+          } catch (e) {
+            console.error(
+              "Error in transaction step 1 (mockTestResults.set):",
+              e
+            );
+            throw e;
+          }
 
+          // Transaction Step 2: Create or update the analytics document
           const analyticsRef = doc(db, "testAnalytics", testId);
-          transaction.update(analyticsRef, {
+          transaction.set(
+            analyticsRef,
+            {
+              takenCount: increment(1),
+              uniqueTakers: arrayUnion(user.uid),
+              // Ensure essential data is present if the doc is new
+              testId: testId,
+              createdBy: testDetails.createdBy,
+            },
+            { merge: true } // This creates the doc if it doesn't exist
+          );
+
+          console.log("Transaction Step 3: Updating mockTests");
+          const mockTestRef = doc(db, "mockTests", testId);
+          const mockTestUpdateData = {
             takenCount: increment(1),
-            uniqueTakers: arrayUnion(user.uid),
-          });
+          };
+          console.log("Path:", mockTestRef.path);
+          console.log("Data:", mockTestUpdateData);
+          try {
+            transaction.update(mockTestRef, mockTestUpdateData);
+          } catch (e) {
+            console.error("Error in transaction step 3 (mockTests.update):", e);
+            throw e;
+          }
 
           if (isLibraryUser && userProfile?.libraryId) {
+            console.log(
+              "Transaction Step 4: Updating libraries (for library user)"
+            );
             const libraryRef = doc(db, "libraries", userProfile?.libraryId);
-            transaction.update(libraryRef, {
+            const libraryUpdateData = {
               testCompletions: arrayUnion({
                 takerId: user.uid,
                 testId: testId,
-                completedAt: serverTimestamp(),
+                completedAt: new Date(),
               }),
-            });
+            };
+            console.log("Path:", libraryRef.path);
+            console.log("Data:", libraryUpdateData);
+            try {
+              transaction.update(libraryRef, libraryUpdateData);
+            } catch (e) {
+              console.error(
+                "Error in transaction step 4 (libraries.update):",
+                e
+              );
+              throw e;
+            }
+
+            console.log(
+              "Transaction Step 5: Updating monthlyTestCounts (for library user)"
+            );
+            const yearMonth = `${new Date().getFullYear()}-${
+              new Date().getMonth() + 1
+            }`;
+            const monthlyCountRef = doc(
+              db,
+              "users",
+              user.uid,
+              "monthlyTestCounts",
+              yearMonth
+            );
+            const monthlyCountUpdateData = {
+              count: increment(1),
+            };
+            console.log("Path:", monthlyCountRef.path);
+            console.log("Data:", monthlyCountUpdateData);
+            try {
+              transaction.set(monthlyCountRef, monthlyCountUpdateData, {
+                merge: true,
+              });
+            } catch (e) {
+              console.error(
+                "Error in transaction step 5 (monthlyTestCounts.set):",
+                e
+              );
+              throw e;
+            }
           }
+          // --- LOGGING END ---
         });
 
         toast.success("Test submitted successfully!");
         router.push(`/mock-tests/results/${resultDocRef.id}`);
       } catch (error) {
-        console.error(error);
+        console.error("Full Test Submission Transaction Error:", error); // Log the overall transaction error
         toast.error("Failed to submit your test. Please try again.");
         setTestState("in-progress");
       }
@@ -181,8 +258,8 @@ export default function TestTakingPage() {
       currentQuestionIndex,
       questionStartTime,
       router,
-      testId,
       user,
+      testId,
       testState,
       testDetails,
       isLibraryUser,
@@ -201,7 +278,7 @@ export default function TestTakingPage() {
       setWarningInfo({ type: "review", count: marked.length });
       setIsWarningModalOpen(true);
     } else {
-      forceSubmit();
+      forceSubmit("user_submitted");
     }
   };
 
@@ -263,7 +340,7 @@ export default function TestTakingPage() {
 
   useEffect(() => {
     if (testState !== "in-progress" || timeLeft <= 0) {
-      if (timeLeft <= 0 && testState === "in-progress") forceSubmit();
+      if (timeLeft <= 0 && testState === "in-progress") forceSubmit("time_up");
       return;
     }
     const timerId = setInterval(
@@ -280,7 +357,7 @@ export default function TestTakingPage() {
           "You switched tabs. The test will be submitted automatically.",
           { duration: 5000 }
         );
-        forceSubmit();
+        forceSubmit("tab_switched");
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -387,7 +464,7 @@ export default function TestTakingPage() {
       <FinalWarningModal
         isOpen={isWarningModalOpen}
         onClose={() => setIsWarningModalOpen(false)}
-        onConfirmSubmit={forceSubmit}
+        onConfirmSubmit={() => forceSubmit("user_submitted")}
         onGoToQuestion={goToFirstRelevantQuestion}
         warningType={warningInfo.type}
         count={warningInfo.count}

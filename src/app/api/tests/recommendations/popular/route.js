@@ -15,25 +15,80 @@ export async function GET(request) {
       .collection("mockTestResults")
       .where("userId", "==", userId);
     const resultsSnap = await resultsQuery.get();
-    const takenTestIds = resultsSnap.docs.map((doc) => doc.data().testId);
+    const takenTestIds = new Set(
+      resultsSnap.docs.map((doc) => doc.data().testId)
+    );
 
-    // 2. Get popular tests (sorted by taken count)
-    const popularTestsQuery = adminDb
+    // 2. Fetch popular tests:
+    //    a) User-created tests that are 'approved'
+    const userApprovedTestsQuery = adminDb
       .collection("mockTests")
       .where("status", "==", "approved")
       .orderBy("takenCount", "desc")
-      .limit(20); // Get top 20 popular to have a good pool to filter from
+      .limit(20); // Get a larger pool to filter from
 
-    const popularTestsSnap = await popularTestsQuery.get();
+    //    b) Admin-created tests (which typically have no 'status' field, or status is null)
+    //    Firestore does not directly support querying for 'field does not exist'.
+    //    A common workaround is to query for a specific value that indicates admin-created,
+    //    or fetch all and filter, or use a separate field.
+    //    Based on src/app/mock-tests/page.js, admin tests have status == null.
+    const adminTestsQuery = adminDb
+      .collection("mockTests")
+      .where("status", "==", null) // Assuming admin tests explicitly set status to null or it's absent and queries for null catch them
+      .orderBy("takenCount", "desc")
+      .limit(20); // Get a larger pool
 
-    // 3. Filter out taken tests and select the top 2
-    const recommendations = popularTestsSnap.docs
-      .map((doc) => ({
+    const [userApprovedTestsSnap, adminTestsSnap] = await Promise.all([
+      userApprovedTestsQuery.get(),
+      adminTestsQuery.get(),
+    ]);
+
+    let allPopularTests = [];
+
+    userApprovedTestsSnap.forEach((doc) => {
+      allPopularTests.push({
         id: doc.id,
         ...doc.data(),
-        createdAt: doc.data().createdAt.toMillis(),
-      }))
-      .filter((test) => !takenTestIds.includes(test.id))
+        createdAt: doc.data().createdAt?.toMillis() || null, // Ensure serializable
+      });
+    });
+
+    adminTestsSnap.forEach((doc) => {
+      // Ensure we only add tests that truly have no 'status' or status is null
+      // and avoid duplicates if a test somehow appears in both queries (unlikely with current setup)
+      if (
+        typeof doc.data().status === "undefined" ||
+        doc.data().status === null
+      ) {
+        allPopularTests.push({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toMillis() || null, // Ensure serializable
+        });
+      }
+    });
+
+    // Remove duplicates based on ID (if any)
+    const uniquePopularTestsMap = new Map(
+      allPopularTests.map((test) => [test.id, test])
+    );
+    const uniquePopularTests = Array.from(uniquePopularTestsMap.values());
+
+    // Sort the combined list by takenCount (desc) and then createdAt (desc)
+    uniquePopularTests.sort((a, b) => {
+      const takenA = a.takenCount || 0;
+      const takenB = b.takenCount || 0;
+      if (takenB !== takenA) {
+        return takenB - takenA;
+      }
+      const createdA = a.createdAt || 0;
+      const createdB = b.createdAt || 0;
+      return createdB - createdA;
+    });
+
+    // 3. Filter out taken tests and select the top 2
+    const recommendations = uniquePopularTests
+      .filter((test) => !takenTestIds.has(test.id))
       .slice(0, 2); // Show top 2 popular tests
 
     return NextResponse.json(recommendations, { status: 200 });

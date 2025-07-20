@@ -1,3 +1,5 @@
+// src/components/admin/QuestionUploader.js
+
 "use client";
 
 import { useState } from "react";
@@ -45,8 +47,12 @@ const textToSvg = (text) => {
   // The SVG structure with a foreignObject containing a div
   return `
     <svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}">
-      <foreignObject x="15" y="15" width="${svgWidth - 30}" height="${svgHeight - 30}">
-        <div xmlns="http://www.w3.org/1999/xhtml" style="${style.replace(/\s\s+/g, ' ').trim()}">
+      <foreignObject x="15" y="15" width="${svgWidth - 30}" height="${
+    svgHeight - 30
+  }">
+        <div xmlns="http://www.w3.org/1999/xhtml" style="${style
+          .replace(/\s\s+/g, " ")
+          .trim()}">
           <div>${sanitizedText}</div>
         </div>
       </foreignObject>
@@ -54,7 +60,12 @@ const textToSvg = (text) => {
   `;
 };
 
-export default function QuestionUploader({ testId, onUploadSuccess }) {
+export default function QuestionUploader({
+  testId,
+  onUploadSuccess,
+  testIsPremium,
+}) {
+  // NEW: Accept testIsPremium prop
   const [questionText, setQuestionText] = useState("");
   const [questionSvgFile, setQuestionSvgFile] = useState(null);
   const [options, setOptions] = useState(["", "", "", ""]);
@@ -73,13 +84,14 @@ export default function QuestionUploader({ testId, onUploadSuccess }) {
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
-    setQuestionSvgFile(file);
     if (file) {
-      setQuestionText("");
+      setQuestionSvgFile(file);
+      if (file) {
+        setQuestionText("");
+      }
     }
   };
 
-  // THIS IS THE FIX: The missing function has been added back.
   const handleOptionChange = (index, value) => {
     const newOptions = [...options];
     newOptions[index] = value;
@@ -120,6 +132,8 @@ export default function QuestionUploader({ testId, onUploadSuccess }) {
           options,
           correctAnswer,
           explanation: explanation || "",
+          isPremium: testIsPremium, // NEW: Inherit premium status from the parent test
+          status: "pending_review", // NEW: Set initial status for review
           createdAt: serverTimestamp(),
         });
 

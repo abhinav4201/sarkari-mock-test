@@ -1,3 +1,5 @@
+// src/components/admin/BulkQuestionUploader.js
+
 "use client";
 
 import { db } from "@/lib/firebase";
@@ -59,7 +61,12 @@ const textToSvg = (text) => {
   `;
 };
 
-export default function BulkQuestionUploader({ testId, onUploadSuccess }) {
+export default function BulkQuestionUploader({
+  testId,
+  onUploadSuccess,
+  testIsPremium,
+}) {
+  // NEW: Accept testIsPremium prop
   const [csvFile, setCsvFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -94,6 +101,8 @@ export default function BulkQuestionUploader({ testId, onUploadSuccess }) {
               options: [row.option1, row.option2, row.option3, row.option4],
               correctAnswer: row.correctAnswer,
               explanation: row.explanation || "",
+              isPremium: testIsPremium, // NEW: Inherit premium status from the parent test
+              status: "pending_review", // NEW: Set initial status for review
             };
           });
 
@@ -140,6 +149,7 @@ export default function BulkQuestionUploader({ testId, onUploadSuccess }) {
   };
 
   const downloadTemplate = () => {
+    // UPDATED: Template now includes 'topic' and 'subject' as they are needed for dynamic tests
     const template =
       'questionText,questionSvgCode,option1,option2,option3,option4,correctAnswer,explanation\n"Fill this column OR the SVG code column","","Option A","Option B","Option C","Option D","Option A","Type optional explanation here"\n"","<svg>Fill this column OR the text column</svg>","Option 1","Option 2","Option 3","Option 4","Option 2","Type optional explanation here"';
     const blob = new Blob([template], { type: "text/csv;charset=utf-8;" });

@@ -1,74 +1,49 @@
-// src/app/mock-tests/page.js
+import { adminDb } from "@/lib/firebase-admin"; // NEW: Import adminDb for server-side operations
 
-import { db } from "@/lib/firebase";
-import {
-  collection,
-  getDocs,
-  query,
-  orderBy,
-  limit,
-  where,
-} from "firebase/firestore";
-import TestHub from "@/components/mock-tests/TestHub";
 
-// This function now correctly fetches ALL public tests for the initial page load.
+import TestHub from "@/components/mock-tests/TestHub"; // Keep this import as it's the main component rendered
+
 async function getInitialTests() {
-  const testsRef = collection(db, "mockTests");
+  const testsRef = adminDb.collection("mockTests"); // Use adminDb collection reference
 
-  // Query 1: Get the most recent tests created by users that are approved.
-  const userTestsQuery = query(
-    testsRef,
-    where("status", "==", "approved"),
-    orderBy("createdAt", "desc"),
-    limit(9)
-  );
 
-  // Query 2: Get the most recent tests that DO NOT have a status field (i.e., admin-created tests).
-  // We achieve this by querying for a non-existent value. This is a common Firestore pattern.
-  const adminTestsQuery = query(
-    testsRef,
-    where("status", "==", null),
-    orderBy("createdAt", "desc"),
-    limit(9)
-  );
+  const userTestsSnapshot = await testsRef
+    .where("status", "==", "approved")
+    .orderBy("createdAt", "desc")
+    .limit(9)
+    .get();
+
+  const adminTestsSnapshot = await testsRef
+    .where("status", "==", null) // Queries for explicit null status
+    .orderBy("createdAt", "desc")
+    .limit(9)
+    .get();
 
   try {
-    // Fetch both sets of tests concurrently for better performance.
-    const [userTestsSnapshot, adminTestsSnapshot] = await Promise.all([
-      getDocs(userTestsQuery),
-      getDocs(adminTestsQuery),
-    ]);
-
     const userTests = userTestsSnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
+      createdAt: doc.data().createdAt ? doc.data().createdAt.toMillis() : null, // Ensure serializable
     }));
 
-    // The second query might incorrectly fetch documents where status is explicitly null.
-    // We must filter on the server to only include those where the field is truly missing.
+    // Filter explicitly for tests where status is truly undefined or null
     const adminTests = adminTestsSnapshot.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter((test) => typeof test.status === "undefined");
+      .filter(
+        (test) => typeof test.status === "undefined" || test.status === null
+      );
 
-    // Combine the two lists and remove any potential duplicates using a Map.
     const combinedTests = [...userTests, ...adminTests];
     const uniqueTests = Array.from(
       new Map(combinedTests.map((test) => [test.id, test])).values()
     );
 
-    // Sort the final, unique list by date to ensure the newest are always first.
-    uniqueTests.sort(
-      (a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)
-    );
+    uniqueTests.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
-    // Return the top results, ensuring createdAt is serializable.
-    return uniqueTests.slice(0, 9).map((test) => ({
-      ...test,
-      createdAt: test.createdAt ? test.createdAt.toMillis() : null,
-    }));
+    return uniqueTests.slice(0, 9);
   } catch (error) {
-    console.error("Failed to fetch initial tests:", error);
-    return []; // Return an empty array on error
+    console.error("Failed to fetch initial tests in Server Component:", error); // Specific error message for clarity
+    return [];
   }
 }
 
@@ -93,7 +68,7 @@ export default async function MockTestsHubPage() {
 
       <div className='container mx-auto px-4 sm:px-6 lg:px-8 pb-16 md:pb-24'>
         <div className='-mt-16'>
-          {/* The TestHub component now receives the complete and correct initial list */}
+          {/* The TestHub component receives the initial data from the server, fetched using Admin SDK */}
           <TestHub initialTests={initialTests} />
         </div>
       </div>

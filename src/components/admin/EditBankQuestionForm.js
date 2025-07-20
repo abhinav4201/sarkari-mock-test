@@ -30,6 +30,7 @@ export default function EditBankQuestionForm({ question, onFormSubmit }) {
   const [explanation, setExplanation] = useState("");
   const [topic, setTopic] = useState("");
   const [subject, setSubject] = useState("");
+  const [isPremium, setIsPremium] = useState(false); // NEW: State for premium status
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -49,6 +50,7 @@ export default function EditBankQuestionForm({ question, onFormSubmit }) {
       setExplanation(question.explanation || "");
       setTopic(question.topic || "");
       setSubject(question.subject || "");
+      setIsPremium(question.isPremium || false); // NEW: Initialize premium status from prop
     }
   }, [question]);
 
@@ -75,6 +77,7 @@ export default function EditBankQuestionForm({ question, onFormSubmit }) {
         explanation,
         topic,
         subject,
+        isPremium: isPremium, // NEW: Update isPremium in the document
       });
 
       toast.success("Question updated successfully!", { id: loadingToast });
@@ -177,6 +180,26 @@ export default function EditBankQuestionForm({ question, onFormSubmit }) {
           rows={3}
         />
       </div>
+
+      {/* NEW: Checkbox for premium status */}
+      <div className='pt-2'>
+        <div className='flex items-center'>
+          <input
+            type='checkbox'
+            id='editIsPremiumQuestion'
+            checked={isPremium}
+            onChange={(e) => setIsPremium(e.target.checked)}
+            className='h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500'
+          />
+          <label
+            htmlFor='editIsPremiumQuestion'
+            className='ml-2 block text-sm font-medium text-slate-900'
+          >
+            Mark this as a Premium Question?
+          </label>
+        </div>
+      </div>
+
       <div className='flex justify-end pt-2'>
         <button
           type='submit'

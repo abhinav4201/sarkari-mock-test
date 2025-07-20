@@ -19,6 +19,7 @@ import BulkQuestionUploader from "@/components/admin/BulkQuestionUploader";
 import QuestionList from "@/components/admin/QuestionList";
 import BackButton from "@/components/BackButton";
 import { ShieldAlert } from "lucide-react";
+import toast from "react-hot-toast"; // Ensure toast is imported
 
 export default function ManageUserTestPage() {
   const params = useParams();
@@ -44,6 +45,7 @@ export default function ManageUserTestPage() {
 
       const testData = { id: testSnap.id, ...testSnap.data() };
 
+      // Ensure that only the creator of the test can manage its questions
       if (testData.createdBy !== user.uid) {
         setIsOwner(false);
         setLoading(false);
@@ -53,6 +55,7 @@ export default function ManageUserTestPage() {
       setIsOwner(true);
       setTest(testData);
 
+      // Fetch questions associated with this specific test
       const questionsQuery = query(
         collection(db, "mockTestQuestions"),
         where("testId", "==", testId)
@@ -122,7 +125,12 @@ export default function ManageUserTestPage() {
               <h2 className='text-xl font-semibold mb-6 text-slate-900'>
                 Add New Question
               </h2>
-              <QuestionUploader testId={testId} onUploadSuccess={loadData} />
+              {/* Pass test.isPremium to QuestionUploader */}
+              <QuestionUploader
+                testId={testId}
+                onUploadSuccess={loadData}
+                testIsPremium={test.isPremium}
+              />
             </div>
             <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-lg'>
               <h2 className='text-xl font-semibold mb-6 text-slate-900'>
@@ -131,9 +139,11 @@ export default function ManageUserTestPage() {
               <p className='text-sm text-slate-700 mb-4'>
                 Upload multiple questions at once using a CSV file.
               </p>
+              {/* Pass test.isPremium to BulkQuestionUploader */}
               <BulkQuestionUploader
                 testId={testId}
                 onUploadSuccess={loadData}
+                testIsPremium={test.isPremium}
               />
             </div>
           </div>

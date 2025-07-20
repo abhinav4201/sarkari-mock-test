@@ -53,40 +53,58 @@ export default function TestHub({ initialTests }) {
 
       let q;
       const collectionRef = collection(db, "mockTests");
-      const queryConstraints = [orderBy("createdAt", "desc"), limit(PAGE_SIZE)];
+      const queryConstraints = [orderBy("createdAt", "desc")]; // Base orderBy for all tabs
 
+      // Apply specific filters based on the active tab
       if (tab === "all") {
-        if (loadMore && lastDoc) queryConstraints.push(startAfter(lastDoc));
-        q = query(collectionRef, ...queryConstraints);
+        // For 'all' tab, no specific 'where' clause here; rules handle visibility.
       } else if (tab === "created" && user) {
-        queryConstraints.unshift(where("createdBy", "==", user.uid));
-        if (loadMore && lastDoc) queryConstraints.push(startAfter(lastDoc));
-        q = query(collectionRef, ...queryConstraints);
+        queryConstraints.unshift(where("createdBy", "==", user.uid)); // Add where clause to the beginning
       } else if (tab === "favorites" && user) {
         if (!favoriteTests || favoriteTests.length === 0) {
           setTests([]);
           setLoading(false);
+          setLoadingMore(false);
+          setHasMore(false);
           return;
         }
-        q = query(
-          collectionRef,
+        // For favorites, fetch by ID. Firestore 'in' query limit is 10.
+        queryConstraints.push(
           where("__name__", "in", favoriteTests.slice(0, 10))
         );
+        setHasMore(false); // Favorites tab does not typically paginate, loads all specified favorites
       } else {
+        // If tab is 'created' or 'favorites' but user is not logged in, or invalid tab
+        setTests([]);
         setLoading(false);
         setLoadingMore(false);
+        setHasMore(false);
         return;
       }
+
+      // Add pagination constraints for 'all' and 'created' tabs
+      if (tab !== "favorites") {
+        if (loadMore && lastDoc) {
+          queryConstraints.push(startAfter(lastDoc));
+        }
+        queryConstraints.push(limit(PAGE_SIZE));
+      }
+
+      q = query(collectionRef, ...queryConstraints);
 
       try {
         const snapshot = await getDocs(q);
         const newTests = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
+          createdAt: doc.data().createdAt?.toMillis() || null, // Ensure serializable
         }));
 
-        setHasMore(newTests.length === PAGE_SIZE && tab !== "favorites");
-        setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+        // Update pagination state based on snapshot size
+        if (tab !== "favorites") {
+          setHasMore(newTests.length === PAGE_SIZE);
+          setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
+        }
 
         if (loadMore) {
           setTests((prev) => [...prev, ...newTests]);
@@ -94,7 +112,8 @@ export default function TestHub({ initialTests }) {
           setTests(newTests);
         }
       } catch (error) {
-        toast.error(`Failed to load tests.`);
+        console.error("Firebase fetchTests error:", error);
+        toast.error(`Failed to load tests: ${error.message}`);
       } finally {
         setLoading(false);
         setLoadingMore(false);
@@ -104,21 +123,23 @@ export default function TestHub({ initialTests }) {
   );
 
   useEffect(() => {
-    setTests([]);
-    setLastDoc(null);
-    setHasMore(true);
-    fetchTests(activeTab, false);
-  }, [activeTab]);
+    // Only fetch if user is defined (for user-specific tabs) or if it's the 'all' tab.
+    // The `user` dependency ensures this runs when auth state changes.
+    if (user || activeTab === "all") {
+      setTests([]); // Clear tests before new fetch
+      setLastDoc(null); // Reset pagination
+      setHasMore(true); // Assume there's more until proven otherwise
+      fetchTests(activeTab, false);
+    }
+  }, [activeTab, user]); // Added fetchTests as dependency
 
   const handleLoadMore = () => {
     fetchTests(activeTab, true);
   };
 
   const filteredTests = useMemo(() => {
+    // Client-side filtering based on search term
     return tests.filter((test) => {
-      const isVisible =
-        test.status === "approved" || typeof test.status === "undefined";
-      if (!isVisible) return false;
       const matchesSearch = searchTerm
         ? (test.title?.toLowerCase() || "").includes(
             searchTerm.toLowerCase()
@@ -132,13 +153,22 @@ export default function TestHub({ initialTests }) {
   const [takenTestIds, setTakenTestIds] = useState(new Set());
   useEffect(() => {
     if (user) {
+      // Fetch only test IDs from mockTestResults
       const resultsQuery = query(
         collection(db, "mockTestResults"),
         where("userId", "==", user.uid)
       );
-      getDocs(resultsQuery).then((snapshot) => {
-        setTakenTestIds(new Set(snapshot.docs.map((doc) => doc.data().testId)));
-      });
+      getDocs(resultsQuery)
+        .then((snapshot) => {
+          setTakenTestIds(
+            new Set(snapshot.docs.map((doc) => doc.data().testId))
+          );
+        })
+        .catch((error) => {
+          console.error("Error fetching taken test IDs:", error);
+        });
+    } else {
+      setTakenTestIds(new Set()); // Clear if user logs out
     }
   }, [user]);
 
@@ -164,7 +194,6 @@ export default function TestHub({ initialTests }) {
           isActive={activeTab === "all"}
           onClick={() => setActiveTab("all")}
         />
-        {/* --- CHANGE: Removed the conditional rendering to show tabs for all users --- */}
         {user && (
           <>
             <TabButton
@@ -181,7 +210,6 @@ export default function TestHub({ initialTests }) {
             />
           </>
         )}
-        {/* --- END OF CHANGE --- */}
       </div>
 
       <div className='p-4 mb-8 bg-blue-50 border-2 border-blue-200 rounded-lg flex items-center gap-4'>
