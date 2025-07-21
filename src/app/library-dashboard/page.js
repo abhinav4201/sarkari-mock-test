@@ -18,6 +18,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import TravelingModeCard from "@/components/dashboard/TravelingModeCard";
+import StudyPlanner from "@/components/dashboard/StudyPlanner"; // <-- IMPORT NEW COMPONENT
+
 
 async function getDailyVocabulary() {
   const q = query(
@@ -97,8 +99,9 @@ export default function LibraryDashboardPage() {
           <LazyLibraryStats />
         </div>
 
-        <div className='mt-8'>
+        <div className='mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8 items-start'>
           <DailyChallenges />
+          <StudyPlanner />
         </div>
 
         <div className='mt-8'>

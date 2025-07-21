@@ -20,6 +20,8 @@ import Achievements from "@/components/dashboard/Achievements";
 import DailyChallenges from "@/components/dashboard/DailyChallenges";
 import LazyUserStats from "@/components/dashboard/LazyUserStats"; // <-- IMPORT NEW COMPONENT
 import TravelingModeCard from "@/components/dashboard/TravelingModeCard";
+import StudyPlanner from "@/components/dashboard/StudyPlanner"; // <-- IMPORT NEW COMPONENT
+
 
 async function getDailyVocabulary() {
   const q = query(
@@ -102,8 +104,9 @@ export default function DashboardPage() {
             <LazyUserStats />
           </div>
 
-          <div className='mt-8'>
+          <div className='mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8 items-start'>
             <DailyChallenges />
+            <StudyPlanner />
           </div>
 
           <div className='mt-8'>
