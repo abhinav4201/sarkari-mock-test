@@ -31,6 +31,8 @@ import {
   useState,
 } from "react";
 import toast from "react-hot-toast";
+import { getOfflineResults, clearOfflineResults } from "@/lib/indexedDb"; // <-- NEW IMPORT
+
 
 const AuthContext = createContext();
 
