@@ -1,7 +1,7 @@
 "use client"; // This converts the page to a Client Component
 
 import { useState, useEffect } from "react";
-import { useParams, notFound, useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
 import {
   doc,
@@ -20,6 +20,7 @@ import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import Explanation from "@/components/results/Explanation"; 
 import ComparativeAnalysis from "@/components/results/ComparativeAnalysis";
 import ActionableInsights from "@/components/results/ActionableInsights";
+import XPSummary from "@/components/results/XPSummary";
 
 // Helper function to fetch all necessary data
 async function getResultData(resultId, userId) {
@@ -128,6 +129,7 @@ export default function ResultPage() {
           </div>
           {/* The AdvancedAnalysis component will need to be a client component that fetches its own data */}
           <div className='mt-12'>
+            <XPSummary />
             <ComparativeAnalysis resultId={resultId} />
             <AdvancedAnalysis resultId={resultId} />
             {result && (

@@ -22,6 +22,7 @@ import {
   PenSquare,
   TestTube,
   BookUser, // NEW: Icon for User Questions
+  Map,
 } from "lucide-react";
 
 const adminLinks = [
@@ -29,6 +30,11 @@ const adminLinks = [
     name: "Dashboard",
     href: "/admin",
     icon: <LayoutDashboard className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Exam Adventures",
+    href: "/admin/adventures",
+    icon: <Map className='mr-3 h-5 w-5' />,
   },
   {
     name: "Library Partners",

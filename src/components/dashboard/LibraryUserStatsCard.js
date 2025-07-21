@@ -1,3 +1,5 @@
+// src/components/dashboard/LibraryUserStatsCard.js
+
 "use client";
 
 import { useAuth } from "@/context/AuthContext";
@@ -11,24 +13,57 @@ import {
   getDoc,
   Timestamp,
 } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { CalendarDays, RefreshCw } from "lucide-react";
 
 export default function LibraryUserStatsCard() {
   const { user, userProfile } = useAuth();
-  // Keep the stats state, but default loading to false
   const [stats, setStats] = useState({ taken: 0, limit: 0, loading: false });
-  // NEW: State to control whether stats are visible
   const [statsVisible, setStatsVisible] = useState(false);
 
-  // This function is now only called when the user clicks the button
+  // Refs for managing the inactivity timer
+  const timerRef = useRef(null);
+  const wrapperRef = useRef(null);
+
+  // Function to hide stats and reset state
+  const hideStats = () => {
+    setStatsVisible(false);
+  };
+
+  // Function to reset the inactivity timer
+  const resetTimer = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+    timerRef.current = setTimeout(hideStats, 60000); // 1 minute timeout
+  };
+
+  // Effect to manage the timer and event listeners
+  useEffect(() => {
+    if (statsVisible) {
+      resetTimer();
+      const wrapper = wrapperRef.current;
+      wrapper?.addEventListener("mousemove", resetTimer);
+      wrapper?.addEventListener("touchstart", resetTimer);
+    }
+
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+      const wrapper = wrapperRef.current;
+      wrapper?.removeEventListener("mousemove", resetTimer);
+      wrapper?.removeEventListener("touchstart", resetTimer);
+    };
+  }, [statsVisible]);
+
   const fetchStats = async () => {
     if (!user || !userProfile?.libraryId) {
       setStats({ taken: 0, limit: 0, loading: false });
       return;
     }
 
-    setStats({ ...stats, loading: true }); // Show loading state
+    setStats({ ...stats, loading: true });
 
     try {
       const libraryRef = doc(db, "libraries", userProfile.libraryId);
@@ -57,7 +92,7 @@ export default function LibraryUserStatsCard() {
       const taken = resultsSnapshot.size;
 
       setStats({ taken, limit, loading: false });
-      setStatsVisible(true); // Make the stats visible after fetching
+      setStatsVisible(true);
     } catch (error) {
       console.error("Error fetching library stats:", error);
       setStats({ taken: 0, limit: 0, loading: false });
@@ -76,7 +111,10 @@ export default function LibraryUserStatsCard() {
   }
 
   return (
-    <div className='bg-white p-6 rounded-2xl shadow-lg border border-slate-200'>
+    <div
+      ref={wrapperRef}
+      className='bg-white p-6 rounded-2xl shadow-lg border border-slate-200'
+    >
       <div className='flex items-center justify-between'>
         <div className='flex items-center gap-3'>
           <div className='bg-indigo-100 p-3 rounded-full'>
@@ -86,7 +124,6 @@ export default function LibraryUserStatsCard() {
             Your Monthly Test Limit
           </h2>
         </div>
-        {/* Refresh button is only shown if stats are already visible */}
         {statsVisible && (
           <button
             onClick={fetchStats}
@@ -106,7 +143,6 @@ export default function LibraryUserStatsCard() {
           <div className='h-3 w-full bg-slate-200 rounded'></div>
         </div>
       ) : !statsVisible ? (
-        // Initial state: Show the button instead of the stats
         <div className='mt-4 text-center'>
           <button
             onClick={fetchStats}
@@ -116,7 +152,6 @@ export default function LibraryUserStatsCard() {
           </button>
         </div>
       ) : stats.limit > 0 ? (
-        // State after fetching: Show the stats
         <div className='mt-4'>
           <div className='flex justify-between items-baseline mb-2'>
             <p className='text-slate-700'>

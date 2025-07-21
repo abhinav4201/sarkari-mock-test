@@ -5,22 +5,20 @@ import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import NotificationBell from "../components/ui/NotificationBell";
 import { useState } from "react";
-import { Menu, X, BarChart } from "lucide-react"; // Import BarChart for My Library Analytics
+import { Menu, X, BarChart, Map } from "lucide-react"; // Import Map icon
 
 export default function LibraryNavbar() {
-  // Access isLibraryOwner and ownedLibraryIds from useAuth
   const { logOut, isLibraryOwner, ownedLibraryIds } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
-  // Reusable link component for mobile menu
   const MobileNavLink = ({ href, children, isOwnerSpecific = false }) => (
     <Link
       href={href}
       onClick={closeMobileMenu}
       className={`block px-3 py-2 rounded-md text-base font-medium ${
-        isOwnerSpecific ? "text-yellow-300" : "text-indigo-100" // Apply owner-specific styling
+        isOwnerSpecific ? "text-yellow-300" : "text-indigo-100"
       } hover:text-white hover:bg-slate-800`}
     >
       {children}
@@ -38,7 +36,7 @@ export default function LibraryNavbar() {
                 isLibraryOwner && ownedLibraryIds.length > 0
                   ? `/library-owner/${ownedLibraryIds[0]}`
                   : "/library-dashboard"
-              } // Redirect owners to their analytics
+              }
               className='text-2xl font-bold text-white'
             >
               Sarkari Mock Test
@@ -48,7 +46,6 @@ export default function LibraryNavbar() {
           {/* Desktop Menu Links */}
           <div className='hidden md:flex items-center gap-1 sm:gap-2'>
             {isLibraryOwner && ownedLibraryIds.length > 0 ? (
-              // If it's a Library Owner, only show My Library Analytics
               <Link
                 href={`/library-owner/${ownedLibraryIds[0]}`}
                 className='px-3 py-2 text-yellow-300 font-medium hover:text-white rounded-md text-sm flex items-center gap-1'
@@ -56,13 +53,21 @@ export default function LibraryNavbar() {
                 <BarChart size={16} /> My Library Analytics
               </Link>
             ) : (
-              // For regular library users (students), show standard links
+              // For regular library users (students)
               <>
                 <Link
                   href='/library-dashboard'
                   className='px-3 py-2 text-indigo-100 font-medium hover:text-white rounded-md text-sm'
                 >
                   Dashboard
+                </Link>
+                {/* NEW: Adventures Link for library users */}
+                <Link
+                  href='/adventures'
+                  className='px-3 py-2 text-indigo-100 font-medium hover:text-white rounded-md text-sm flex items-center gap-1.5'
+                >
+                  <Map size={16} />
+                  Adventures
                 </Link>
                 <Link
                   href='/mock-tests'
@@ -84,8 +89,7 @@ export default function LibraryNavbar() {
                 </Link>
               </>
             )}
-            <NotificationBell />{" "}
-            {/* Notification Bell is always visible for logged-in users */}
+            <NotificationBell />
             <button
               onClick={logOut}
               className='px-4 py-2 bg-blue-500/50 text-white rounded-lg text-sm font-semibold hover:bg-blue-500'
@@ -119,7 +123,6 @@ export default function LibraryNavbar() {
         <div className='md:hidden' id='mobile-menu'>
           <div className='px-2 pt-2 pb-3 space-y-1 sm:px-3'>
             {isLibraryOwner && ownedLibraryIds.length > 0 ? (
-              // If it's a Library Owner, only show My Library Analytics
               <MobileNavLink
                 href={`/library-owner/${ownedLibraryIds[0]}`}
                 isOwnerSpecific={true}
@@ -128,10 +131,15 @@ export default function LibraryNavbar() {
                 Analytics
               </MobileNavLink>
             ) : (
-              // For regular library users (students), show standard links
+              // For regular library users (students)
               <>
                 <MobileNavLink href='/library-dashboard'>
                   Dashboard
+                </MobileNavLink>
+                {/* NEW: Adventures Link for mobile library users */}
+                <MobileNavLink href='/adventures'>
+                  <Map size={16} className='inline-block mr-2' />
+                  Adventures
                 </MobileNavLink>
                 <MobileNavLink href='/mock-tests'>Tests</MobileNavLink>
                 <MobileNavLink href='/leaderboard'>Leaderboard</MobileNavLink>

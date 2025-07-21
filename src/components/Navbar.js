@@ -4,8 +4,8 @@
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { useState } from "react";
-import { Menu, X } from "lucide-react";
-import NotificationBell from "./ui/NotificationBell"; // Import the bell
+import { Menu, X, Map } from "lucide-react"; // Import Map Icon
+import NotificationBell from "./ui/NotificationBell";
 
 export default function Navbar() {
   const { user, loading, googleSignIn, logOut } = useAuth();
@@ -41,6 +41,17 @@ export default function Navbar() {
 
   const publicLinks = (
     <>
+      {/* NEW LINK FOR ADVENTURES */}
+      <Link
+        href='/adventures'
+        className={linkClasses}
+        onClick={closeMobileMenu}
+      >
+        <span className='flex items-center gap-1.5'>
+          <Map size={16} />
+          Adventures
+        </span>
+      </Link>
       <Link href='/blog' className={linkClasses} onClick={closeMobileMenu}>
         Blog
       </Link>

@@ -1,22 +1,23 @@
-// src/app/library-dashboard/page.js
-
 "use client";
 
+import Achievements from "@/components/dashboard/Achievements";
+import DailyChallenges from "@/components/dashboard/DailyChallenges";
 import DailyDose from "@/components/dashboard/DailyDose";
+import LazyLibraryStats from "@/components/dashboard/LazyLibraryStats";
 import LazyProgressChart from "@/components/dashboard/LazyProgressChart";
-import LibraryUserStatsCard from "@/components/dashboard/LibraryUserStatsCard";
+import LazyTestHistory from "@/components/dashboard/LazyTestHistory";
 import PaymentModal from "@/components/dashboard/PaymentModal";
 import PlatformTrends from "@/components/dashboard/PlatformTrends";
+import ReferralCard from "@/components/dashboard/ReferralCard";
 import SubscriptionStatusCard from "@/components/dashboard/SubscriptionStatusCard";
-import LazyTestHistory from "@/components/dashboard/LazyTestHistory";
 import WelcomeHeader from "@/components/dashboard/WelcomeHeader";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
-import { ArrowRight, TrendingUp } from "lucide-react"; // Import TrendingUp icon
-import Link from "next/link"; // Import Link
+import { ArrowRight, TrendingUp } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import ReferralCard from "@/components/dashboard/ReferralCard";
+import TravelingModeCard from "@/components/dashboard/TravelingModeCard";
 
 async function getDailyVocabulary() {
   const q = query(
@@ -87,16 +88,25 @@ export default function LibraryDashboardPage() {
         <WelcomeHeader />
 
         <div className='mt-8'>
-          <LibraryUserStatsCard />
+          <SubscriptionStatusCard
+            onUpgradeClick={() => setIsPaymentModalOpen(true)}
+          />
+        </div>
+        <TravelingModeCard />
+        <div className='mt-8'>
+          <LazyLibraryStats />
+        </div>
+
+        <div className='mt-8'>
+          <DailyChallenges />
+        </div>
+
+        <div className='mt-8'>
+          <Achievements />
         </div>
 
         <div className='mt-8'>
           <LazyProgressChart />
-        </div>
-        <div className='mt-8'>
-          <SubscriptionStatusCard
-            onUpgradeClick={() => setIsPaymentModalOpen(true)}
-          />
         </div>
         <div className='mt-8'>
           <ReferralCard />
@@ -104,7 +114,6 @@ export default function LibraryDashboardPage() {
         <div className='mt-8'>
           <PlatformTrends />
         </div>
-
 
         {/* NEW: Link to the dedicated Trending page for library users */}
         <div className='mt-8'>

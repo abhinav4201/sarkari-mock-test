@@ -7,6 +7,7 @@ import ActionableInsights from "@/components/results/ActionableInsights";
 import ComparativeAnalysis from "@/components/results/ComparativeAnalysis";
 import DynamicAdvancedAnalysis from "@/components/results/DynamicAdvancedAnalysis";
 import Explanation from "@/components/results/Explanation";
+import XPSummary from "@/components/results/XPSummary";
 import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
@@ -106,6 +107,7 @@ export default function DynamicResultPage() {
             </p>
           </div>
           <div className='mt-12'>
+            <XPSummary />
             <ComparativeAnalysis resultId={resultId} />
 
             <DynamicAdvancedAnalysis

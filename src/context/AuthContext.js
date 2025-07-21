@@ -20,6 +20,7 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
+import Cookies from "js-cookie";
 import { useRouter } from "next/navigation";
 import {
   createContext,
@@ -30,9 +31,18 @@ import {
   useState,
 } from "react";
 import toast from "react-hot-toast";
-import Cookies from "js-cookie";
 
 const AuthContext = createContext();
+
+// Helper function to check if two dates are consecutive days
+const areConsecutiveDays = (date1, date2) => {
+  if (!date1 || !date2) return false;
+  const d1 = new Date(date1.toDate().setHours(0, 0, 0, 0));
+  const d2 = new Date(date2.setHours(0, 0, 0, 0));
+  const diffTime = d2 - d1;
+  const diffDays = diffTime / (1000 * 60 * 60 * 24);
+  return diffDays === 1;
+};
 
 export const AuthContextProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -156,8 +166,19 @@ export const AuthContextProvider = ({ children }) => {
 
         if (userSnap.exists()) {
           const userData = userSnap.data();
-          await updateDoc(userRef, { lastLogin: serverTimestamp() });
+          const updates = { lastLogin: now };
 
+          const lastLoginDate = userData.lastLogin;
+
+          if (areConsecutiveDays(lastLoginDate, new Date())) {
+            if (!userData.earnedBadges?.includes("hot_streak")) {
+              updates.earnedBadges = arrayUnion("hot_streak");
+              toast.success("Achievement Unlocked: Hot Streak!");
+            }
+          }
+          // --- End of Badge Logic ---
+
+          await updateDoc(userRef, updates);
           const isOwner =
             userData.role === "library-owner" ||
             (Array.isArray(userData.libraryOwnerOf) &&
@@ -181,6 +202,11 @@ export const AuthContextProvider = ({ children }) => {
             libraryOwnerOf: [],
             premiumCredits: 0,
             referralCount: 0,
+            xp: 0,
+            level: 1,
+            earnedBadges: [],
+            currentStreak: 0,
+            lastStreakDay: null,
           };
           const refCode = Cookies.get("referral_code");
           if (refCode) {
@@ -238,6 +264,41 @@ export const AuthContextProvider = ({ children }) => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         const userDocRef = doc(db, "users", currentUser.uid);
+
+        const syncOfflineResults = async () => {
+          if (navigator.onLine) {
+            const offlineResults = await getOfflineResults();
+            if (offlineResults.length > 0) {
+              const toastId = toast.loading(
+                `Syncing ${offlineResults.length} offline result(s)...`
+              );
+              try {
+                // Here you would typically send these results to a dedicated API endpoint
+                // For simplicity, we'll simulate the submission logic here.
+                // In a real app, an API route is better to handle batch submissions.
+                for (const result of offlineResults) {
+                  // This is a simplified version of the transaction logic.
+                  // A proper implementation would use a batch write via an API route.
+                  const newResultRef = doc(collection(db, "mockTestResults"));
+                  await setDoc(newResultRef, {
+                    ...result,
+                    completedAt: serverTimestamp(),
+                    synced: true,
+                  });
+                }
+                await clearOfflineResults();
+                toast.success("Offline results synced successfully!", {
+                  id: toastId,
+                });
+              } catch (error) {
+                toast.error("Failed to sync offline results.", { id: toastId });
+                console.error("Offline sync error:", error);
+              }
+            }
+          }
+        };
+        syncOfflineResults();
+
         const unsub = onSnapshot(userDocRef, (doc) => {
           if (doc.exists()) {
             const userData = doc.data();

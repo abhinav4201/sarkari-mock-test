@@ -44,6 +44,24 @@ async function getTestData(testId) {
   return { testDetails, questions };
 }
 
+// Helper function to check if two dates are on the same calendar day
+const isSameDay = (date1, date2) => {
+    if (!date1 || !date2) return false;
+    return date1.getFullYear() === date2.getFullYear() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getDate() === date2.getDate();
+};
+
+// Helper function to check if two dates are on consecutive calendar days
+const areConsecutiveTestDays = (date1, date2) => {
+    if (!date1 || !date2) return false;
+    const d1 = new Date(date1.toDate().setHours(0, 0, 0, 0));
+    const d2 = new Date(date2.setHours(0, 0, 0, 0));
+    const diffTime = d2 - d1;
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays === 1;
+};
+
 export default function TestTakingPage() {
   const [testDetails, setTestDetails] = useState(null);
   const [questions, setQuestions] = useState([]);
@@ -75,6 +93,8 @@ export default function TestTakingPage() {
       if (testState === "submitting" || !user) return;
       setTestState("submitting");
       const resultDocRef = doc(collection(db, "mockTestResults"));
+
+      let xpGained = 0;
 
       try {
         await runTransaction(db, async (transaction) => {
@@ -144,10 +164,94 @@ export default function TestTakingPage() {
             resultData.ownerId = userProfile.ownerId;
           }
 
+          // --- START: GAMIFICATION LOGIC ---
+          const userRef = doc(db, "users", user.uid);
+          const userSnap = await transaction.get(userRef);
+          if (!userSnap.exists()) {
+            throw "User document not found!";
+          }
+          const userData = userSnap.data();
+
+          const updates = {};
+          const newBadges = [];
+
+          const lastStreakDate = userData.lastStreakDay;
+          const today = new Date();
+
+          if (!isSameDay(lastStreakDate?.toDate(), today)) {
+            if (areConsecutiveTestDays(lastStreakDate, today)) {
+              updates.currentStreak = (userData.currentStreak || 0) + 1;
+            } else {
+              updates.currentStreak = 1; // Reset streak
+            }
+            updates.lastStreakDay = today;
+
+            // 2. Check for Streak Milestone Badges
+            const newStreak = updates.currentStreak || userData.currentStreak;
+            if (
+              newStreak === 7 &&
+              !userData.earnedBadges?.includes("iron_will")
+            )
+              newBadges.push("iron_will");
+            if (
+              newStreak === 15 &&
+              !userData.earnedBadges?.includes("silver_resolve")
+            )
+              newBadges.push("silver_resolve");
+            if (
+              newStreak === 30 &&
+              !userData.earnedBadges?.includes("master_learner")
+            ) {
+              newBadges.push("master_learner");
+              updates.premiumCredits = increment(1); // Award premium credit
+            }
+          }
+
+          // 3. Check for Performance Badges
+          if (
+            score === totalQuestions &&
+            !userData.earnedBadges?.includes("perfectionist")
+          ) {
+            newBadges.push("perfectionist");
+          }
+          const timeUsedPercentage =
+            totalTimeTaken / (testDetails.estimatedTime * 60);
+          if (
+            timeUsedPercentage < 0.5 &&
+            !userData.earnedBadges?.includes("speed_demon")
+          ) {
+            newBadges.push("speed_demon");
+          }
+
+          if (newBadges.length > 0) {
+            updates.earnedBadges = arrayUnion(...newBadges);
+          }
+
+          xpGained = 50; // Base XP for completing a test
+          xpGained += score * 2; // XP for correct answers
+
+          // Bonus for high score
+          if (score / totalQuestions >= 0.8) {
+            xpGained += 25;
+          }
+
+          const newXp = (userData.xp || 0) + xpGained;
+          let newLevel = userData.level || 1;
+          let xpForNextLevel = newLevel * 100;
+
+          // Check for level up
+          if (newXp >= xpForNextLevel) {
+            newLevel++;
+          }
+
+          transaction.update(userRef, {
+            xp: newXp,
+            level: newLevel,
+            ...updates,
+          });
+          // --- END: GAMIFICATION LOGIC ---
+
           // --- LOGGING START ---
-          console.log("Transaction Step 1: Setting mockTestResults");
-          console.log("Path:", resultDocRef.path);
-          console.log("Data:", resultData);
           try {
             transaction.set(resultDocRef, resultData);
           } catch (e) {
@@ -172,13 +276,10 @@ export default function TestTakingPage() {
             { merge: true } // This creates the doc if it doesn't exist
           );
 
-          console.log("Transaction Step 3: Updating mockTests");
           const mockTestRef = doc(db, "mockTests", testId);
           const mockTestUpdateData = {
             takenCount: increment(1),
           };
-          console.log("Path:", mockTestRef.path);
-          console.log("Data:", mockTestUpdateData);
           try {
             transaction.update(mockTestRef, mockTestUpdateData);
           } catch (e) {
@@ -187,9 +288,6 @@ export default function TestTakingPage() {
           }
 
           if (isLibraryUser && userProfile?.libraryId) {
-            console.log(
-              "Transaction Step 4: Updating libraries (for library user)"
-            );
             const libraryRef = doc(db, "libraries", userProfile?.libraryId);
             const libraryUpdateData = {
               testCompletions: arrayUnion({
@@ -198,8 +296,6 @@ export default function TestTakingPage() {
                 completedAt: new Date(),
               }),
             };
-            console.log("Path:", libraryRef.path);
-            console.log("Data:", libraryUpdateData);
             try {
               transaction.update(libraryRef, libraryUpdateData);
             } catch (e) {
@@ -210,9 +306,6 @@ export default function TestTakingPage() {
               throw e;
             }
 
-            console.log(
-              "Transaction Step 5: Updating monthlyTestCounts (for library user)"
-            );
             const yearMonth = `${new Date().getFullYear()}-${
               new Date().getMonth() + 1
             }`;
@@ -226,8 +319,6 @@ export default function TestTakingPage() {
             const monthlyCountUpdateData = {
               count: increment(1),
             };
-            console.log("Path:", monthlyCountRef.path);
-            console.log("Data:", monthlyCountUpdateData);
             try {
               transaction.set(monthlyCountRef, monthlyCountUpdateData, {
                 merge: true,
@@ -244,8 +335,10 @@ export default function TestTakingPage() {
         });
 
         toast.success("Test submitted successfully!");
-        router.push(`/mock-tests/results/${resultDocRef.id}`);
-      } catch (error) {
+        router.push(
+          `/mock-tests/results/${resultDocRef.id}?xpGained=${xpGained}`
+        );
+      }  catch (error) {
         console.error("Full Test Submission Transaction Error:", error); // Log the overall transaction error
         toast.error("Failed to submit your test. Please try again.");
         setTestState("in-progress");

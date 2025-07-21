@@ -1,7 +1,7 @@
 // src/app/leaderboard/page.js
 "use client";
 
-import { Award, PartyPopper } from "lucide-react"; // Changed ShieldX to PartyPopper
+import { Award, PartyPopper } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export default function LeaderboardPage() {
@@ -30,30 +30,43 @@ export default function LeaderboardPage() {
           </div>
         ) : leaderboard.length > 0 ? (
           <div className='max-w-2xl mx-auto bg-white p-6 rounded-2xl shadow-lg'>
-            {leaderboard.map((entry, index) => (
-              <div
-                key={entry.userId}
-                className='flex items-center justify-between p-4 border-b last:border-b-0'
-              >
-                <div className='flex items-center'>
-                  <span className='text-lg font-bold w-10 text-slate-500'>
-                    {index + 1}
-                  </span>
-                  <span className='font-semibold text-slate-800'>
-                    {entry.userName}
-                  </span>
+            {leaderboard.map((entry, index) => {
+              // Check if the user is an ambassador
+              const isAmbassador = entry.isAmbassador === true;
+
+              return (
+                <div
+                  key={entry.userId}
+                  className={`flex items-center justify-between p-4 border-b last:border-b-0 rounded-lg transition-all ${
+                    isAmbassador ? "bg-amber-50 border-amber-200" : ""
+                  }`}
+                >
+                  <div className='flex items-center'>
+                    <span className='text-lg font-bold w-10 text-slate-500'>
+                      {index + 1}
+                    </span>
+                    <span
+                      className={`font-semibold ${
+                        isAmbassador ? "text-amber-700" : "text-slate-800"
+                      }`}
+                    >
+                      {isAmbassador && (
+                        <Award className='inline-block h-4 w-4 mr-1.5 text-amber-500' />
+                      )}
+                      {entry.userName}
+                    </span>
+                  </div>
+                  <div className='flex items-center gap-2'>
+                    <Award className='h-5 w-5 text-yellow-500' />
+                    <span className='font-bold text-lg text-slate-900'>
+                      {entry.score}
+                    </span>
+                  </div>
                 </div>
-                <div className='flex items-center gap-2'>
-                  <Award className='h-5 w-5 text-yellow-500' />
-                  <span className='font-bold text-lg text-slate-900'>
-                    {entry.score}
-                  </span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
-          // THIS SECTION HAS BEEN UPDATED FOR A BETTER VIBE
           <div className='max-w-2xl mx-auto bg-white p-12 rounded-2xl shadow-lg text-center'>
             <PartyPopper className='h-16 w-16 mx-auto text-indigo-500' />
             <h3 className='mt-4 text-2xl font-bold text-slate-800'>

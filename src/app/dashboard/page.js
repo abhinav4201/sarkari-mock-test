@@ -1,20 +1,25 @@
+// src/app/dashboard/page.js
+
 "use client";
 
 import DailyDose from "@/components/dashboard/DailyDose";
 import PaymentModal from "@/components/dashboard/PaymentModal";
 import SubscriptionStatusCard from "@/components/dashboard/SubscriptionStatusCard";
-import UserStats from "@/components/dashboard/UserStats";
 import WelcomeHeader from "@/components/dashboard/WelcomeHeader";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
-import { ArrowRight, PenSquare, TrendingUp, X } from "lucide-react";
-import Link from "next/link"; // Import Link
+import { ArrowRight, PenSquare, TrendingUp } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import ReferralCard from "@/components/dashboard/ReferralCard";
 import PlatformTrends from "@/components/dashboard/PlatformTrends";
 import LazyProgressChart from "@/components/dashboard/LazyProgressChart";
 import LazyTestHistory from "@/components/dashboard/LazyTestHistory";
+import Achievements from "@/components/dashboard/Achievements";
+import DailyChallenges from "@/components/dashboard/DailyChallenges";
+import LazyUserStats from "@/components/dashboard/LazyUserStats"; // <-- IMPORT NEW COMPONENT
+import TravelingModeCard from "@/components/dashboard/TravelingModeCard";
 
 async function getDailyVocabulary() {
   const q = query(
@@ -77,7 +82,6 @@ export default function DashboardPage() {
 
   return (
     <>
-      {/* --- NEW: Add the modal to the page --- */}
       <PaymentModal
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
@@ -88,18 +92,27 @@ export default function DashboardPage() {
           <WelcomeHeader />
 
           <div className='mt-8'>
-            <UserStats />
+            <SubscriptionStatusCard
+              onUpgradeClick={() => setIsPaymentModalOpen(true)}
+            />
+          </div>
+          <TravelingModeCard />
+          {/* REPLACE UserStats with LazyUserStats */}
+          <div className='mt-8'>
+            <LazyUserStats />
+          </div>
+
+          <div className='mt-8'>
+            <DailyChallenges />
+          </div>
+
+          <div className='mt-8'>
+            <Achievements />
           </div>
 
           <div className='mt-8'>
             <LazyProgressChart />
           </div>
-
-
-          {/* --- NEW: The "Go Premium" card --- */}
-          <SubscriptionStatusCard
-            onUpgradeClick={() => setIsPaymentModalOpen(true)}
-          />
 
           <div className='mt-8'>
             <Link

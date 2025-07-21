@@ -38,6 +38,24 @@ async function getTestInstance(instanceId, userId) {
   return data;
 }
 
+// Helper function to check if two dates are on the same calendar day
+const isSameDay = (date1, date2) => {
+    if (!date1 || !date2) return false;
+    return date1.getFullYear() === date2.getFullYear() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getDate() === date2.getDate();
+};
+
+// Helper function to check if two dates are on consecutive calendar days
+const areConsecutiveTestDays = (date1, date2) => {
+    if (!date1 || !date2) return false;
+    const d1 = new Date(date1.toDate().setHours(0, 0, 0, 0));
+    const d2 = new Date(date2.setHours(0, 0, 0, 0));
+    const diffTime = d2 - d1;
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays === 1;
+};
+
 export default function TakeDynamicTestPage() {
   const [instanceData, setInstanceData] = useState(null);
   const [questions, setQuestions] = useState([]);
@@ -64,173 +82,21 @@ export default function TakeDynamicTestPage() {
   const params = useParams();
   const { instanceId } = params;
 
-  // const forceSubmit = useCallback(
-  //   async (reason = "user_submitted") => {
-  //     // reason defaults to 'user_submitted' if not provided
-  //     if (testState === "submitting" || !user || !instanceData) return;
-  //     setTestState("submitting");
-
-  //     const resultDocRef = doc(collection(db, "mockTestResults"));
-  //     const yearMonth = `${new Date().getFullYear()}-${
-  //       new Date().getMonth() + 1
-  //     }`;
-
-  //     try {
-  //       await runTransaction(db, async (transaction) => {
-  //         const lastQuestionId = questions[currentQuestionIndex]?.id;
-  //         let finalTimePerQuestion = { ...timePerQuestion };
-  //         if (lastQuestionId) {
-  //           const timeSpent = (Date.now() - questionStartTime) / 1000;
-  //           finalTimePerQuestion[lastQuestionId] =
-  //             (finalTimePerQuestion[lastQuestionId] || 0) + timeSpent;
-  //         }
-
-  //         const finalAnswers = {};
-  //         for (const qId in selectedOptions) {
-  //           finalAnswers[qId] = {
-  //             answer: selectedOptions[qId],
-  //             timeTaken: finalTimePerQuestion[qId] || 0,
-  //           };
-  //         }
-  //         for (const q of questions) {
-  //           if (!finalAnswers[q.id]) {
-  //             finalAnswers[q.id] = {
-  //               answer: null,
-  //               timeTaken: finalTimePerQuestion[q.id] || 0,
-  //             };
-  //           }
-  //         }
-
-  //         let score = 0;
-  //         const correctAnswersMap = new Map(
-  //           questions.map((q) => [q.id, q.correctAnswer])
-  //         );
-  //         for (const qId in selectedOptions) {
-  //           if (selectedOptions[qId] === correctAnswersMap.get(qId)) {
-  //             score++;
-  //           }
-  //         }
-  //         const totalQuestions = questions.length;
-  //         const incorrectAnswers = totalQuestions - score;
-  //         const totalTimeTaken = Object.values(finalTimePerQuestion).reduce(
-  //           (acc, time) => acc + time,
-  //           0
-  //         );
-
-  //         const estimatedTimeInSeconds = instanceData.estimatedTime * 60;
-  //         const suspiciousTimeThreshold = estimatedTimeInSeconds * 0.15;
-  //         const resultData = {
-  //           userId: user.uid,
-  //           testId: instanceData.originalTestId,
-  //           instanceId: instanceId,
-  //           answers: finalAnswers,
-  //           score,
-  //           totalQuestions,
-  //           incorrectAnswers,
-  //           submissionReason: reason, // This will now be a string
-  //           isDynamic: true,
-  //           completedAt: serverTimestamp(),
-  //           reviewFlag:
-  //             totalTimeTaken < suspiciousTimeThreshold
-  //               ? "low_completion_time"
-  //               : null,
-  //           totalTimeTaken: totalTimeTaken,
-  //         };
-
-  //         // Correctly add library info if the user is a library student
-  //         if (isLibraryUser && userProfile?.libraryId) {
-  //           resultData.libraryId = userProfile.libraryId;
-  //           resultData.ownerId = userProfile.ownerId;
-  //         }
-
-  //         transaction.set(resultDocRef, resultData);
-
-  //         // Update testAnalytics document
-  //         const analyticsRef = doc(
-  //           db,
-  //           "testAnalytics",
-  //           instanceData.originalTestId
-  //         );
-  //         transaction.update(analyticsRef, {
-  //           takenCount: increment(1),
-  //           uniqueTakers: arrayUnion(user.uid),
-  //         });
-  //         // Increment takenCount on the mockTests document itself
-  //         const mockTestRef = doc(db, "mockTests", instanceData.originalTestId);
-  //         transaction.update(mockTestRef, {
-  //           takenCount: increment(1),
-  //         });
-
-  //         if (isLibraryUser && userProfile?.libraryId) {
-  //           const libraryRef = doc(db, "libraries", userProfile?.libraryId);
-  //           transaction.update(libraryRef, {
-  //             testCompletions: arrayUnion({
-  //               takerId: user.uid,
-  //               testId: instanceData.originalTestId,
-  //               completedAt: new Date(), // Use new Date() instead of serverTimestamp()
-  //             }),
-  //           });
-
-  //           // NEW: Increment monthlyTestCounts for library users upon successful submission
-  //           const yearMonth = `${new Date().getFullYear()}-${
-  //             new Date().getMonth() + 1
-  //           }`;
-  //           const monthlyCountRef = doc(
-  //             db,
-  //             "users",
-  //             user.uid,
-  //             "monthlyTestCounts",
-  //             yearMonth
-  //           );
-  //           transaction.set(
-  //             monthlyCountRef,
-  //             {
-  //               count: increment(1),
-  //             },
-  //             { merge: true }
-  //           );
-  //         }
-  //       });
-
-  //       toast.success("Test submitted successfully!");
-  //       router.push(`/mock-tests/results/results-dynamic/${resultDocRef.id}`);
-  //     } catch (error) {
-  //       console.error("Error writing test results:", error);
-  //       toast.error("Failed to submit test.");
-  //       setTestState("in-progress");
-  //     }
-  //   },
-  //   [
-  //     instanceData,
-  //     selectedOptions,
-  //     timePerQuestion,
-  //     questions,
-  //     currentQuestionIndex,
-  //     questionStartTime,
-  //     router,
-  //     user,
-  //     instanceId,
-  //     testState,
-  //     isLibraryUser,
-  //     userProfile,
-  //   ]
-  // );
-
   const forceSubmit = useCallback(
     async (reason = "user_submitted") => {
       if (testState === "submitting" || !user || !instanceData) return;
       setTestState("submitting");
 
       const resultDocRef = doc(collection(db, "mockTestResults"));
+
+      let xpGained = 0;
+
       const yearMonth = `${new Date().getFullYear()}-${
         new Date().getMonth() + 1
       }`;
 
       try {
         await runTransaction(db, async (transaction) => {
-          // ---
-          // Step 1: Finalize timing and answer data (No changes needed here)
-          // ---
           const lastQuestionId = questions[currentQuestionIndex]?.id;
           let finalTimePerQuestion = { ...timePerQuestion };
           if (lastQuestionId) {
@@ -270,12 +136,9 @@ export default function TakeDynamicTestPage() {
             (acc, time) => acc + time,
             0
           );
+
           const estimatedTimeInSeconds = instanceData.estimatedTime * 60;
           const suspiciousTimeThreshold = estimatedTimeInSeconds * 0.15;
-
-          // ---
-          // Step 2: Prepare the main result document (No changes needed here)
-          // ---
           const resultData = {
             userId: user.uid,
             testId: instanceData.originalTestId,
@@ -286,7 +149,7 @@ export default function TakeDynamicTestPage() {
             incorrectAnswers,
             submissionReason: reason,
             isDynamic: true,
-            completedAt: new Date(), // Using client-side timestamp
+            completedAt: new Date(),
             reviewFlag:
               totalTimeTaken < suspiciousTimeThreshold
                 ? "low_completion_time"
@@ -299,16 +162,106 @@ export default function TakeDynamicTestPage() {
             resultData.ownerId = userProfile.ownerId;
           }
 
-          // ---
-          // Step 3: Perform the transaction writes
-          // ---
+          // --- START: GAMIFICATION LOGIC (Identical to static test) ---
+          const userRef = doc(db, "users", user.uid);
+          const userSnap = await transaction.get(userRef);
+          if (!userSnap.exists()) {
+            throw "User document not found!";
+          }
+          const userData = userSnap.data();
+          const updates = {};
+          const newBadges = [];
 
-          // Write 1: Create the new test result document.
+          const lastStreakDate = userData.lastStreakDay;
+          const today = new Date();
+
+          if (!isSameDay(lastStreakDate?.toDate(), today)) {
+            if (areConsecutiveTestDays(lastStreakDate, today)) {
+              updates.currentStreak = (userData.currentStreak || 0) + 1;
+            } else {
+              updates.currentStreak = 1;
+            }
+            updates.lastStreakDay = today;
+
+            const newStreak = updates.currentStreak || userData.currentStreak;
+            if (
+              newStreak === 7 &&
+              !userData.earnedBadges?.includes("iron_will")
+            )
+              newBadges.push("iron_will");
+            if (
+              newStreak === 15 &&
+              !userData.earnedBadges?.includes("silver_resolve")
+            )
+              newBadges.push("silver_resolve");
+            if (
+              newStreak === 30 &&
+              !userData.earnedBadges?.includes("master_learner")
+            ) {
+              newBadges.push("master_learner");
+              updates.premiumCredits = increment(1);
+            }
+          }
+
+          if (
+            score === totalQuestions &&
+            !userData.earnedBadges?.includes("perfectionist")
+          ) {
+            newBadges.push("perfectionist");
+          }
+          const timeUsedPercentage =
+            totalTimeTaken / (instanceData.estimatedTime * 60);
+          if (
+            timeUsedPercentage < 0.5 &&
+            !userData.earnedBadges?.includes("speed_demon")
+          ) {
+            newBadges.push("speed_demon");
+          }
+
+          if (newBadges.length > 0) {
+            updates.earnedBadges = arrayUnion(...newBadges);
+          }
+
+          xpGained = 50; // Base XP
+          xpGained += score * 2; // XP for correct answers
+
+          if (score / totalQuestions >= 0.8) {
+            xpGained += 25; // Bonus XP
+          }
+
+          const newXp = (userData.xp || 0) + xpGained;
+          let newLevel = userData.level || 1;
+          let xpForNextLevel = newLevel * 100;
+
+          if (newXp >= xpForNextLevel) {
+            newLevel++;
+          }
+
+          transaction.update(userRef, {
+            xp: newXp,
+            level: newLevel,
+            ...updates,
+          });
+          // --- END: GAMIFICATION LOGIC ---
+
           transaction.set(resultDocRef, resultData);
 
-          // Write 2 & 3 (for library users only): Update library and user's monthly count.
+          const analyticsRef = doc(
+            db,
+            "testAnalytics",
+            instanceData.originalTestId
+          );
+          transaction.update(analyticsRef, {
+            takenCount: increment(1),
+            uniqueTakers: arrayUnion(user.uid),
+          });
+          const mockTestRef = doc(db, "mockTests", instanceData.originalTestId);
+          transaction.update(mockTestRef, {
+            takenCount: increment(1),
+          });
+
           if (isLibraryUser && userProfile?.libraryId) {
-            const libraryRef = doc(db, "libraries", userProfile.libraryId);
+            const libraryRef = doc(db, "libraries", userProfile?.libraryId);
             transaction.update(libraryRef, {
               testCompletions: arrayUnion({
                 takerId: user.uid,
@@ -329,14 +282,13 @@ export default function TakeDynamicTestPage() {
           }
         });
 
-        // ---
-        // Step 4: Redirect upon success (No changes needed here)
-        // ---
         toast.success("Test submitted successfully!");
-        router.push(`/mock-tests/results/results-dynamic/${resultDocRef.id}`);
+        router.push(
+          `/mock-tests/results/results-dynamic/${resultDocRef.id}?xpGained=${xpGained}`
+        );
       } catch (error) {
-        console.error("Full Test Submission Transaction Error:", error);
-        toast.error("Failed to submit your test. Please try again.");
+        console.error("Error writing test results:", error);
+        toast.error("Failed to submit test.");
         setTestState("in-progress");
       }
     },

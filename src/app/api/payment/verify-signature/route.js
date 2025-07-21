@@ -37,6 +37,7 @@ export async function POST(request) {
       const userSnap = await transaction.get(userRef);
       const userData = userSnap.data();
 
+      // --- START: AMBASSADOR PROGRAM LOGIC ---
       if (userData.referredBy && !userData.hasMadeFirstPurchase) {
         const referrerRef = adminDb
           .collection("users")
@@ -47,7 +48,16 @@ export async function POST(request) {
           const referrerData = referrerSnap.data();
           const newReferralCount = (referrerData.referralCount || 0) + 1;
 
+          const referrerUpdates = {};
+
           if (newReferralCount >= 10) {
+            // Referrer has hit the milestone
+            referrerUpdates.referralCount = 0; // Reset the counter
+            referrerUpdates.isAmbassador = true; // Grant Ambassador status
+            referrerUpdates.earnedBadges = FieldValue.arrayUnion(
+              "platform_ambassador"
+            ); // Grant the badge
+
             const isReferrerPremium =
               referrerData.premiumAccessExpires &&
               referrerData.premiumAccessExpires.toDate() > new Date();
@@ -57,24 +67,20 @@ export async function POST(request) {
               const newExpiry = new Date(
                 currentExpiry.setDate(currentExpiry.getDate() + 30)
               );
-              transaction.update(referrerRef, {
-                referralCount: 0,
-                premiumAccessExpires: newExpiry,
-              });
+              referrerUpdates.premiumAccessExpires = newExpiry;
             } else {
-              transaction.update(referrerRef, {
-                referralCount: 0,
-                premiumCredits: FieldValue.increment(1),
-              });
+              referrerUpdates.premiumCredits = FieldValue.increment(1);
             }
           } else {
-            transaction.update(referrerRef, {
-              referralCount: newReferralCount,
-            });
+            // Referrer is still on the way
+            referrerUpdates.referralCount = newReferralCount;
           }
+
+          transaction.update(referrerRef, referrerUpdates);
           transaction.update(userRef, { hasMadeFirstPurchase: true });
         }
       }
+      // --- END: AMBASSADOR PROGRAM LOGIC ---
 
       const expiryDate = new Date();
       expiryDate.setDate(expiryDate.getDate() + 30);
