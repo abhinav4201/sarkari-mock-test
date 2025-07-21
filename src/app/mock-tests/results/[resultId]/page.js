@@ -21,6 +21,7 @@ import Explanation from "@/components/results/Explanation";
 import ComparativeAnalysis from "@/components/results/ComparativeAnalysis";
 import ActionableInsights from "@/components/results/ActionableInsights";
 import XPSummary from "@/components/results/XPSummary";
+import Confetti from "@/components/ui/Confetti";
 
 // Helper function to fetch all necessary data
 async function getResultData(resultId, userId) {
@@ -56,6 +57,13 @@ export default function ResultPage() {
 
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showConfetti, setShowConfetti] = useState(true);
+
+  //  useEffect(() => {
+  //    // Hide confetti after 5 seconds
+  //    const timer = setTimeout(() => setShowConfetti(false), 5000);
+  //    return () => clearTimeout(timer);
+  //  }, []);
 
   useEffect(() => {
     // Wait until Firebase has confirmed the user's auth status
@@ -111,6 +119,10 @@ export default function ResultPage() {
 
   return (
     <div className='bg-slate-100 min-h-screen py-12 md:py-20'>
+      <Confetti
+        active={showConfetti}
+        onComplete={() => setShowConfetti(false)}
+      />
       <div className='container mx-auto p-4'>
         <div className='max-w-4xl mx-auto bg-white p-6 sm:p-8 md:p-12 rounded-2xl shadow-2xl border border-slate-200'>
           <h1 className='text-3xl md:text-4xl font-extrabold text-center text-slate-900'>

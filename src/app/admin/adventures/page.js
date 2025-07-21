@@ -48,7 +48,7 @@ export default function AdminAdventuresPage() {
   };
 
   const handleEdit = (adventure) => {
-    setCurrentAdventure(JSON.parse(JSON.stringify(adventure))); // Deep copy to avoid direct state mutation
+    setCurrentAdventure(JSON.parse(JSON.stringify(adventure)));
     setIsEditing(true);
   };
 
@@ -84,13 +84,19 @@ export default function AdminAdventuresPage() {
   const handleStageChange = (index, field, value) => {
     const newStages = [...currentAdventure.stages];
     newStages[index][field] = value;
+    if (field === "creationMethod") {
+      newStages[index].sourceTestId = "";
+      newStages[index].topic = "";
+      newStages[index].subject = "";
+    }
     setCurrentAdventure((prev) => ({ ...prev, stages: newStages }));
   };
 
   const addStage = () => {
     const newStage = {
       name: "",
-      type: "topic",
+      creationMethod: "dynamic",
+      sourceTestId: "",
       topic: "",
       subject: "",
       questionCount: 10,
@@ -107,9 +113,8 @@ export default function AdminAdventuresPage() {
     setCurrentAdventure((prev) => ({ ...prev, stages: newStages }));
   };
 
-  if (loading) {
+  if (loading)
     return <div className='text-center p-8'>Loading Adventures...</div>;
-  }
 
   if (isEditing) {
     return (
@@ -172,18 +177,29 @@ export default function AdminAdventuresPage() {
                   }
                   className='w-full p-1 border rounded'
                 />
+
                 <select
-                  value={stage.type}
+                  value={stage.creationMethod || "dynamic"}
                   onChange={(e) =>
-                    handleStageChange(index, "type", e.target.value)
+                    handleStageChange(index, "creationMethod", e.target.value)
                   }
-                  className='w-full p-1 border rounded'
+                  className='w-full p-1 border rounded bg-white'
                 >
-                  <option value='topic'>Topic Stage</option>
-                  <option value='sectional'>Sectional Challenge</option>
-                  <option value='boss'>Boss Level (Final Mock)</option>
+                  <option value='dynamic'>Dynamic (from Question Bank)</option>
+                  <option value='static'>Static (from Existing Test)</option>
                 </select>
-                {stage.type === "topic" && (
+
+                {stage.creationMethod === "static" ? (
+                  <input
+                    type='text'
+                    placeholder='Enter Mock Test ID'
+                    value={stage.sourceTestId}
+                    onChange={(e) =>
+                      handleStageChange(index, "sourceTestId", e.target.value)
+                    }
+                    className='w-full p-1 border rounded'
+                  />
+                ) : (
                   <>
                     <input
                       type='text'
@@ -205,32 +221,43 @@ export default function AdminAdventuresPage() {
                     />
                   </>
                 )}
-                <input
-                  type='number'
-                  placeholder='Question Count'
-                  value={stage.questionCount}
-                  onChange={(e) =>
-                    handleStageChange(
-                      index,
-                      "questionCount",
-                      Number(e.target.value)
-                    )
-                  }
-                  className='w-full p-1 border rounded'
-                />
-                <input
-                  type='number'
-                  placeholder='Unlock Score (%)'
-                  value={stage.unlockScore}
-                  onChange={(e) =>
-                    handleStageChange(
-                      index,
-                      "unlockScore",
-                      Number(e.target.value)
-                    )
-                  }
-                  className='w-full p-1 border rounded'
-                />
+
+                <div className='flex gap-2'>
+                  <div className='w-1/2'>
+                    <label className='text-xs font-medium text-slate-600'>
+                      No. of Questions
+                    </label>
+                    <input
+                      type='number'
+                      value={stage.questionCount}
+                      onChange={(e) =>
+                        handleStageChange(
+                          index,
+                          "questionCount",
+                          Number(e.target.value)
+                        )
+                      }
+                      className='w-full p-1 border rounded'
+                    />
+                  </div>
+                  <div className='w-1/2'>
+                    <label className='text-xs font-medium text-slate-600'>
+                      Passing Score %
+                    </label>
+                    <input
+                      type='number'
+                      value={stage.unlockScore}
+                      onChange={(e) =>
+                        handleStageChange(
+                          index,
+                          "unlockScore",
+                          Number(e.target.value)
+                        )
+                      }
+                      className='w-full p-1 border rounded'
+                    />
+                  </div>
+                </div>
               </div>
               <button
                 onClick={() => removeStage(index)}

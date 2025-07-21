@@ -13,8 +13,41 @@ import {
   getDoc,
 } from "firebase/firestore";
 import Link from "next/link";
-import { Map, PlayCircle } from "lucide-react";
+import { Map, CheckCircle, Star, User } from "lucide-react";
 import toast from "react-hot-toast";
+import React from "react";
+
+// New Badge Component to display creator status
+const AdventureBadge = ({ status }) => {
+  let badge = {
+    text: "Community",
+    icon: <User className='h-3.5 w-3.5' />,
+    style: "bg-slate-100 text-slate-700",
+  };
+
+  if (status === "admin") {
+    badge = {
+      text: "Original",
+      icon: <Star className='h-3.5 w-3.5' />,
+      style: "bg-blue-100 text-blue-700",
+    };
+  } else if (status === "approved") {
+    badge = {
+      text: "Certified",
+      icon: <CheckCircle className='h-3.5 w-3.5' />,
+      style: "bg-green-100 text-green-700",
+    };
+  }
+
+  return (
+    <div
+      className={`flex items-center gap-1.5 text-xs font-bold px-2 py-1 rounded-full ${badge.style}`}
+    >
+      {badge.icon}
+      <span>{badge.text}</span>
+    </div>
+  );
+};
 
 export default function AdventuresPage() {
   const { user, loading: authLoading } = useAuth();
@@ -32,7 +65,6 @@ export default function AdventuresPage() {
 
     const fetchAdventuresAndProgress = async () => {
       try {
-        // Fetch all available adventures
         const adventuresQuery = query(
           collection(db, "adventures"),
           orderBy("createdAt", "desc")
@@ -44,7 +76,6 @@ export default function AdventuresPage() {
         }));
         setAdventures(fetchedAdventures);
 
-        // Fetch user's progress for all adventures
         const progressPromises = fetchedAdventures.map((adv) =>
           getDoc(doc(db, `users/${user.uid}/adventureProgress`, adv.id))
         );
@@ -114,9 +145,13 @@ export default function AdventuresPage() {
                 >
                   <div className='bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden h-full flex flex-col hover:shadow-xl hover:-translate-y-1 transition-all'>
                     <div className='p-6 flex-grow'>
-                      <p className='font-semibold text-indigo-600'>
-                        {adv.examName}
-                      </p>
+                      <div className='flex justify-between items-start'>
+                        <p className='font-semibold text-indigo-600'>
+                          {adv.examName}
+                        </p>
+                        {/* --- Display the appropriate badge --- */}
+                        <AdventureBadge status={adv.creatorStatus} />
+                      </div>
                       <h3 className='text-2xl font-bold text-slate-800 mt-1'>
                         {adv.title}
                       </h3>

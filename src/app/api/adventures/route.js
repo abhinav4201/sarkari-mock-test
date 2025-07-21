@@ -1,4 +1,4 @@
-// src/app/api/admin/adventures/route.js
+// src/app/api/adventures/route.js
 
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { NextResponse } from "next/server";
@@ -11,14 +11,14 @@ export async function POST(request) {
       return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
     }
     const decodedToken = await adminAuth.verifyIdToken(userToken);
-    const adminUser = await adminAuth.getUser(decodedToken.uid);
+    const userId = decodedToken.uid;
 
-    if (adminUser.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
-      return NextResponse.json(
-        { message: "Forbidden: Not an admin." },
-        { status: 403 }
-      );
+    // Get user's profile to check their status
+    const userDoc = await adminDb.collection("users").doc(userId).get();
+    if (!userDoc.exists()) {
+      return NextResponse.json({ message: "User not found." }, { status: 404 });
     }
+    const userData = userDoc.data();
 
     const { id, ...adventureData } = await request.json();
 
@@ -29,22 +29,33 @@ export async function POST(request) {
       );
     }
 
+    // For new adventures, enforce the creator ID and their status
+    if (!id) {
+      adventureData.createdBy = userId;
+      adventureData.creatorStatus = userData.monetizationStatus || "regular"; // Save status at time of creation
+    }
+
     const adventureRef = id
       ? adminDb.collection("adventures").doc(id)
       : adminDb.collection("adventures").doc();
+
+    // Security check for updates: ensure user is the owner
+    if (id) {
+      const existingDoc = await adventureRef.get();
+      if (!existingDoc.exists() || existingDoc.data().createdBy !== userId) {
+        return NextResponse.json(
+          { message: "Forbidden: You do not own this adventure." },
+          { status: 403 }
+        );
+      }
+    }
 
     await adventureRef.set(
       {
         ...adventureData,
         title_lowercase: adventureData.title.toLowerCase(),
         lastUpdatedAt: FieldValue.serverTimestamp(),
-        // --- THIS IS THE FIX ---
-        // Add creator info and set status to 'admin'
-        creatorStatus: "admin",
-        ...(!id && {
-          createdAt: FieldValue.serverTimestamp(),
-          createdBy: adminUser.uid,
-        }),
+        ...(!id && { createdAt: FieldValue.serverTimestamp() }),
       },
       { merge: true }
     );
@@ -54,7 +65,7 @@ export async function POST(request) {
       adventureId: adventureRef.id,
     });
   } catch (error) {
-    console.error("Adventure Save Error:", error);
+    console.error("User Adventure Save Error:", error);
     return NextResponse.json(
       { message: "Internal Server Error" },
       { status: 500 }

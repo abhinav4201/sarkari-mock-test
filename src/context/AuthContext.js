@@ -31,8 +31,7 @@ import {
   useState,
 } from "react";
 import toast from "react-hot-toast";
-import { getOfflineResults, clearOfflineResults } from "@/lib/indexedDb"; // <-- NEW IMPORT
-
+import { getOfflineResults, clearOfflineResults } from "@/lib/indexedDb";
 
 const AuthContext = createContext();
 
@@ -168,7 +167,9 @@ export const AuthContextProvider = ({ children }) => {
 
         if (userSnap.exists()) {
           const userData = userSnap.data();
-          const updates = { lastLogin: now };
+          // --- THIS IS THE FIX ---
+          // Replaced the undefined 'now' variable with serverTimestamp()
+          const updates = { lastLogin: serverTimestamp() };
 
           const lastLoginDate = userData.lastLogin;
 
@@ -275,12 +276,7 @@ export const AuthContextProvider = ({ children }) => {
                 `Syncing ${offlineResults.length} offline result(s)...`
               );
               try {
-                // Here you would typically send these results to a dedicated API endpoint
-                // For simplicity, we'll simulate the submission logic here.
-                // In a real app, an API route is better to handle batch submissions.
                 for (const result of offlineResults) {
-                  // This is a simplified version of the transaction logic.
-                  // A proper implementation would use a batch write via an API route.
                   const newResultRef = doc(collection(db, "mockTestResults"));
                   await setDoc(newResultRef, {
                     ...result,
@@ -331,8 +327,6 @@ export const AuthContextProvider = ({ children }) => {
   }, []);
 
   const value = useMemo(() => {
-    // --- THIS IS THE ROBUST FIX ---
-    // It checks for the role OR the existence of the libraryOwnerOf array.
     const isOwner =
       userProfile?.role === "library-owner" ||
       (Array.isArray(userProfile?.libraryOwnerOf) &&
@@ -349,9 +343,8 @@ export const AuthContextProvider = ({ children }) => {
       premiumExpires,
       freeTrialCount,
       favoriteTests,
-      // isLibraryUser: userProfile?.role === "library-student",
       isLibraryUser: isCurrentlyLibraryStudent,
-      isLibraryOwner: isOwner, // Use the new robust check
+      isLibraryOwner: isOwner,
       ownedLibraryIds: userProfile?.libraryOwnerOf || [],
       libraryId: userProfile?.libraryId || null,
       removedLibraryAssociations: userProfile?.removedLibraryAssociations || [],
