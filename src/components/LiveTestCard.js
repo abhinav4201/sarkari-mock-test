@@ -13,6 +13,7 @@ import {
   IndianRupee,
   PlayCircle,
   Lock,
+  Gift,
 } from "lucide-react";
 
 export default function LiveTestCard({ test }) {
@@ -46,7 +47,7 @@ export default function LiveTestCard({ test }) {
 
     checkStatus();
     checkParticipation();
-    const interval = setInterval(checkStatus, 60000); // Update status every minute
+    const interval = setInterval(checkStatus, 60000);
     return () => clearInterval(interval);
   }, [test, user]);
 
@@ -56,6 +57,25 @@ export default function LiveTestCard({ test }) {
     const toastId = toast.loading("Processing your entry...");
     try {
       const idToken = await user.getIdToken();
+
+      // --- THIS IS THE NEW LOGIC ---
+      if (test.isFree) {
+        const res = await fetch("/api/live-tests/join-free", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ liveTestId: test.id }),
+        });
+        if (!res.ok)
+          throw new Error((await res.json()).message || "Failed to join.");
+        toast.success("Successfully joined the free test!", { id: toastId });
+        setHasJoined(true);
+        return;
+      }
+
+      // Paid flow remains the same
       const res = await fetch("/api/live-tests/join", {
         method: "POST",
         headers: {
@@ -102,7 +122,7 @@ export default function LiveTestCard({ test }) {
       rzp.open();
       toast.dismiss(toastId);
     } catch (error) {
-      toast.error("Could not process entry.", { id: toastId });
+      toast.error(error.message || "Could not process entry.", { id: toastId });
     }
   };
 
@@ -125,12 +145,20 @@ export default function LiveTestCard({ test }) {
           <span className='flex items-center gap-1'>
             <Users size={16} /> {test.participantCount} Participants
           </span>
-          <span className='flex items-center gap-1'>
-            <Trophy size={16} /> Est. Prize: ₹{prizePool}
-          </span>
-          <span className='flex items-center gap-1'>
-            <IndianRupee size={16} /> ₹{test.entryFee} Entry
-          </span>
+          {test.isFree ? (
+            <span className='flex items-center gap-1'>
+              <Gift size={16} /> {test.bonusCoinPrize} Bonus Coins
+            </span>
+          ) : (
+            <>
+              <span className='flex items-center gap-1'>
+                <Trophy size={16} /> Est. Prize: ₹{prizePool}
+              </span>
+              <span className='flex items-center gap-1'>
+                <IndianRupee size={16} /> ₹{test.entryFee} Entry
+              </span>
+            </>
+          )}
         </div>
       </div>
 
@@ -138,9 +166,13 @@ export default function LiveTestCard({ test }) {
         {status === "Scheduled" && !hasJoined && (
           <button
             onClick={handleJoin}
-            className='w-full py-3 bg-indigo-600 text-white font-bold rounded-lg'
+            className={`w-full py-3 font-bold rounded-lg text-white ${
+              test.isFree
+                ? "bg-green-600 hover:bg-green-700"
+                : "bg-indigo-600 hover:bg-indigo-700"
+            }`}
           >
-            Join Now
+            {test.isFree ? "Join for Free" : "Join Now"}
           </button>
         )}
         {status === "Scheduled" && hasJoined && (
