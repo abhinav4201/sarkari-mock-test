@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { useState } from "react";
-import { Menu, X, Map } from "lucide-react"; // Import Map Icon
+import { Menu, X, Map, Trophy } from "lucide-react"; // <-- IMPORT TROPHY ICON
 import NotificationBell from "./ui/NotificationBell";
 
 export default function Navbar() {
@@ -41,7 +41,17 @@ export default function Navbar() {
 
   const publicLinks = (
     <>
-      {/* NEW LINK FOR ADVENTURES */}
+      {/* --- NEW LINK FOR LIVE TESTS --- */}
+      <Link
+        href='/live-tests'
+        className={linkClasses}
+        onClick={closeMobileMenu}
+      >
+        <span className='flex items-center gap-1.5'>
+          <Trophy size={16} />
+          Live Tests
+        </span>
+      </Link>
       <Link
         href='/adventures'
         className={linkClasses}

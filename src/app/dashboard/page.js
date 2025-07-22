@@ -30,6 +30,7 @@ import DailyChallenges from "@/components/dashboard/DailyChallenges";
 import LazyUserStats from "@/components/dashboard/LazyUserStats";
 import TravelingModeCard from "@/components/dashboard/TravelingModeCard";
 import StudyPlanner from "@/components/dashboard/StudyPlanner";
+import LazyLiveTestEarnings from "@/components/dashboard/LazyLiveTestEarnings"; // <-- NEW IMPORT
 
 // Reusable decorative SVG patterns for section backgrounds
 const BookPattern = () => <BookOpen className='h-64 w-64' />;
@@ -236,6 +237,8 @@ export default function DashboardPage() {
               theme='sky'
             >
               <Achievements />
+              {/* --- NEWLY ADDED EARNINGS COMPONENT --- */}
+              <LazyLiveTestEarnings />
               <div className='mt-8 grid grid-cols-1 md:grid-cols-2 gap-8'>
                 <ReferralCard />
                 <PlatformTrends />

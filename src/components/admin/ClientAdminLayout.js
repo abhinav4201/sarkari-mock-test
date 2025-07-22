@@ -23,6 +23,7 @@ import {
   TestTube,
   BookUser, // NEW: Icon for User Questions
   Map,
+  Trophy,
 } from "lucide-react";
 
 const adminLinks = [
@@ -40,6 +41,11 @@ const adminLinks = [
     name: "Library Partners",
     href: "/admin/libraries",
     icon: <Library className='mr-3 h-5 w-5' />,
+  },
+  {
+    name: "Live Pool Tests",
+    href: "/admin/live-tests",
+    icon: <Trophy className='mr-3 h-5 w-5' />,
   },
   {
     name: "Blog Management",

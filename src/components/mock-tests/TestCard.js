@@ -10,6 +10,7 @@ import {
   Shuffle,
   Star,
   Tag,
+  LockOpen, // <-- NEW ICON IMPORT
 } from "lucide-react";
 import Link from "next/link";
 import LikeButton from "./LikeButton";
@@ -31,6 +32,13 @@ export default function TestCard({ test, hasTaken }) {
     >
       <div>
         <div className='flex flex-wrap items-center gap-2 mb-3'>
+          {/* --- NEW BADGE FOR FREE TESTS --- */}
+          {!test.isPremium && (
+            <div className='flex items-center gap-1.5 text-xs font-bold text-green-700 bg-green-100 px-2 py-1 rounded-full'>
+              <LockOpen className='h-3.5 w-3.5' />
+              <span>Free</span>
+            </div>
+          )}
           {test.isDynamic && (
             <div className='flex items-center gap-1.5 text-xs font-bold text-blue-700 bg-blue-100 px-2 py-1 rounded-full'>
               <Shuffle className='h-3.5 w-3.5' />
@@ -68,9 +76,7 @@ export default function TestCard({ test, hasTaken }) {
       </div>
       <div className='mt-auto flex justify-between items-center'>
         <div className='flex items-center gap-2'>
-          {/* --- CHANGE: Removed the conditional rendering --- */}
           <LikeButton testId={test.id} initialLikeCount={test.likeCount} />
-          {/* --- END OF CHANGE --- */}
           <ShareButton testId={test.id} title={test.title} />
         </div>
         <Link

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import NotificationBell from "../components/ui/NotificationBell";
 import { useState } from "react";
-import { Menu, X, BarChart, Map } from "lucide-react"; // Import Map icon
+import { Menu, X, BarChart, Map, Trophy } from "lucide-react"; // <-- IMPORT TROPHY ICON
 
 export default function LibraryNavbar() {
   const { logOut, isLibraryOwner, ownedLibraryIds } = useAuth();
@@ -61,7 +61,14 @@ export default function LibraryNavbar() {
                 >
                   Dashboard
                 </Link>
-                {/* NEW: Adventures Link for library users */}
+                {/* --- NEW LINK FOR LIVE TESTS --- */}
+                <Link
+                  href='/live-tests'
+                  className='px-3 py-2 text-indigo-100 font-medium hover:text-white rounded-md text-sm flex items-center gap-1.5'
+                >
+                  <Trophy size={16} />
+                  Live Tests
+                </Link>
                 <Link
                   href='/adventures'
                   className='px-3 py-2 text-indigo-100 font-medium hover:text-white rounded-md text-sm flex items-center gap-1.5'
@@ -136,7 +143,11 @@ export default function LibraryNavbar() {
                 <MobileNavLink href='/library-dashboard'>
                   Dashboard
                 </MobileNavLink>
-                {/* NEW: Adventures Link for mobile library users */}
+                {/* --- NEW LINK FOR LIVE TESTS (MOBILE) --- */}
+                <MobileNavLink href='/live-tests'>
+                  <Trophy size={16} className='inline-block mr-2' />
+                  Live Tests
+                </MobileNavLink>
                 <MobileNavLink href='/adventures'>
                   <Map size={16} className='inline-block mr-2' />
                   Adventures

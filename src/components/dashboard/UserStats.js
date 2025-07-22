@@ -33,7 +33,7 @@ export default function UserStats() {
   const [stats, setStats] = useState({
     testsTaken: 0,
     questionsAttempted: 0,
-    averageScore: 0,
+    averageScore: "0%",
   });
   const [loading, setLoading] = useState(true);
 
@@ -52,7 +52,12 @@ export default function UserStats() {
         const snapshot = await getDocs(resultsQuery);
 
         if (snapshot.empty) {
-          setStats({ testsTaken: 0, questionsAttempted: 0, averageScore: 0 });
+          setStats({
+            testsTaken: 0,
+            questionsAttempted: 0,
+            averageScore: "0%",
+          });
+          setLoading(false);
           return;
         }
 

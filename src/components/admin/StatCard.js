@@ -1,4 +1,11 @@
-export default function StatCard({ title, value, icon, isLoading, onClick }) {
+// No Link import needed anymore
+export default function StatCard({
+  title,
+  value,
+  icon: Icon,
+  isLoading,
+  onClick,
+}) {
   const cardContent = (
     <>
       {isLoading ? (
@@ -10,10 +17,13 @@ export default function StatCard({ title, value, icon, isLoading, onClick }) {
         <>
           <div>
             <p className='text-sm font-medium text-slate-700'>{title}</p>
-            <p className='text-3xl font-bold text-slate-900'>{value}</p>
+            {/* Show value only if it's not empty, null, or undefined */}
+            {value !== "" && value !== null && value !== undefined && (
+              <p className='text-3xl font-bold text-slate-900'>{value}</p>
+            )}
           </div>
           <div className='bg-indigo-100 text-indigo-600 p-3 rounded-full'>
-            {icon}
+            {Icon && <Icon />}
           </div>
         </>
       )}
@@ -23,6 +33,9 @@ export default function StatCard({ title, value, icon, isLoading, onClick }) {
   const baseClasses =
     "bg-white p-6 rounded-2xl shadow-lg border border-slate-100 flex items-center justify-between";
 
+  // --- THIS IS THE FIX ---
+  // If onClick is provided, it's a button. Otherwise, it's a plain div.
+  // The logic for what onClick does (navigate vs. open modal) is now handled by the parent.
   if (onClick) {
     return (
       <button

@@ -16,6 +16,7 @@ import {
 import toast from "react-hot-toast";
 import UserEligibilityCard from "@/components/dashboard/UserEligibilityCard";
 import CreatorPayouts from "@/components/dashboard/CreatorPayouts";
+import CreatorEarnings from "@/components/dashboard/CreatorEarnings"; 
 
 export default function PayoutsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -99,11 +100,14 @@ export default function PayoutsPage() {
 
       {/* The main content area */}
       {userProfile?.monetizationStatus === "approved" ? (
-        <CreatorPayouts
-          userProfile={userProfile}
-          earnings={earnings}
-          onUpdate={fetchData}
-        />
+        <div>
+          <CreatorPayouts
+            userProfile={userProfile}
+            earnings={earnings}
+            onUpdate={fetchData}
+          />
+          <CreatorEarnings />
+        </div>
       ) : (
         <UserEligibilityCard userStats={userStats} onApply={fetchData} />
       )}
