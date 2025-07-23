@@ -1,9 +1,5 @@
-// src/app/api/tests/for-offline/route.js
-
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { NextResponse } from "next/server";
-
-const RECOMMENDATION_COUNT = 10; // Number of tests to cache
 
 export async function POST(request) {
   try {
@@ -14,7 +10,9 @@ export async function POST(request) {
     const decodedToken = await adminAuth.verifyIdToken(userToken);
     const userId = decodedToken.uid;
 
-    // 1. Get tests the user has already taken to avoid recommending them again
+    const { duration, topic, subject } = await request.json();
+
+    // 1. Get tests the user has already taken
     const resultsQuery = adminDb
       .collection("mockTestResults")
       .where("userId", "==", userId);
@@ -23,28 +21,44 @@ export async function POST(request) {
       resultsSnap.docs.map((doc) => doc.data().testId)
     );
 
-    // 2. Fetch a batch of recent, popular, non-premium tests
-    const testsQuery = adminDb
+    // 2. Build a dynamic query for STATIC tests
+    let testsQuery = adminDb
       .collection("mockTests")
+      .where("isDynamic", "==", false) // <-- THIS IS THE KEY CHANGE
       .where("isPremium", "==", false)
       .where("status", "in", ["approved", null])
-      .orderBy("createdAt", "desc")
-      .limit(50); // Fetch a larger pool to filter from
+      .orderBy("createdAt", "desc");
 
-    const testsSnap = await testsQuery.get();
+    if (topic) {
+      testsQuery = testsQuery.where("topic", "==", topic);
+    }
+    if (subject) {
+      testsQuery = testsQuery.where("subject", "==", subject);
+    }
 
-    // 3. Filter out already taken tests and select the final count
-    const availableTests = testsSnap.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter((test) => !takenTestIds.has(test.id))
-      .slice(0, RECOMMENDATION_COUNT);
+    const testsSnap = await testsQuery.limit(100).get();
 
-    if (availableTests.length === 0) {
+    // 3. Filter out taken tests and select enough to fill the duration
+    let remainingDuration = duration;
+    const testsToDownload = [];
+
+    // This loop automatically handles cases where not enough tests are available.
+    // It will simply add all it can find until the list is exhausted.
+    for (const doc of testsSnap.docs) {
+      if (remainingDuration <= 0) break;
+      const test = { id: doc.id, ...doc.data() };
+      if (!takenTestIds.has(test.id)) {
+        testsToDownload.push(test);
+        remainingDuration -= test.estimatedTime;
+      }
+    }
+
+    if (testsToDownload.length === 0) {
       return NextResponse.json({ tests: [], questions: [] });
     }
 
     // 4. For each selected test, fetch its questions
-    const testIds = availableTests.map((test) => test.id);
+    const testIds = testsToDownload.map((test) => test.id);
     const questionsQuery = adminDb
       .collection("mockTestQuestions")
       .where("testId", "in", testIds);
@@ -55,7 +69,7 @@ export async function POST(request) {
     }));
 
     // 5. Package and return the data
-    const serializableTests = availableTests.map((test) => ({
+    const serializableTests = testsToDownload.map((test) => ({
       ...test,
       createdAt: test.createdAt ? test.createdAt.toMillis() : null,
     }));

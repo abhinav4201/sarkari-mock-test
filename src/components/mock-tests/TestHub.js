@@ -1,9 +1,8 @@
-// src/components/mock-tests/TestHub.js
-
 "use client";
 
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
+import { getCachedTests } from "@/lib/indexedDb"; // Import the new function
 import {
   collection,
   getDocs,
@@ -13,7 +12,7 @@ import {
   startAfter,
   where,
 } from "firebase/firestore";
-import { CheckCircle, Heart, History, Search, ShieldCheck } from "lucide-react";
+import { CheckCircle, Heart, History, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import TestCard from "./TestCard";
@@ -35,12 +34,13 @@ const TabButton = ({ label, icon, isActive, onClick }) => (
 );
 
 export default function TestHub({ initialTests }) {
-  const { user, favoriteTests, userProfile } = useAuth(); // Using userProfile for role check
+  const { user, favoriteTests } = useAuth();
   const [activeTab, setActiveTab] = useState("all");
   const [tests, setTests] = useState(initialTests);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isOffline, setIsOffline] = useState(false);
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // No initial loading as we have server data
   const [loadingMore, setLoadingMore] = useState(false);
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(initialTests.length === PAGE_SIZE);
@@ -48,72 +48,77 @@ export default function TestHub({ initialTests }) {
   const fetchTests = useCallback(
     async (tab, loadMore = false) => {
       if (loadMore && !hasMore) return;
-
       loadMore ? setLoadingMore(true) : setLoading(true);
 
-      let q;
-      const collectionRef = collection(db, "mockTests");
-      const queryConstraints = [orderBy("createdAt", "desc")]; // Base orderBy for all tabs
-
-      // Apply specific filters based on the active tab
-      if (tab === "all") {
-        // For 'all' tab, no specific 'where' clause here; rules handle visibility.
-      } else if (tab === "created" && user) {
-        queryConstraints.unshift(where("createdBy", "==", user.uid)); // Add where clause to the beginning
-      } else if (tab === "favorites" && user) {
-        if (!favoriteTests || favoriteTests.length === 0) {
-          setTests([]);
-          setLoading(false);
-          setLoadingMore(false);
-          setHasMore(false);
-          return;
-        }
-        // For favorites, fetch by ID. Firestore 'in' query limit is 10.
-        queryConstraints.push(
-          where("__name__", "in", favoriteTests.slice(0, 10))
-        );
-        setHasMore(false); // Favorites tab does not typically paginate, loads all specified favorites
-      } else {
-        // If tab is 'created' or 'favorites' but user is not logged in, or invalid tab
-        setTests([]);
-        setLoading(false);
-        setLoadingMore(false);
-        setHasMore(false);
-        return;
-      }
-
-      // Add pagination constraints for 'all' and 'created' tabs
-      if (tab !== "favorites") {
-        if (loadMore && lastDoc) {
-          queryConstraints.push(startAfter(lastDoc));
-        }
-        queryConstraints.push(limit(PAGE_SIZE));
-      }
-
-      q = query(collectionRef, ...queryConstraints);
-
       try {
+        // --- ONLINE LOGIC ---
+        if (!navigator.onLine) {
+          throw new Error("Offline");
+        }
+
+        let q;
+        const collectionRef = collection(db, "mockTests");
+        const queryConstraints = [orderBy("createdAt", "desc")];
+
+        // (Your existing query logic for different tabs remains the same)
+        if (tab === "favorites" && user) {
+          if (!favoriteTests || favoriteTests.length === 0) {
+            setTests([]);
+            setLoading(false);
+            setLoadingMore(false);
+            setHasMore(false);
+            return;
+          }
+          queryConstraints.push(
+            where("__name__", "in", favoriteTests.slice(0, 10))
+          );
+          setHasMore(false);
+        } else if (tab === "created" && user) {
+          queryConstraints.unshift(where("createdBy", "==", user.uid));
+        }
+
+        if (tab !== "favorites") {
+          if (loadMore && lastDoc) {
+            queryConstraints.push(startAfter(lastDoc));
+          }
+          queryConstraints.push(limit(PAGE_SIZE));
+        }
+
+        q = query(collectionRef, ...queryConstraints);
         const snapshot = await getDocs(q);
         const newTests = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
-          createdAt: doc.data().createdAt?.toMillis() || null, // Ensure serializable
+          createdAt: doc.data().createdAt?.toMillis() || null,
         }));
 
-        // Update pagination state based on snapshot size
+        setIsOffline(false);
+        setTests(loadMore ? (prev) => [...prev, ...newTests] : newTests);
         if (tab !== "favorites") {
           setHasMore(newTests.length === PAGE_SIZE);
           setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
         }
-
-        if (loadMore) {
-          setTests((prev) => [...prev, ...newTests]);
-        } else {
-          setTests(newTests);
-        }
       } catch (error) {
-        console.error("Firebase fetchTests error:", error);
-        toast.error(`Failed to load tests: ${error.message}`);
+        // --- OFFLINE FALLBACK LOGIC ---
+        console.warn(
+          "Could not fetch from server, trying offline.",
+          error.message
+        );
+        try {
+          const cachedTests = await getCachedTests();
+          if (cachedTests.length > 0) {
+            setTests(cachedTests);
+            setHasMore(false);
+            setIsOffline(true);
+            toast.success("Displaying tests from your offline library.");
+          } else {
+            toast.error(
+              "You are offline. No tests were saved for traveling mode."
+            );
+          }
+        } catch (dbError) {
+          toast.error("Could not load tests from the offline cache.");
+        }
       } finally {
         setLoading(false);
         setLoadingMore(false);
@@ -122,53 +127,45 @@ export default function TestHub({ initialTests }) {
     [user, lastDoc, hasMore, favoriteTests]
   );
 
+  // (The rest of the component remains largely the same)
+  // ... useEffect, handleLoadMore, filteredTests, takenTestIds ...
+
   useEffect(() => {
-    // Only fetch if user is defined (for user-specific tabs) or if it's the 'all' tab.
-    // The `user` dependency ensures this runs when auth state changes.
     if (user || activeTab === "all") {
-      setTests([]); // Clear tests before new fetch
-      setLastDoc(null); // Reset pagination
-      setHasMore(true); // Assume there's more until proven otherwise
+      setTests([]);
+      setLastDoc(null);
+      setHasMore(true);
       fetchTests(activeTab, false);
     }
-  }, [activeTab, user]); // Added fetchTests as dependency
+  }, [activeTab, user, fetchTests]);
 
   const handleLoadMore = () => {
     fetchTests(activeTab, true);
   };
 
   const filteredTests = useMemo(() => {
-    // Client-side filtering based on search term
-    return tests.filter((test) => {
-      const matchesSearch = searchTerm
+    return tests.filter((test) =>
+      searchTerm
         ? (test.title?.toLowerCase() || "").includes(
             searchTerm.toLowerCase()
           ) ||
           (test.topic?.toLowerCase() || "").includes(searchTerm.toLowerCase())
-        : true;
-      return matchesSearch;
-    });
+        : true
+    );
   }, [tests, searchTerm]);
 
   const [takenTestIds, setTakenTestIds] = useState(new Set());
   useEffect(() => {
     if (user) {
-      // Fetch only test IDs from mockTestResults
       const resultsQuery = query(
         collection(db, "mockTestResults"),
         where("userId", "==", user.uid)
       );
-      getDocs(resultsQuery)
-        .then((snapshot) => {
-          setTakenTestIds(
-            new Set(snapshot.docs.map((doc) => doc.data().testId))
-          );
-        })
-        .catch((error) => {
-          console.error("Error fetching taken test IDs:", error);
-        });
+      getDocs(resultsQuery).then((snapshot) => {
+        setTakenTestIds(new Set(snapshot.docs.map((doc) => doc.data().testId)));
+      });
     } else {
-      setTakenTestIds(new Set()); // Clear if user logs out
+      setTakenTestIds(new Set());
     }
   }, [user]);
 
@@ -212,19 +209,20 @@ export default function TestHub({ initialTests }) {
         )}
       </div>
 
-      <div className='p-4 mb-8 bg-blue-50 border-2 border-blue-200 rounded-lg flex items-center gap-4'>
-        <ShieldCheck className='h-10 w-10 text-blue-600 flex-shrink-0' />
-        <div>
-          <h3 className='font-bold text-blue-800'>
-            AI-Powered Proctoring Enabled
-          </h3>
-          <p className='text-sm text-blue-700 mt-1'>
-            To ensure a fair testing environment, all tests will be submitted
-            automatically if you switch tabs or minimize the browser during the
-            attempt.
-          </p>
+      {isOffline && (
+        <div className='p-4 mb-8 bg-amber-50 border-2 border-amber-200 rounded-lg flex items-center gap-4'>
+          <WifiOff className='h-8 w-8 text-amber-600 flex-shrink-0' />
+          <div>
+            <h3 className='font-bold text-amber-800'>
+              You are in Offline Mode
+            </h3>
+            <p className='text-sm text-amber-700 mt-1'>
+              Showing tests saved for Traveling Mode. Your results will be
+              synced when you reconnect.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {loading ? (
         <div className='text-center py-16'>Loading...</div>
@@ -236,11 +234,10 @@ export default function TestHub({ initialTests }) {
                 key={test.id}
                 test={test}
                 hasTaken={takenTestIds.has(test.id)}
-                isLibraryUser={userProfile?.role === "library-student"}
               />
             ))}
           </div>
-          {hasMore && (
+          {hasMore && !isOffline && (
             <div className='text-center mt-16'>
               <button
                 onClick={handleLoadMore}

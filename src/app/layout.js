@@ -9,7 +9,7 @@ import { Toaster } from "react-hot-toast";
 import { usePathname } from "next/navigation";
 import LoginPromptModal from "@/components/ui/LoginPromptModal";
 import LibraryNavbar from "@/components/LibraryNavbar";
-import Script from "next/script"; // Import the Script component
+import Script from "next/script";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -54,7 +54,8 @@ export default function RootLayout({ children }) {
   return (
     <html lang='en'>
       <head>
-        {/* Add the Razorpay script here */}
+        <link rel='manifest' href='/manifest.json' />
+        <meta name='theme-color' content='#4f46e5' />
         <Script
           src='https://checkout.razorpay.com/v1/checkout.js'
           strategy='beforeInteractive'

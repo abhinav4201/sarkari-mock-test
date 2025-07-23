@@ -14,11 +14,9 @@ export async function getDb() {
       if (!db.objectStoreNames.contains(SVG_STORE)) {
         db.createObjectStore(SVG_STORE, { keyPath: "id", autoIncrement: true });
       }
-      // NEW: Create object store for cached tests
       if (!db.objectStoreNames.contains(TEST_STORE)) {
         db.createObjectStore(TEST_STORE, { keyPath: "id" });
       }
-      // NEW: Create object store for offline results
       if (!db.objectStoreNames.contains(RESULTS_STORE)) {
         db.createObjectStore(RESULTS_STORE, {
           keyPath: "id",
@@ -29,7 +27,7 @@ export async function getDb() {
   });
 }
 
-// --- SVG Functions (Unchanged) ---
+// --- SVG Functions ---
 export async function saveSvg({ name, svg }) {
   const db = await getDb();
   await db.add(SVG_STORE, { name, svg, createdAt: new Date() });
@@ -43,7 +41,7 @@ export async function clearAllSvgs() {
   await db.clear(SVG_STORE);
 }
 
-// --- NEW: Offline Test Caching Functions ---
+// --- Offline Test Caching Functions ---
 
 /**
  * Caches an array of test data objects into IndexedDB.
@@ -57,7 +55,16 @@ export async function cacheTests(tests) {
 }
 
 /**
- * Retrieves a single cached test by its ID.
+ * Retrieves all cached tests for the main listing page.
+ * @returns {Promise<Array<object>>} An array of all cached tests.
+ */
+export async function getCachedTests() {
+  const db = await getDb();
+  return await db.getAll(TEST_STORE);
+}
+
+/**
+ * Retrieves a single cached test by its ID for the test-taking page.
  * @param {string} testId - The ID of the test to retrieve.
  * @returns {Promise<object|undefined>} The cached test object or undefined if not found.
  */
@@ -65,6 +72,8 @@ export async function getCachedTest(testId) {
   const db = await getDb();
   return await db.get(TEST_STORE, testId);
 }
+
+// --- Offline Result Functions ---
 
 /**
  * Saves a test result to the offline queue for later syncing.
