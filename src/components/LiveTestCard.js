@@ -15,6 +15,7 @@ import {
   Lock,
   Gift,
 } from "lucide-react";
+import Link from "next/link";
 
 export default function LiveTestCard({ test }) {
   const { user, openLoginPrompt } = useAuth();
@@ -58,7 +59,6 @@ export default function LiveTestCard({ test }) {
     try {
       const idToken = await user.getIdToken();
 
-      // --- THIS IS THE NEW LOGIC ---
       if (test.isFree) {
         const res = await fetch("/api/live-tests/join-free", {
           method: "POST",
@@ -194,9 +194,12 @@ export default function LiveTestCard({ test }) {
           </p>
         )}
         {status === "Completed" && (
-          <button className='w-full py-3 bg-slate-200 text-slate-700 font-bold rounded-lg'>
+          <Link
+            href={`/live-tests/results/${test.id}`}
+            className='w-full block text-center py-3 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300'
+          >
             View Results
-          </button>
+          </Link>
         )}
       </div>
     </div>

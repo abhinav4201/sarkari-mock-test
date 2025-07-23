@@ -4,10 +4,12 @@ import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import toast from "react-hot-toast";
-import LiveTestCard from "@/components/LiveTestCard"; // <-- NEW COMPONENT
+import LiveTestCard from "@/components/LiveTestCard";
+import { Trophy } from "lucide-react";
 
 export default function LiveTestsPage() {
   const [liveTests, setLiveTests] = useState([]);
+  const [completedTests, setCompletedTests] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -22,7 +24,15 @@ export default function LiveTestsPage() {
           id: doc.id,
           ...doc.data(),
         }));
-        setLiveTests(tests);
+
+        const now = new Date();
+        const upcoming = tests.filter((t) => t.endTime.toDate() >= now);
+        const completed = tests
+          .filter((t) => t.endTime.toDate() < now)
+          .slice(0, 5); // Get last 5 completed
+
+        setLiveTests(upcoming);
+        setCompletedTests(completed);
       } catch (error) {
         toast.error("Could not load live tests.");
       } finally {
@@ -56,9 +66,32 @@ export default function LiveTestsPage() {
             ))}
           </div>
         ) : (
-          <p className='text-center text-slate-500'>
-            No live tests scheduled at the moment. Please check back later.
-          </p>
+          !loading &&
+          completedTests.length === 0 && (
+            <div className='text-center py-16 px-6 bg-white rounded-2xl shadow-lg border'>
+              <Trophy className='mx-auto h-16 w-16 text-indigo-400' />
+              <h3 className='mt-4 text-2xl font-bold text-gray-800'>
+                No Upcoming Live Tests
+              </h3>
+              <p className='mt-2 text-gray-700'>
+                There are no live or scheduled tests at the moment. Please check
+                back later for new events!
+              </p>
+            </div>
+          )
+        )}
+
+        {completedTests.length > 0 && (
+          <div className='mt-20'>
+            <h2 className='text-3xl font-bold text-center text-slate-800 mb-8'>
+              Recently Completed Events
+            </h2>
+            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
+              {completedTests.map((test) => (
+                <LiveTestCard key={test.id} test={test} />
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>

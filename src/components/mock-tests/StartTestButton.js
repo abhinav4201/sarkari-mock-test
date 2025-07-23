@@ -17,7 +17,7 @@ import {
   increment,
 } from "firebase/firestore";
 import { Crown, Loader2, PlayCircle } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation"; // Correctly import useSearchParams
 import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import TestStartConfirmModal from "./TestStartConfirmModal";
@@ -32,7 +32,7 @@ export default function StartTestButton({ test }) {
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [userTestStats, setUserTestStats] = useState(null);
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams(); // Correctly use the hook
 
   const handleLogin = () => {
     googleSignIn({ redirectUrl: pathname });
@@ -52,8 +52,6 @@ export default function StartTestButton({ test }) {
     if (isPreparing) return;
     setIsPreparing(true);
     const loadingToast = toast.loading("Preparing your test...");
-
-    
 
     try {
       const idToken = await user.getIdToken();
@@ -137,8 +135,6 @@ export default function StartTestButton({ test }) {
     if (!user) return handleLogin();
     if (isPreparing) return;
 
-    // --- THIS IS THE FIX ---
-    // The logic is now much cleaner. It decides whether to show the modal or proceed directly.
     if (isLibraryUser && userProfile?.libraryId) {
       setIsPreparing(true);
       const loadingToast = toast.loading("Checking your test limit...");
@@ -206,7 +202,6 @@ export default function StartTestButton({ test }) {
     }
   };
 
-  // The JSX part of the component remains the same
   if (!user) {
     return (
       <button

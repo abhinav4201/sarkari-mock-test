@@ -5,6 +5,7 @@ import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { Book, Clock, FileText, ShieldCheck, Tag } from "lucide-react";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 async function getTestDetails(testId) {
   const testRef = doc(db, "mockTests", testId);
@@ -104,7 +105,13 @@ export default async function PreTestStartPage({ params }) {
 
         <div className='mt-8 text-center'>
           {/* The smart button handles all logic for login checks and premium status */}
-          <StartTestButton test={test} />
+          <Suspense
+            fallback={
+              <div className='h-16 w-56 bg-gray-200 rounded-lg animate-pulse mx-auto'></div>
+            }
+          >
+            <StartTestButton test={test} />
+          </Suspense>
         </div>
         <TestReviews testId={test.id} />
       </div>
