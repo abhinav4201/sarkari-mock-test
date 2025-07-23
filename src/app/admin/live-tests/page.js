@@ -13,13 +13,16 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import toast from "react-hot-toast";
-import { Trophy, Plus, Edit, X } from "lucide-react";
+import { Plus, Edit, X } from "lucide-react";
 import TestSearchModal from "@/components/admin/TestSearchModal";
+import { useAuth } from "@/context/AuthContext";
 
 export default function AdminLiveTestsPage() {
+  const { user } = useAuth();
   const [liveTests, setLiveTests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Unified state for the form
   const [isEditing, setIsEditing] = useState(false);
@@ -56,6 +59,34 @@ export default function AdminLiveTestsPage() {
     fetchLiveTests();
   }, [fetchLiveTests]);
 
+  const handleCalculateWinners = async (liveTestId) => {
+    if (!user) return toast.error("Admin user not authenticated.");
+    setIsProcessing(true);
+    const loadingToast = toast.loading("Calculating winners...");
+
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch("/api/admin/live-tests/calculate-winners", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ liveTestId }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+
+      toast.success(data.message, { id: loadingToast });
+      fetchLiveTests(); // Refresh the list to show the "completed" status
+    } catch (error) {
+      toast.error(`Error: ${error.message}`, { id: loadingToast });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const resetForm = () => {
     setIsEditing(false);
     setCurrentTestId(null);
@@ -76,7 +107,7 @@ export default function AdminLiveTestsPage() {
     setCurrentTestId(test.id);
     setTitle(test.title);
     setSourceTestId(test.sourceTestId);
-    setSourceTestTitle(`ID: ${test.sourceTestId}`); // Placeholder, ideally fetch title
+    setSourceTestTitle(`ID: ${test.sourceTestId}`); // Placeholder
     setEntryFee(test.entryFee);
 
     const formatForInput = (date) => {
@@ -103,9 +134,7 @@ export default function AdminLiveTestsPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title || !sourceTestId || !startTime || !endTime) {
-      return toast.error(
-        "Please fill all required fields, including selecting a source test."
-      );
+      return toast.error("Please fill all required fields.");
     }
 
     const eventData = {
@@ -161,6 +190,7 @@ export default function AdminLiveTestsPage() {
               {isEditing ? "Edit Live Test" : "Create New Live Test"}
             </h2>
             <form onSubmit={handleSubmit} className='space-y-4'>
+              {/* Form fields */}
               <div>
                 <label className='block text-sm font-medium text-slate-700'>
                   Event Title
@@ -214,14 +244,13 @@ export default function AdminLiveTestsPage() {
                   htmlFor='isFree'
                   className='ml-2 block text-sm font-medium text-slate-900'
                 >
-                  Free to Enter (Awards Bonus Coins)
+                  Free to Enter
                 </label>
               </div>
-
               {isFree ? (
                 <div>
                   <label className='block text-sm font-medium text-slate-700'>
-                    Bonus Coin Prize (for participation)
+                    Bonus Coin Prize
                   </label>
                   <input
                     type='number'
@@ -304,8 +333,7 @@ export default function AdminLiveTestsPage() {
                     onClick={resetForm}
                     className='w-full flex justify-center items-center gap-2 px-4 py-2 bg-slate-200 text-slate-800 font-semibold rounded-lg'
                   >
-                    <X size={16} />
-                    Cancel
+                    <X size={16} /> Cancel
                   </button>
                 )}
                 <button
@@ -325,51 +353,76 @@ export default function AdminLiveTestsPage() {
               <p>Loading...</p>
             ) : (
               <div className='space-y-3'>
-                {liveTests.map((test) => (
-                  <div
-                    key={test.id}
-                    className='p-4 border rounded-lg flex justify-between items-center'
-                  >
-                    <div>
-                      <p className='font-semibold text-slate-800'>
-                        {test.title}{" "}
-                        {test.isFree && (
-                          <span className='text-xs font-bold text-green-600 bg-green-100 px-2 py-1 rounded-full ml-2'>
-                            FREE
+                {liveTests.map((test) => {
+                  const now = new Date();
+                  const startTime = test.startTime.toDate();
+                  const endTime = test.endTime.toDate();
+                  let status = test.status;
+
+                  if (status !== "completed") {
+                    if (now > startTime && now < endTime) {
+                      status = "live";
+                    } else if (now > endTime) {
+                      status = "processing";
+                    }
+                  }
+
+                  return (
+                    <div
+                      key={test.id}
+                      className='p-4 border rounded-lg flex justify-between items-center'
+                    >
+                      <div>
+                        <p className='font-semibold text-slate-800'>
+                          {test.title}{" "}
+                          {test.isFree && (
+                            <span className='text-xs font-bold text-green-600 bg-green-100 px-2 py-1 rounded-full ml-2'>
+                              FREE
+                            </span>
+                          )}
+                        </p>
+                        <p className='text-sm text-slate-500'>
+                          Status:{" "}
+                          <span
+                            className={`font-medium ${
+                              status === "live"
+                                ? "text-red-600"
+                                : "text-indigo-600"
+                            }`}
+                          >
+                            {status}
                           </span>
+                        </p>
+                        <p className='text-sm text-slate-500'>
+                          Starts: {startTime.toLocaleString()}
+                        </p>
+                        <p className='text-sm text-slate-500'>
+                          Participants: {test.participantCount || 0}
+                        </p>
+                      </div>
+                      <div className='flex items-center gap-2'>
+                        {now < endTime && (
+                          <button
+                            onClick={() => handleEditClick(test)}
+                            className='p-2 text-slate-500 hover:bg-slate-100 rounded-lg'
+                            title='Edit Event'
+                          >
+                            <Edit size={18} />
+                          </button>
                         )}
-                      </p>
-                      <p className='text-sm text-slate-500'>
-                        Status:{" "}
-                        <span className='font-medium text-indigo-600'>
-                          {test.status}
-                        </span>
-                      </p>
-                      <p className='text-sm text-slate-500'>
-                        Starts: {test.startTime.toDate().toLocaleString()}
-                      </p>
-                      <p className='text-sm text-slate-500'>
-                        Participants: {test.participantCount || 0}
-                      </p>
+                        {status === "processing" && (
+                          <button
+                            onClick={() => handleCalculateWinners(test.id)}
+                            disabled={isProcessing}
+                            className='text-xs font-bold text-red-500 p-2 rounded-lg hover:bg-red-100 disabled:opacity-50'
+                          >
+                            CALCULATE WINNERS
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className='flex items-center gap-2'>
-                      {new Date() < test.endTime.toDate() && (
-                        <button
-                          onClick={() => handleEditClick(test)}
-                          className='p-2 text-slate-500 hover:bg-slate-100 rounded-lg'
-                          title='Edit Event'
-                        >
-                          <Edit size={18} />
-                        </button>
-                      )}
-                      {test.status === "live" && (
-                        <button className='text-xs font-bold text-red-500 p-2 rounded-lg hover:bg-red-100'>
-                          CALCULATE WINNERS
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

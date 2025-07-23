@@ -1,25 +1,27 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import QuestionPalette from "@/components/mock-tests/QuestionPalette";
+import FinalWarningModal from "@/components/ui/FinalWarningModal";
+import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import {
+  collection,
   doc,
   getDoc,
-  collection,
-  query,
-  where,
   getDocs,
+  query,
   runTransaction,
   serverTimestamp,
   increment,
+  arrayUnion, // <-- Import arrayUnion
+  where,
 } from "firebase/firestore";
-import toast from "react-hot-toast";
-import QuestionPalette from "@/components/mock-tests/QuestionPalette";
-import SvgDisplayer from "@/components/ui/SvgDisplayer";
-import FinalWarningModal from "@/components/ui/FinalWarningModal";
 import { Lock } from "lucide-react";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import toast from "react-hot-toast";
 
 // Fetches the test data based on the source test ID
 async function getTestData(testId) {
@@ -40,6 +42,23 @@ async function getTestData(testId) {
   }));
   return { testDetails, questions };
 }
+
+// --- Helper functions for gamification (add these) ---
+const isSameDay = (date1, date2) => {
+    if (!date1 || !date2) return false;
+    return date1.getFullYear() === date2.getFullYear() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getDate() === date2.getDate();
+};
+
+const areConsecutiveTestDays = (date1, date2) => {
+    if (!date1 || !date2) return false;
+    const d1 = new Date(date1.toDate().setHours(0, 0, 0, 0));
+    const d2 = new Date(date2.setHours(0, 0, 0, 0));
+    const diffTime = d2 - d1;
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays === 1;
+};
 
 export default function TakeLiveTestPage() {
   const [testDetails, setTestDetails] = useState(null);
@@ -68,6 +87,7 @@ export default function TakeLiveTestPage() {
 
       // --- KEY DIFFERENCE #1: Save to a different collection ---
       const resultDocRef = doc(collection(db, "liveTestResults"));
+      let xpGained = 0; 
 
       try {
         await runTransaction(db, async (transaction) => {
@@ -115,12 +135,93 @@ export default function TakeLiveTestPage() {
             totalTimeTaken: totalTimeTaken,
           };
 
+          const userRef = doc(db, "users", user.uid);
+          const userSnap = await transaction.get(userRef);
+          if (!userSnap.exists()) {
+            throw "User document not found!";
+          }
+          const userData = userSnap.data();
+          const updates = {};
+          const newBadges = [];
+
+          const lastStreakDate = userData.lastStreakDay;
+          const today = new Date();
+
+          if (!isSameDay(lastStreakDate?.toDate(), today)) {
+            if (areConsecutiveTestDays(lastStreakDate, today)) {
+              updates.currentStreak = (userData.currentStreak || 0) + 1;
+            } else {
+              updates.currentStreak = 1;
+            }
+            updates.lastStreakDay = today;
+
+            const newStreak = updates.currentStreak || userData.currentStreak;
+            if (
+              newStreak === 7 &&
+              !userData.earnedBadges?.includes("iron_will")
+            )
+              newBadges.push("iron_will");
+            if (
+              newStreak === 15 &&
+              !userData.earnedBadges?.includes("silver_resolve")
+            )
+              newBadges.push("silver_resolve");
+            if (
+              newStreak === 30 &&
+              !userData.earnedBadges?.includes("master_learner")
+            ) {
+              newBadges.push("master_learner");
+              updates.premiumCredits = increment(1);
+            }
+          }
+
+          if (
+            score === totalQuestions &&
+            !userData.earnedBadges?.includes("perfectionist")
+          ) {
+            newBadges.push("perfectionist");
+          }
+          const timeUsedPercentage =
+            totalTimeTaken / (testDetails.estimatedTime * 60);
+          if (
+            timeUsedPercentage < 0.5 &&
+            !userData.earnedBadges?.includes("speed_demon")
+          ) {
+            newBadges.push("speed_demon");
+          }
+
+          if (newBadges.length > 0) {
+            updates.earnedBadges = arrayUnion(...newBadges);
+          }
+
+          xpGained = 50; // Base XP
+          xpGained += score * 2; // XP for correct answers
+          if (score / totalQuestions >= 0.8) {
+            xpGained += 25; // Bonus XP
+          }
+
+          const newXp = (userData.xp || 0) + xpGained;
+          let newLevel = userData.level || 1;
+          let xpForNextLevel = newLevel * 100;
+
+          if (newXp >= xpForNextLevel) {
+            newLevel++;
+          }
+
+          transaction.update(userRef, {
+            xp: newXp,
+            level: newLevel,
+            ...updates,
+          });
+
           transaction.set(resultDocRef, resultData);
         });
 
         toast.success("Test submitted successfully! Redirecting to results...");
         // --- KEY DIFFERENCE #2: Redirect to the special results page ---
-        router.push(`/live-tests/results/${resultDocRef.id}`);
+        router.push(
+          `/live-tests/results/${resultDocRef.id}?xpGained=${xpGained}`
+        );
       } catch (error) {
         console.error("Error writing live test results:", error);
         toast.error("Failed to submit your test.");

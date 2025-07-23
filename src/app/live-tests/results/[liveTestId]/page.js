@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Trophy, IndianRupee, UserCircle, Users } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import XPSummary from "@/components/results/XPSummary"; // Import XPSummary
 
 export default function LiveTestEventResultPage() {
   const { user, loading: authLoading } = useAuth();
@@ -171,6 +172,8 @@ export default function LiveTestEventResultPage() {
             </h1>
             <p className='text-slate-600'>Event Results</p>
           </div>
+
+          <XPSummary />
 
           <div className='my-8 text-center bg-indigo-50 p-6 rounded-xl'>
             <p className='text-lg font-medium text-indigo-800'>
