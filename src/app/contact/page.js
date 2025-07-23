@@ -1,6 +1,17 @@
 "use client";
 import { useState, useEffect } from "react";
-import { X, CheckCircle, AlertTriangle, Info } from "lucide-react";
+import {
+  X,
+  CheckCircle,
+  AlertTriangle,
+  Info,
+  User,
+  Mail,
+  Phone,
+  MessageSquare,
+  Linkedin,
+  Twitter,
+} from "lucide-react";
 
 const Toast = ({ message, type, onClose }) => {
   useEffect(() => {
@@ -12,7 +23,7 @@ const Toast = ({ message, type, onClose }) => {
   }, [onClose]);
 
   const baseClasses =
-    "fixed bottom-5 right-5 flex items-center p-4 rounded-lg shadow-lg text-white transition-all duration-300";
+    "fixed bottom-5 right-5 flex items-center p-4 rounded-lg shadow-lg text-white transition-all duration-300 z-50";
   const typeClasses = {
     success: "bg-green-600",
     error: "bg-red-600",
@@ -38,6 +49,24 @@ const Toast = ({ message, type, onClose }) => {
     </div>
   );
 };
+
+// New decorative background component
+const ContactBackground = () => (
+  <div className='absolute inset-0 z-0 overflow-hidden'>
+    <Mail className='absolute top-10 left-5 h-32 w-32 text-blue-500/10 transform -rotate-12' />
+    <Phone className='absolute top-1/4 right-5 h-24 w-24 text-green-500/10 transform rotate-12' />
+    {/* Simple WhatsApp SVG Icon */}
+    <svg
+      className='absolute bottom-1/4 left-1/3 h-20 w-20 text-green-500/10'
+      viewBox='0 0 24 24'
+      fill='currentColor'
+    >
+      <path d='M16.75 13.96c.25.13.42.2.52.32.1.13.15.28.15.44 0 .2-.07.38-.22.54-.15.15-.33.28-.53.38-.2.1-.42.15-.65.15-.28 0-.55-.06-.8-.18-.25-.12-.5-.28-.75-.48s-.5-.45-.75-.73c-.25-.28-.48-.58-.68-.9-.2-.32-.35-.65-.48-.98-.12-.33-.18-.65-.18-.95 0-.3.07-.6.2-.85.13-.25.32-.45.55-.6.23-.15.48-.22.75-.22.2 0 .38.03.53.1.15.07.28.15.4.28l.1.12c.08.1.13.2.15.3.02.1.03.2.03.3 0 .1-.02.2-.05.3-.03.1-.08.2-.13.28l-.13.15c-.05.05-.1.1-.15.15-.05.05-.08.08-.08.1 0 .03.02.07.05.1.03.03.07.07.1.1.15.15.3.32.5.5.2.18.38.33.58.45.05.03.1.05.13.05h.15c.05 0 .1-.02.13-.05.03-.03.07-.07.1-.1l.1-.12c.1-.12.2-.22.3-.3.1-.08.2-.13.3-.15s.2-.03.3-.03c.12 0 .23.03.33.08.1.05.2.13.28.2l.1.15zM12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.4 0-8-3.6-8-8s3.6-8 8-8 8 3.6 8 8-3.6 8-8 8z' />
+    </svg>
+    <Linkedin className='absolute bottom-10 right-1/3 h-16 w-16 text-blue-700/10 transform rotate-6' />
+    <Twitter className='absolute bottom-1/4 left-5 h-20 w-20 text-sky-500/10 transform -rotate-6' />
+  </div>
+);
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -91,14 +120,11 @@ export default function ContactPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // FIX: Updated this function to restrict input for the phone field
   const handleInputChange = (e) => {
     let { name, value } = e.target;
 
     if (name === "phone") {
-      // Remove all non-digit characters
       const numericValue = value.replace(/\D/g, "");
-      // Limit the length to 10 characters
       value = numericValue.slice(0, 10);
     }
 
@@ -153,8 +179,9 @@ export default function ContactPage() {
 
   return (
     <>
-      <div className='bg-gradient-to-b from-indigo-50 via-white to-white py-16 sm:py-24'>
-        <div className='container mx-auto px-4 sm:px-6 lg:px-8'>
+      <div className='relative min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-100 py-16 sm:py-24 overflow-hidden'>
+        <ContactBackground />
+        <div className='relative z-10 container mx-auto px-4 sm:px-6 lg:px-8'>
           <div className='max-w-2xl mx-auto'>
             <div className='text-center'>
               <h1 className='text-4xl font-extrabold text-slate-900'>
@@ -164,7 +191,7 @@ export default function ContactPage() {
                 Have a question or feedback? We'd love to hear from you.
               </p>
             </div>
-            <div className='mt-12 bg-white p-8 sm:p-12 rounded-2xl shadow-xl border border-slate-100'>
+            <div className='mt-12 bg-white/80 backdrop-blur-sm p-8 sm:p-12 rounded-2xl shadow-xl border border-slate-200/50'>
               <form onSubmit={handleSubmit} className='space-y-6' noValidate>
                 <div>
                   <label
@@ -173,7 +200,10 @@ export default function ContactPage() {
                   >
                     Full Name
                   </label>
-                  <div className='mt-1'>
+                  <div className='relative mt-1'>
+                    <div className='pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3'>
+                      <User className='h-5 w-5 text-slate-400' />
+                    </div>
                     <input
                       type='text'
                       name='name'
@@ -181,16 +211,16 @@ export default function ContactPage() {
                       value={formData.name}
                       onChange={handleInputChange}
                       required
-                      className={`w-full p-3 border rounded-lg shadow-sm transition text-slate-900 ${
+                      className={`w-full p-3 pl-10 border rounded-lg shadow-sm transition text-slate-900 ${
                         errors.name
                           ? "border-red-500 focus:ring-red-500 focus:border-red-500"
                           : "border-slate-300 focus:ring-indigo-500 focus:border-indigo-500"
                       }`}
                     />
-                    {errors.name && (
-                      <p className='mt-2 text-sm text-red-600'>{errors.name}</p>
-                    )}
                   </div>
+                  {errors.name && (
+                    <p className='mt-2 text-sm text-red-600'>{errors.name}</p>
+                  )}
                 </div>
                 <div>
                   <label
@@ -199,7 +229,10 @@ export default function ContactPage() {
                   >
                     Email Address
                   </label>
-                  <div className='mt-1'>
+                  <div className='relative mt-1'>
+                    <div className='pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3'>
+                      <Mail className='h-5 w-5 text-slate-400' />
+                    </div>
                     <input
                       type='email'
                       name='email'
@@ -207,18 +240,16 @@ export default function ContactPage() {
                       value={formData.email}
                       onChange={handleInputChange}
                       required
-                      className={`w-full p-3 border rounded-lg shadow-sm transition text-slate-900 ${
+                      className={`w-full p-3 pl-10 border rounded-lg shadow-sm transition text-slate-900 ${
                         errors.email
                           ? "border-red-500 focus:ring-red-500 focus:border-red-500"
                           : "border-slate-300 focus:ring-indigo-500 focus:border-indigo-500"
                       }`}
                     />
-                    {errors.email && (
-                      <p className='mt-2 text-sm text-red-600'>
-                        {errors.email}
-                      </p>
-                    )}
                   </div>
+                  {errors.email && (
+                    <p className='mt-2 text-sm text-red-600'>{errors.email}</p>
+                  )}
                 </div>
 
                 <div>
@@ -228,7 +259,10 @@ export default function ContactPage() {
                   >
                     Phone Number
                   </label>
-                  <div className='mt-1'>
+                  <div className='relative mt-1'>
+                    <div className='pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3'>
+                      <Phone className='h-5 w-5 text-slate-400' />
+                    </div>
                     <input
                       type='tel'
                       name='phone'
@@ -237,18 +271,16 @@ export default function ContactPage() {
                       onChange={handleInputChange}
                       required
                       maxLength='10'
-                      className={`w-full p-3 border rounded-lg shadow-sm transition text-slate-900 ${
+                      className={`w-full p-3 pl-10 border rounded-lg shadow-sm transition text-slate-900 ${
                         errors.phone
                           ? "border-red-500 focus:ring-red-500 focus:border-red-500"
                           : "border-slate-300 focus:ring-indigo-500 focus:border-indigo-500"
                       }`}
                     />
-                    {errors.phone && (
-                      <p className='mt-2 text-sm text-red-600'>
-                        {errors.phone}
-                      </p>
-                    )}
                   </div>
+                  {errors.phone && (
+                    <p className='mt-2 text-sm text-red-600'>{errors.phone}</p>
+                  )}
                 </div>
 
                 <div>
@@ -258,7 +290,10 @@ export default function ContactPage() {
                   >
                     Message
                   </label>
-                  <div className='mt-1'>
+                  <div className='relative mt-1'>
+                    <div className='pointer-events-none absolute top-3 left-0 flex items-center pl-3'>
+                      <MessageSquare className='h-5 w-5 text-slate-400' />
+                    </div>
                     <textarea
                       name='message'
                       id='message'
@@ -266,18 +301,18 @@ export default function ContactPage() {
                       value={formData.message}
                       onChange={handleInputChange}
                       required
-                      className={`w-full p-3 border rounded-lg shadow-sm transition text-slate-900 ${
+                      className={`w-full p-3 pl-10 border rounded-lg shadow-sm transition text-slate-900 ${
                         errors.message
                           ? "border-red-500 focus:ring-red-500 focus:border-red-500"
                           : "border-slate-300 focus:ring-indigo-500 focus:border-indigo-500"
                       }`}
                     ></textarea>
-                    {errors.message && (
-                      <p className='mt-2 text-sm text-red-600'>
-                        {errors.message}
-                      </p>
-                    )}
                   </div>
+                  {errors.message && (
+                    <p className='mt-2 text-sm text-red-600'>
+                      {errors.message}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <button

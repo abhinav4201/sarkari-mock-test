@@ -196,7 +196,7 @@ export default function LiveTestCard({ test }) {
         {status === "Completed" && (
           <Link
             href={`/live-tests/results/${test.id}`}
-            className='w-full block text-center py-3 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300'
+            className='w-full block text-center py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-green-600'
           >
             View Results
           </Link>

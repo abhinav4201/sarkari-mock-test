@@ -1,3 +1,5 @@
+// src/components/ui/FinalWarningModal.js
+
 "use client";
 
 import Modal from "./Modal";
@@ -10,6 +12,7 @@ export default function FinalWarningModal({
   onGoToQuestion, // This will handle both unanswered and review questions
   warningType, // 'unanswered' or 'review'
   count, // The number of questions for the warning
+  isSubmitting, // <-- NEW PROP
 }) {
   const isReviewWarning = warningType === "review";
 
@@ -43,13 +46,15 @@ export default function FinalWarningModal({
           <button
             type='button'
             onClick={onConfirmSubmit}
-            className='w-full inline-flex justify-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700'
+            disabled={isSubmitting} // <-- Disable if already submitting
+            className='w-full inline-flex justify-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 disabled:bg-green-400'
           >
-            Yes, Submit Anyway
+            {isSubmitting ? "Submitting..." : "Yes, Submit Anyway"}
           </button>
           <button
             type='button'
             onClick={onGoToQuestion}
+            disabled={isSubmitting} // <-- Also disabled during submission
             className='w-full inline-flex justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50'
           >
             {revisitButtonText}

@@ -1,10 +1,16 @@
 const formatTime = (seconds) => {
   // If seconds is not a valid number (null, undefined, etc.), return '0s'.
-  if (typeof seconds !== "number" || isNaN(seconds)) {
+  if (typeof seconds !== "number" || isNaN(seconds) || seconds === 0) {
     return "0s";
   }
-  if (seconds === 0) return "0s";
-  return `${seconds.toFixed(1)}s`;
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.round(seconds % 60);
+
+  if (minutes > 0) {
+    return `${minutes}m ${remainingSeconds}s`;
+  }
+  return `${remainingSeconds}s`;
 };
 
 export default function TimeAnalysis({ data }) {

@@ -18,8 +18,9 @@ import {
 import { Lock } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import toast from "react-hot-toast";
+import InactivityWarningModal from "@/components/ui/InactivityWarningModal"; // Import the inactivity modal
 
 async function getTestInstance(instanceId, userId) {
   const instanceRef = doc(db, "dynamicTestInstances", instanceId);
@@ -40,20 +41,22 @@ async function getTestInstance(instanceId, userId) {
 
 // Helper function to check if two dates are on the same calendar day
 const isSameDay = (date1, date2) => {
-    if (!date1 || !date2) return false;
-    return date1.getFullYear() === date2.getFullYear() &&
-           date1.getMonth() === date2.getMonth() &&
-           date1.getDate() === date2.getDate();
+  if (!date1 || !date2) return false;
+  return (
+    date1.getFullYear() === date2.getFullYear() &&
+    date1.getMonth() === date2.getMonth() &&
+    date1.getDate() === date2.getDate()
+  );
 };
 
 // Helper function to check if two dates are on consecutive calendar days
 const areConsecutiveTestDays = (date1, date2) => {
-    if (!date1 || !date2) return false;
-    const d1 = new Date(date1.toDate().setHours(0, 0, 0, 0));
-    const d2 = new Date(date2.setHours(0, 0, 0, 0));
-    const diffTime = d2 - d1;
-    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays === 1;
+  if (!date1 || !date2) return false;
+  const d1 = new Date(date1.toDate().setHours(0, 0, 0, 0));
+  const d2 = new Date(date2.setHours(0, 0, 0, 0));
+  const diffTime = d2 - d1;
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays === 1;
 };
 
 export default function TakeDynamicTestPage() {
@@ -65,11 +68,13 @@ export default function TakeDynamicTestPage() {
   const [testState, setTestState] = useState("loading");
   const [timePerQuestion, setTimePerQuestion] = useState({});
   const [questionStartTime, setQuestionStartTime] = useState(0);
-  const [markedForReview, setMarkedForReview] = useState(new Set()); // FIX: Corrected useState initialization
+  const [markedForReview, setMarkedForReview] = useState(new Set());
   const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
   const [warningInfo, setWarningInfo] = useState({ type: null, count: 0 });
   const [lastQuestionWarningShown, setLastQuestionWarningShown] =
     useState(false);
+  const [isInactivityModalOpen, setIsInactivityModalOpen] = useState(false); // State for inactivity modal
+  const inactivityTimerRef = useRef(null); // Ref for the inactivity timer
 
   const {
     user,
@@ -142,12 +147,12 @@ export default function TakeDynamicTestPage() {
           const resultData = {
             userId: user.uid,
             testId: instanceData.originalTestId,
-            instanceId: instanceId,
+            instanceId: instanceId, // This correctly records it as a re-take of the instance
             answers: finalAnswers,
             score,
             totalQuestions,
             incorrectAnswers,
-            submissionReason: reason,
+            submissionReason: reason, // Reason can now be 'inactivity'
             isDynamic: true,
             completedAt: new Date(),
             reviewFlag:
@@ -162,7 +167,6 @@ export default function TakeDynamicTestPage() {
             resultData.ownerId = userProfile.ownerId;
           }
 
-          // --- START: GAMIFICATION LOGIC (Identical to static test) ---
           const userRef = doc(db, "users", user.uid);
           const userSnap = await transaction.get(userRef);
           if (!userSnap.exists()) {
@@ -222,11 +226,11 @@ export default function TakeDynamicTestPage() {
             updates.earnedBadges = arrayUnion(...newBadges);
           }
 
-          xpGained = 50; // Base XP
-          xpGained += score * 2; // XP for correct answers
+          xpGained = 50;
+          xpGained += score * 2;
 
           if (score / totalQuestions >= 0.8) {
-            xpGained += 25; // Bonus XP
+            xpGained += 25;
           }
 
           const newXp = (userData.xp || 0) + xpGained;
@@ -242,7 +246,6 @@ export default function TakeDynamicTestPage() {
             level: newLevel,
             ...updates,
           });
-          // --- END: GAMIFICATION LOGIC ---
 
           transaction.set(resultDocRef, resultData);
 
@@ -308,6 +311,33 @@ export default function TakeDynamicTestPage() {
     ]
   );
 
+  // --- START: INACTIVITY TIMER LOGIC ---
+  const resetInactivityTimer = useCallback(() => {
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
+    inactivityTimerRef.current = setTimeout(() => {
+      setIsInactivityModalOpen(true);
+    }, 5 * 60 * 1000); // 5 minutes
+  }, []);
+
+  useEffect(() => {
+    if (testState === "in-progress") {
+      resetInactivityTimer();
+      window.addEventListener("mousemove", resetInactivityTimer);
+      window.addEventListener("keydown", resetInactivityTimer);
+    }
+
+    return () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+      window.removeEventListener("mousemove", resetInactivityTimer);
+      window.removeEventListener("keydown", resetInactivityTimer);
+    };
+  }, [testState, resetInactivityTimer]);
+  // --- END: INACTIVITY TIMER LOGIC ---
+
   const handleFinalSubmit = () => {
     const unanswered = questions.filter((q) => !selectedOptions[q.id]);
     const marked = [...markedForReview];
@@ -318,7 +348,7 @@ export default function TakeDynamicTestPage() {
       setWarningInfo({ type: "review", count: marked.length });
       setIsWarningModalOpen(true);
     } else {
-      forceSubmit("user_submitted"); // Pass the string literal
+      forceSubmit("user_submitted");
     }
   };
 
@@ -338,7 +368,7 @@ export default function TakeDynamicTestPage() {
     if (authLoading) return;
     if (!user) {
       toast.error("You must be logged in to start a test.");
-      router.push(`/mock-tests/${testId}`);
+      router.push(`/mock-tests/${instanceId}`);
       return;
     }
 
@@ -385,7 +415,7 @@ export default function TakeDynamicTestPage() {
   useEffect(() => {
     if (testState !== "in-progress" || timeLeft <= 0) {
       if (timeLeft <= 0 && testState === "in-progress") {
-        forceSubmit("time_up"); // Pass the string literal
+        forceSubmit("time_up");
       }
       return;
     }
@@ -403,7 +433,7 @@ export default function TakeDynamicTestPage() {
           "You switched tabs. The test will be submitted automatically.",
           { duration: 5000 }
         );
-        forceSubmit("tab_switched"); // Pass the string literal
+        forceSubmit("tab_switched");
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -505,6 +535,14 @@ export default function TakeDynamicTestPage() {
 
   return (
     <>
+      <InactivityWarningModal
+        isOpen={isInactivityModalOpen}
+        onConfirm={() => {
+          setIsInactivityModalOpen(false);
+          resetInactivityTimer();
+        }}
+        onIdleSubmit={() => forceSubmit("inactivity")}
+      />
       <FinalWarningModal
         isOpen={isWarningModalOpen}
         onClose={() => setIsWarningModalOpen(false)}
@@ -512,6 +550,7 @@ export default function TakeDynamicTestPage() {
         onGoToQuestion={goToFirstRelevantQuestion}
         warningType={warningInfo.type}
         count={warningInfo.count}
+        isSubmitting={testState === "submitting"}
       />
       <div className='bg-slate-100 min-h-screen p-4'>
         <div className='container mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8'>

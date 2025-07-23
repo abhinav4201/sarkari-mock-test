@@ -7,8 +7,81 @@ import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
-import { MapPin, Lock, CheckCircle, Play, Trophy } from "lucide-react";
+import { Lock, CheckCircle, Play, Trophy, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+
+// New Bouncing Ball Animation Component
+const BouncingBall = ({ size, initialTop, initialLeft, duration }) => (
+  <div
+    className='absolute rounded-full bg-gradient-to-br from-pink-400 to-purple-500 opacity-30'
+    style={{
+      width: size,
+      height: size,
+      top: `${initialTop}%`,
+      left: `${initialLeft}%`,
+      animation: `bounce ${duration}s infinite alternate ease-in-out`,
+    }}
+  />
+);
+
+// New Stage Background Component
+const StageBackground = () => (
+  <div className='absolute inset-0 z-0 overflow-hidden'>
+    {/* Stage "ropes" from the top */}
+    <svg
+      className='absolute top-0 left-0 w-full h-48 text-indigo-500/10'
+      preserveAspectRatio='none'
+    >
+      <line
+        x1='10%'
+        y1='0'
+        x2='20%'
+        y2='100%'
+        stroke='currentColor'
+        strokeWidth='2'
+      />
+      <line
+        x1='30%'
+        y1='0'
+        x2='35%'
+        y2='100%'
+        stroke='currentColor'
+        strokeWidth='1'
+      />
+      <line
+        x1='50%'
+        y1='0'
+        x2='50%'
+        y2='100%'
+        stroke='currentColor'
+        strokeWidth='3'
+      />
+      <line
+        x1='70%'
+        y1='0'
+        x2='65%'
+        y2='100%'
+        stroke='currentColor'
+        strokeWidth='1'
+      />
+      <line
+        x1='90%'
+        y1='0'
+        x2='80%'
+        y2='100%'
+        stroke='currentColor'
+        strokeWidth='2'
+      />
+    </svg>
+
+    {/* Animated Bouncing Balls */}
+    <BouncingBall size={60} initialTop={10} initialLeft={5} duration={10} />
+    <BouncingBall size={80} initialTop={50} initialLeft={20} duration={12} />
+    <BouncingBall size={40} initialTop={80} initialLeft={-5} duration={8} />
+    <BouncingBall size={100} initialTop={30} initialLeft={85} duration={15} />
+    <BouncingBall size={50} initialTop={60} initialLeft={95} duration={9} />
+  </div>
+);
 
 export default function AdventureDetailPage() {
   const { user, loading: authLoading } = useAuth();
@@ -46,7 +119,6 @@ export default function AdventureDetailPage() {
       if (progSnap.exists()) {
         setProgress(progSnap.data());
       } else {
-        // If no progress, create a starting document
         const initialProgress = {
           adventureId: advSnap.id,
           userId: user.uid,
@@ -72,8 +144,6 @@ export default function AdventureDetailPage() {
   }, [authLoading, fetchAdventureData]);
 
   const handleStartStage = (stageIndex) => {
-    // This is where you would redirect to a special test-taking page for adventures
-    // For now, it will just show a toast.
     toast.success(
       `Starting Stage ${stageIndex + 1}: ${adventure.stages[stageIndex].name}`
     );
@@ -85,16 +155,27 @@ export default function AdventureDetailPage() {
   }
 
   if (!adventure) {
-    return null; // Redirects are handled in fetch logic
+    return null;
   }
 
   const stagesCompleted = progress?.stagesCompleted || 0;
 
   return (
-    <div className='bg-slate-100 min-h-screen py-12'>
-      <div className='container mx-auto px-4'>
+    <div className='relative min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-100 py-12 overflow-hidden'>
+      <style jsx global>{`
+        @keyframes bounce {
+          from {
+            transform: translateX(0) scale(1);
+          }
+          to {
+            transform: translateX(calc(100vw - 100%)) scale(1.1);
+          }
+        }
+      `}</style>
+      <StageBackground />
+      <div className='relative z-10 container mx-auto px-4'>
         <div className='max-w-3xl mx-auto'>
-          <div className='text-center mb-8'>
+          <div className='text-center mb-8 bg-white/70 backdrop-blur-md p-6 rounded-2xl shadow-lg'>
             <p className='font-semibold text-indigo-600'>
               {adventure.examName}
             </p>
@@ -126,13 +207,14 @@ export default function AdventureDetailPage() {
                 buttonAction = () => handleStartStage(index);
                 buttonText =
                   stage.type === "boss" ? "Start Final Boss" : "Start Stage";
-                buttonClasses = "bg-indigo-600 text-white hover:bg-indigo-700";
+                buttonClasses =
+                  "bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg hover:shadow-xl";
               }
 
               return (
                 <div
                   key={index}
-                  className='bg-white p-4 rounded-xl shadow-md border flex items-center justify-between'
+                  className='bg-white/70 backdrop-blur-md p-4 rounded-xl shadow-md border flex items-center justify-between transition-all hover:shadow-lg hover:scale-105'
                 >
                   <div className='flex items-center gap-4'>
                     <Icon className={`h-8 w-8 flex-shrink-0 ${iconColor}`} />
@@ -149,7 +231,7 @@ export default function AdventureDetailPage() {
                   <button
                     onClick={buttonAction}
                     disabled={!isUnlocked || isCompleted}
-                    className={`px-4 py-2 font-semibold rounded-lg text-sm ${buttonClasses}`}
+                    className={`px-4 py-2 font-semibold rounded-lg text-sm transition-all ${buttonClasses}`}
                   >
                     {buttonText}
                   </button>
@@ -160,9 +242,9 @@ export default function AdventureDetailPage() {
           <div className='mt-8 text-center'>
             <Link
               href='/adventures'
-              className='font-semibold text-indigo-600 hover:underline'
+              className='inline-flex items-center gap-2 font-semibold text-indigo-600 hover:underline'
             >
-              &larr; Back to All Adventures
+              <ArrowLeft size={16} /> Back to All Adventures
             </Link>
           </div>
         </div>

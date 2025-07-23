@@ -13,7 +13,17 @@ import {
   getDoc,
 } from "firebase/firestore";
 import Link from "next/link";
-import { Map, CheckCircle, Star, User } from "lucide-react";
+import {
+  Map,
+  CheckCircle,
+  Star,
+  User,
+  BookOpen,
+  Atom,
+  Sword,
+  Calculator,
+  Landmark,
+} from "lucide-react";
 import toast from "react-hot-toast";
 import React from "react";
 
@@ -48,6 +58,36 @@ const AdventureBadge = ({ status }) => {
     </div>
   );
 };
+
+// New, more elaborate decorative component for the background
+const AdventureBackground = () => (
+  <div className='absolute inset-0 z-0 overflow-hidden'>
+    {/* Large, faint background elements */}
+    <Map className='absolute -top-24 -left-24 h-96 w-96 text-gray-400/5' />
+    <BookOpen className='absolute -bottom-24 -right-24 h-96 w-96 text-gray-400/5' />
+
+    {/* Floating icons */}
+    <Sword className='absolute top-1/4 left-10 h-16 w-16 text-red-500/20 transform -rotate-12' />
+    <Atom className='absolute top-1/2 right-12 h-20 w-20 text-blue-500/20 transform rotate-12' />
+    <Calculator className='absolute bottom-1/4 left-1/3 h-12 w-12 text-green-500/20' />
+    <Landmark className='absolute top-20 right-1/4 h-16 w-16 text-yellow-500/20 transform rotate-6' />
+
+    {/* UPSC Text Icon */}
+    <span
+      className='absolute bottom-10 right-10 font-bold text-4xl text-purple-500/20'
+      style={{ fontFamily: "serif" }}
+    >
+      UPSC
+    </span>
+    {/* SSC Text Icon */}
+    <span
+      className='absolute top-10 left-1/3 font-bold text-3xl text-cyan-500/20'
+      style={{ fontFamily: "sans-serif" }}
+    >
+      SSC
+    </span>
+  </div>
+);
 
 export default function AdventuresPage() {
   const { user, loading: authLoading } = useAuth();
@@ -114,8 +154,9 @@ export default function AdventuresPage() {
   }
 
   return (
-    <div className='bg-slate-50 min-h-screen py-16'>
-      <div className='container mx-auto px-4'>
+    <div className='relative bg-gradient-to-br from-blue-50 via-green-50 to-yellow-50 min-h-screen py-16'>
+      <AdventureBackground />
+      <div className='relative z-10 container mx-auto px-4'>
         <div className='text-center mb-12'>
           <h1 className='text-4xl md:text-5xl font-extrabold text-slate-900'>
             Exam Adventures
@@ -143,7 +184,7 @@ export default function AdventuresPage() {
                   href={`/adventures/${adv.id}`}
                   className='block group'
                 >
-                  <div className='bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden h-full flex flex-col hover:shadow-xl hover:-translate-y-1 transition-all'>
+                  <div className='bg-white/70 backdrop-blur-md rounded-2xl shadow-lg border border-slate-200 overflow-hidden h-full flex flex-col hover:shadow-xl hover:-translate-y-1 transition-all'>
                     <div className='p-6 flex-grow'>
                       <div className='flex justify-between items-start'>
                         <p className='font-semibold text-indigo-600'>
@@ -159,7 +200,7 @@ export default function AdventuresPage() {
                         {adv.description}
                       </p>
                     </div>
-                    <div className='p-6 bg-slate-50 border-t'>
+                    <div className='p-6 bg-slate-50/80 border-t'>
                       <div className='flex justify-between items-center mb-1 text-sm font-medium'>
                         <span className='text-slate-600'>Progress</span>
                         <span
@@ -182,7 +223,7 @@ export default function AdventuresPage() {
                         className={`mt-4 text-center font-bold py-2 rounded-lg ${
                           isCompleted
                             ? "text-green-700 bg-green-100"
-                            : "text-indigo-700 bg-indigo-100 group-hover:bg-indigo-200"
+                            : "text-white bg-blue-600 group-hover:bg-green-600"
                         }`}
                       >
                         {isCompleted
@@ -198,7 +239,7 @@ export default function AdventuresPage() {
             })}
           </div>
         ) : (
-          <div className='text-center p-12 bg-white rounded-lg shadow'>
+          <div className='text-center p-12 bg-white/70 backdrop-blur-md rounded-lg shadow'>
             <h3 className='text-xl font-semibold'>
               No Adventures Available Yet
             </h3>

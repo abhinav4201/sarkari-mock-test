@@ -3,9 +3,28 @@ import StartTestButton from "@/components/mock-tests/StartTestButton";
 import TestReviews from "@/components/mock-tests/TestReviews";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
-import { Book, Clock, FileText, ShieldCheck, Tag } from "lucide-react";
+import { Book, Clock, FileText, ShieldCheck, Tag, Target } from "lucide-react";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+
+// New STATIC background component with a BRIGHT theme
+const ExamBackground = () => (
+  <div className='absolute inset-0 z-0 overflow-hidden'>
+    {/* Static decorative elements */}
+    <Target className='absolute top-[15%] left-[5%] h-24 w-24 text-red-500/10 transform -rotate-12' />
+    <Book className='absolute bottom-[10%] right-[8%] h-32 w-32 text-blue-500/10 transform rotate-12' />
+    <svg
+      className='absolute top-0 right-0 w-1/3 h-full text-slate-900/5'
+      fill='none'
+      viewBox='0 0 100 100'
+      preserveAspectRatio='none'
+    >
+      <path d='M0,0 L100,0 L0,100 Z' fill='currentColor' />
+    </svg>
+    <div className='absolute bottom-0 left-0 h-32 w-32 bg-purple-500/10 rounded-full blur-3xl'></div>
+    <div className='absolute top-0 right-1/4 h-40 w-40 bg-indigo-500/10 rounded-full blur-3xl'></div>
+  </div>
+);
 
 async function getTestDetails(testId) {
   const testRef = doc(db, "mockTests", testId);
@@ -23,7 +42,7 @@ async function getTestDetails(testId) {
 }
 
 export default async function PreTestStartPage({ params }) {
-  const { testId } = await params; // Await params to resolve the promise
+  const { testId } = params;
   const test = await getTestDetails(testId);
 
   if (!test) {
@@ -31,8 +50,9 @@ export default async function PreTestStartPage({ params }) {
   }
 
   return (
-    <div className='bg-slate-100 flex items-center justify-center min-h-screen p-4'>
-      <div className='max-w-2xl w-full bg-white p-8 md:p-12 rounded-2xl shadow-2xl border border-slate-200'>
+    <div className='relative min-h-screen bg-gradient-to-br from-sky-50 via-indigo-50 to-purple-100 flex items-center justify-center p-4 overflow-hidden'>
+      <ExamBackground />
+      <div className='relative z-10 max-w-2xl w-full bg-white/70 backdrop-blur-md p-8 md:p-12 rounded-2xl shadow-2xl border border-white/50'>
         {test.isPremium && (
           <div className='flex justify-center mb-6'>
             <span className='bg-amber-100 text-amber-800 text-sm font-bold px-4 py-1 rounded-full flex items-center'>
@@ -53,7 +73,9 @@ export default async function PreTestStartPage({ params }) {
           </div>
         )}
         <div className='text-center'>
-          <p className='text-indigo-600 font-semibold'>{test.examName}</p>
+          <p className='text-indigo-600 text-3xl font-semibold'>
+            {test.examName}
+          </p>
           <h1 className='text-3xl md:text-4xl font-extrabold text-slate-900 mt-2'>
             {test.title}
           </h1>
@@ -104,7 +126,6 @@ export default async function PreTestStartPage({ params }) {
         </div>
 
         <div className='mt-8 text-center'>
-          {/* The smart button handles all logic for login checks and premium status */}
           <Suspense
             fallback={
               <div className='h-16 w-56 bg-gray-200 rounded-lg animate-pulse mx-auto'></div>
