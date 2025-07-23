@@ -19,6 +19,7 @@ export default function EditTestModal({
   const [estimatedTime, setEstimatedTime] = useState(0);
   const [questionCount, setQuestionCount] = useState(10);
   const [isPremium, setIsPremium] = useState(false);
+  const [isHidden, setIsHidden] = useState(false); // <-- ADDED
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -27,6 +28,7 @@ export default function EditTestModal({
       setExamName(test.examName || "");
       setEstimatedTime(test.estimatedTime || 0);
       setIsPremium(test.isPremium || false);
+      setIsHidden(test.isHidden || false); // <-- ADDED
       if (test.isDynamic) {
         setTopic(test.sourceCriteria?.topic || "");
         setSubject(test.sourceCriteria?.subject || "");
@@ -57,6 +59,7 @@ export default function EditTestModal({
         examName,
         estimatedTime: Number(estimatedTime),
         isPremium,
+        isHidden, // <-- ADDED
       };
 
       if (test.isDynamic) {
@@ -198,6 +201,22 @@ export default function EditTestModal({
             className='ml-2 block text-sm text-slate-900'
           >
             Is this a Premium Test?
+          </label>
+        </div>
+        {/* ADDED CHECKBOX FOR isHidden */}
+        <div className='flex items-center'>
+          <input
+            type='checkbox'
+            id='edit-isHidden'
+            checked={isHidden}
+            onChange={(e) => setIsHidden(e.target.checked)}
+            className='h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500'
+          />
+          <label
+            htmlFor='edit-isHidden'
+            className='ml-2 block text-sm text-slate-900'
+          >
+            Hide from public Test Hub?
           </label>
         </div>
         <div>

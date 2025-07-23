@@ -42,8 +42,6 @@ export async function POST(request) {
     let remainingDuration = duration;
     const testsToDownload = [];
 
-    // This loop automatically handles cases where not enough tests are available.
-    // It will simply add all it can find until the list is exhausted.
     for (const doc of testsSnap.docs) {
       if (remainingDuration <= 0) break;
       const test = { id: doc.id, ...doc.data() };

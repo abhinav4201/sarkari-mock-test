@@ -3,7 +3,14 @@
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  collection,
+  getDocs,
+} from "firebase/firestore";
 import {
   CalendarCheck,
   CheckCircle2,
@@ -33,9 +40,11 @@ const getWeekId = () => {
 };
 
 // Form for adding/editing a task, rendered inside the modal
-const TaskForm = ({ task, onSave, onCancel }) => {
+const TaskForm = ({ task, onSave, onCancel, subjects, topics }) => {
   const [text, setText] = useState(task ? task.text : "");
   const [day, setDay] = useState(task ? task.day : "Monday");
+  const [selectedSubject, setSelectedSubject] = useState("");
+  const [selectedTopic, setSelectedTopic] = useState("");
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -44,9 +53,11 @@ const TaskForm = ({ task, onSave, onCancel }) => {
       return;
     }
     onSave({
-      ...task, // Preserve existing properties like 'completed' and 'isUserAdded'
+      ...task,
       text: text.trim(),
       day,
+      subject: selectedSubject,
+      topic: selectedTopic,
     });
   };
 
@@ -87,6 +98,40 @@ const TaskForm = ({ task, onSave, onCancel }) => {
           ))}
         </select>
       </div>
+      <div>
+        <label className='block text-sm font-medium text-slate-700'>
+          Subject (Optional)
+        </label>
+        <select
+          value={selectedSubject}
+          onChange={(e) => setSelectedSubject(e.target.value)}
+          className='mt-1 w-full p-2 border border-slate-300 rounded-md text-slate-900'
+        >
+          <option value=''>-- Select a Subject --</option>
+          {subjects.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className='block text-sm font-medium text-slate-700'>
+          Topic (Optional)
+        </label>
+        <select
+          value={selectedTopic}
+          onChange={(e) => setSelectedTopic(e.target.value)}
+          className='mt-1 w-full p-2 border border-slate-300 rounded-md text-slate-900'
+        >
+          <option value=''>-- Select a Topic --</option>
+          {topics.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+      </div>
       <div className='flex justify-end gap-2 pt-2'>
         <button
           type='button'
@@ -112,6 +157,9 @@ export default function StudyPlanner() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [taskToEdit, setTaskToEdit] = useState(null);
+  const [subjects, setSubjects] = useState([]);
+  const [topics, setTopics] = useState([]);
+  const [recommendations, setRecommendations] = useState([]);
 
   const fetchPlan = async () => {
     if (!user) {
@@ -133,6 +181,19 @@ export default function StudyPlanner() {
 
   useEffect(() => {
     fetchPlan();
+    const fetchFilters = async () => {
+      const testsSnapshot = await getDocs(collection(db, "mockTests"));
+      const subjectsSet = new Set();
+      const topicsSet = new Set();
+      testsSnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.subject) subjectsSet.add(data.subject);
+        if (data.topic) topicsSet.add(data.topic);
+      });
+      setSubjects(Array.from(subjectsSet));
+      setTopics(Array.from(topicsSet));
+    };
+    fetchFilters();
   }, [user]);
 
   const handleSaveTask = async (taskData) => {
@@ -155,6 +216,24 @@ export default function StudyPlanner() {
       await setDoc(planRef, { tasks: updatedTasks, weekId }, { merge: true });
       toast.success(taskToEdit ? "Task updated!" : "Task added!");
       setPlan({ tasks: updatedTasks, weekId });
+
+      // Fetch recommendations if subject or topic is provided
+      if (taskData.subject || taskData.topic) {
+        const idToken = await user.getIdToken();
+        const res = await fetch("/api/tests/recommendations/by-task", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            subject: taskData.subject,
+            topic: taskData.topic,
+          }),
+        });
+        const recommendedTests = await res.json();
+        setRecommendations(recommendedTests);
+      }
     } catch (error) {
       toast.error("Could not save the task.");
     } finally {
@@ -231,6 +310,8 @@ export default function StudyPlanner() {
             setIsModalOpen(false);
             setTaskToEdit(null);
           }}
+          subjects={subjects}
+          topics={topics}
         />
       </Modal>
 
@@ -250,6 +331,26 @@ export default function StudyPlanner() {
             <Plus size={16} /> Add Task
           </button>
         </div>
+
+        {recommendations.length > 0 && (
+          <div className='mb-6'>
+            <h3 className='font-bold text-slate-800 flex items-center gap-2 mb-2'>
+              <Wand2 size={18} className='text-green-500' />
+              Today's Goal: Recommended Tests
+            </h3>
+            <div className='space-y-2'>
+              {recommendations.map((test) => (
+                <a
+                  key={test.id}
+                  href={`/mock-tests/${test.id}`}
+                  className='block p-3 bg-green-50 rounded-lg hover:bg-green-100'
+                >
+                  <p className='font-semibold text-green-800'>{test.title}</p>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Recommended Tasks Section */}
         {recommendedTasks.length > 0 && (

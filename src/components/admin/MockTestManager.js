@@ -15,8 +15,10 @@ export default function MockTestManager({ onTestCreated }) {
   const [examName, setExamName] = useState("");
   const [estimatedTime, setEstimatedTime] = useState(0);
   const [isPremium, setIsPremium] = useState(false);
+  const [isHidden, setIsHidden] = useState(false); // <-- ADDED
   const [isLoading, setIsLoading] = useState(false);
   const [questionCount, setQuestionCount] = useState(10);
+  
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -42,6 +44,7 @@ export default function MockTestManager({ onTestCreated }) {
         examName: examName || "",
         estimatedTime: Number(estimatedTime),
         isPremium,
+        isHidden: isHidden || false, // <-- ADDED
         createdAt: serverTimestamp(),
         isDynamic: isDynamicTest,
         likeCount: initialLikeCount,
@@ -65,6 +68,7 @@ export default function MockTestManager({ onTestCreated }) {
       setExamName("");
       setEstimatedTime(0);
       setIsPremium(false);
+      setIsHidden(false); // <-- ADDED
       setQuestionCount(10);
 
       // --- THIS IS THE CORRECTED REFRESH LOGIC ---
@@ -235,6 +239,27 @@ export default function MockTestManager({ onTestCreated }) {
         >
           Is this a Premium Test?
         </label>
+      </div>
+      {/* ADDED CHECKBOX FOR isHidden */}
+      <div className='pt-2'>
+        <div className='flex items-center'>
+          <input
+            type='checkbox'
+            id='isHidden'
+            checked={isHidden}
+            onChange={(e) => setIsHidden(e.target.checked)}
+            className='h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500'
+          />
+          <label
+            htmlFor='isHidden'
+            className='ml-3 block text-sm font-medium text-slate-900'
+          >
+            Hide from public Test Hub?
+          </label>
+        </div>
+        <p className='text-xs text-slate-500 ml-7'>
+          Use this for tests that are part of a Live Test or Exam Adventure.
+        </p>
       </div>
       <button
         type='submit'

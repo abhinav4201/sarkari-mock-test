@@ -21,7 +21,7 @@ export async function POST(request) {
       examName,
       estimatedTime,
       isPremium,
-      isHidden,
+      isHidden, // <-- ADDED
     } = await request.json();
 
     if (
@@ -89,7 +89,7 @@ export async function POST(request) {
       questionCount: 0,
       isPremium: isPremium || false,
       isDynamic: false,
-      isHidden: isHidden || false, // Save the isHidden flag
+      isHidden: isHidden || false, // <-- ADDED
       createdAt: FieldValue.serverTimestamp(),
       submitterInfo: { ip, userAgent: request.headers.get("user-agent") },
     };

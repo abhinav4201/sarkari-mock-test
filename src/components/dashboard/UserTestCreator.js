@@ -18,6 +18,7 @@ export default function UserTestCreator({ onTestCreated }) {
   const [isPremiumTest, setIsPremiumTest] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [isHidden, setIsHidden] = useState(false);
 
   const validate = () => {
     const newErrors = {};
@@ -57,21 +58,24 @@ export default function UserTestCreator({ onTestCreated }) {
           examName,
           estimatedTime: Number(estimatedTime),
           isPremium: isPremiumTest,
+          isHidden: isHidden || false,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Something went wrong");
 
-      const { newTestId } = data;
-      if (!newTestId) throw new Error("Could not retrieve the new test ID.");
+      // --- THIS IS THE FIX ---
+      const { testId } = data;
+      if (!testId) throw new Error("Could not retrieve the new test ID.");
 
       toast.success("Test details saved! Now add questions.", {
         id: loadingToast,
       });
 
-      // Redirect to the new page
-      router.push(`/dashboard/monetization/${newTestId}`);
+      // Redirect to the new page using the correct variable
+      router.push(`/dashboard/monetization/${testId}`);
+      // --- END OF FIX ---
     } catch (error) {
       toast.error(`Error: ${error.message}`, { id: loadingToast });
     } finally {
@@ -199,6 +203,26 @@ export default function UserTestCreator({ onTestCreated }) {
           </div>
         </div>
       )}
+      <div className='pt-2'>
+        <div className='flex items-center'>
+          <input
+            type='checkbox'
+            id='isHidden'
+            checked={isHidden}
+            onChange={(e) => setIsHidden(e.target.checked)}
+            className='h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500'
+          />
+          <label
+            htmlFor='isHidden'
+            className='ml-3 block text-sm font-medium text-slate-900'
+          >
+            Hide from public Test Hub?
+          </label>
+        </div>
+        <p className='text-xs text-slate-500 ml-7'>
+          Use this for tests that are part of a Live Test or Exam Adventure.
+        </p>
+      </div>
       <button
         type='submit'
         className='w-full px-4 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-green-400'

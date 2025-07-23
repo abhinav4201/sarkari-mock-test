@@ -1,55 +1,33 @@
-import { adminDb } from "@/lib/firebase-admin"; // NEW: Import adminDb for server-side operations
-
-
-import TestHub from "@/components/mock-tests/TestHub"; // Keep this import as it's the main component rendered
+import { adminDb } from "@/lib/firebase-admin";
+import TestHub from "@/components/mock-tests/TestHub";
 
 async function getInitialTests() {
-  const testsRef = adminDb.collection("mockTests"); // Use adminDb collection reference
-
-
-  const userTestsSnapshot = await testsRef
-    .where("status", "==", "approved")
-    .orderBy("createdAt", "desc")
-    .limit(9)
-    .get();
-
-  const adminTestsSnapshot = await testsRef
-    .where("status", "==", null) // Queries for explicit null status
-    .orderBy("createdAt", "desc")
-    .limit(9)
-    .get();
-
+  const testsRef = adminDb.collection("mockTests");
   try {
-    const userTests = userTestsSnapshot.docs.map((doc) => ({
+    // This query correctly fetches only public tests for the initial page load.
+    const publicTestsSnapshot = await testsRef
+      .where("isHidden", "==", false)
+      .orderBy("createdAt", "desc")
+      .limit(9)
+      .get();
+
+    const tests = publicTestsSnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
-      createdAt: doc.data().createdAt ? doc.data().createdAt.toMillis() : null, // Ensure serializable
+      createdAt: doc.data().createdAt ? doc.data().createdAt.toMillis() : null,
     }));
-
-    // Filter explicitly for tests where status is truly undefined or null
-    const adminTests = adminTestsSnapshot.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter(
-        (test) => typeof test.status === "undefined" || test.status === null
-      );
-
-    const combinedTests = [...userTests, ...adminTests];
-    const uniqueTests = Array.from(
-      new Map(combinedTests.map((test) => [test.id, test])).values()
-    );
-
-    uniqueTests.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-
-    return uniqueTests.slice(0, 9);
+    return tests;
   } catch (error) {
-    console.error("Failed to fetch initial tests in Server Component:", error); // Specific error message for clarity
+    console.error(
+      "Server-side fetch failed. This is likely a missing Firestore index.",
+      error.message
+    );
     return [];
   }
 }
 
 export default async function MockTestsHubPage() {
   const initialTests = await getInitialTests();
-
   return (
     <div className='bg-white min-h-screen'>
       <div className='bg-gradient-to-b from-indigo-50 to-white'>
@@ -65,10 +43,8 @@ export default async function MockTestsHubPage() {
           </div>
         </div>
       </div>
-
       <div className='container mx-auto px-4 sm:px-6 lg:px-8 pb-16 md:pb-24'>
         <div className='-mt-16'>
-          {/* The TestHub component receives the initial data from the server, fetched using Admin SDK */}
           <TestHub initialTests={initialTests} />
         </div>
       </div>
