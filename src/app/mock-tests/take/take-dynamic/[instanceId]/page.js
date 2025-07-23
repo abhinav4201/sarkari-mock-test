@@ -1,3 +1,5 @@
+// src/app/mock-tests/take/take-dynamic/[instanceId]/page.js
+
 "use client";
 
 import QuestionPalette from "@/components/mock-tests/QuestionPalette";
@@ -12,37 +14,58 @@ import {
   getDoc,
   increment,
   runTransaction,
-  serverTimestamp,
-  writeBatch,
 } from "firebase/firestore";
-import { Lock, Timer, WifiOff } from "lucide-react";
+import { Lock } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
 async function getTestInstance(instanceId, userId) {
-  const instanceRef = doc(db, "testInstances", instanceId);
-  const instanceSnap = await getDoc(instanceRef);
-
-  if (!instanceSnap.exists() || instanceSnap.data().userId !== userId) {
-    throw new Error("Invalid or expired test session.");
+  const instanceRef = doc(db, "dynamicTestInstances", instanceId);
+  const fetchDoc = async () => {
+    const instanceSnap = await getDoc(instanceRef);
+    if (instanceSnap.exists() && instanceSnap.data().userId === userId) {
+      return instanceSnap.data();
+    }
+    return null;
+  };
+  let data = await fetchDoc();
+  if (!data) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    data = await fetchDoc();
   }
-  return instanceSnap.data();
+  return data;
 }
 
+// Helper function to check if two dates are on the same calendar day
+const isSameDay = (date1, date2) => {
+    if (!date1 || !date2) return false;
+    return date1.getFullYear() === date2.getFullYear() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getDate() === date2.getDate();
+};
+
+// Helper function to check if two dates are on consecutive calendar days
+const areConsecutiveTestDays = (date1, date2) => {
+    if (!date1 || !date2) return false;
+    const d1 = new Date(date1.toDate().setHours(0, 0, 0, 0));
+    const d2 = new Date(date2.setHours(0, 0, 0, 0));
+    const diffTime = d2 - d1;
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays === 1;
+};
+
 export default function TakeDynamicTestPage() {
-  const [instance, setInstance] = useState(null);
+  const [instanceData, setInstanceData] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedOptions, setSelectedOptions] = useState({});
   const [timeLeft, setTimeLeft] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [isOffline, setIsOffline] = useState(false);
+  const [testState, setTestState] = useState("loading");
   const [timePerQuestion, setTimePerQuestion] = useState({});
   const [questionStartTime, setQuestionStartTime] = useState(0);
-  const [markedForReview, setMarkedForReview] = useState(new Set());
+  const [markedForReview, setMarkedForReview] = useState(new Set()); // FIX: Corrected useState initialization
   const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
   const [warningInfo, setWarningInfo] = useState({ type: null, count: 0 });
   const [lastQuestionWarningShown, setLastQuestionWarningShown] =
@@ -61,102 +84,216 @@ export default function TakeDynamicTestPage() {
 
   const forceSubmit = useCallback(
     async (reason = "user_submitted") => {
-      if (submitting) return;
-      setSubmitting(true);
-
-      const finalAnswers = { ...selectedOptions };
-      const finalTimePerQuestion = { ...timePerQuestion };
-      const elapsedTime = Date.now() - questionStartTime;
-      finalTimePerQuestion[questions[currentQuestionIndex].id] =
-        (finalTimePerQuestion[questions[currentQuestionIndex].id] || 0) +
-        elapsedTime;
-
-      let score = 0;
-      let correctAnswers = 0;
-      let incorrectAnswers = 0;
-      let skippedAnswers = 0;
-
-      questions.forEach((q) => {
-        if (finalAnswers[q.id] != null) {
-          if (finalAnswers[q.id] === q.correctOption) {
-            score += 4;
-            correctAnswers++;
-          } else {
-            score -= 1;
-            incorrectAnswers++;
-          }
-        } else {
-          skippedAnswers++;
-        }
-      });
-
-      const resultData = {
-        userId: user.uid,
-        testId: instance.sourceTestId,
-        testTitle: instance.testTitle,
-        score,
-        correctAnswers,
-        incorrectAnswers,
-        skippedAnswers,
-        answers: finalAnswers,
-        timePerQuestion: finalTimePerQuestion,
-        totalTimeTaken: instance.estimatedTime * 60 - timeLeft,
-        submittedAt: serverTimestamp(),
-        reasonForSubmission: reason,
-        isDynamic: true,
-      };
+      if (testState === "submitting" || !user || !instanceData) return;
+      setTestState("submitting");
 
       const resultDocRef = doc(collection(db, "mockTestResults"));
-      const userDocRef = doc(db, "users", user.uid);
-      const testDocRef = doc(db, "mockTests", instance.sourceTestId);
-      const instanceDocRef = doc(db, "testInstances", instanceId);
+
       let xpGained = 0;
+
+      const yearMonth = `${new Date().getFullYear()}-${
+        new Date().getMonth() + 1
+      }`;
 
       try {
         await runTransaction(db, async (transaction) => {
-          const userDoc = await transaction.get(userDocRef);
-          if (!userDoc.exists()) throw "User document does not exist!";
-          const userData = userDoc.data();
-
-          const baseXP = 50;
-          const performanceBonus = Math.max(0, correctAnswers * 10);
-          xpGained = baseXP + performanceBonus;
-
-          const lastTestDate = userData.lastTestTaken?.toDate();
-          const now = new Date();
-          let newStreak = userData.testStreak || 0;
-          if (lastTestDate && isSameDay(lastTestDate, now)) {
-            newStreak = newStreak;
-          } else if (
-            lastTestDate &&
-            areConsecutiveTestDays(lastTestDate, now)
-          ) {
-            newStreak++;
-          } else {
-            newStreak = 1;
+          const lastQuestionId = questions[currentQuestionIndex]?.id;
+          let finalTimePerQuestion = { ...timePerQuestion };
+          if (lastQuestionId) {
+            const timeSpent = (Date.now() - questionStartTime) / 1000;
+            finalTimePerQuestion[lastQuestionId] =
+              (finalTimePerQuestion[lastQuestionId] || 0) + timeSpent;
           }
 
-          transaction.set(resultDocRef, { ...resultData, id: resultDocRef.id });
-          transaction.update(userDocRef, {
-            testsTaken: arrayUnion(instance.sourceTestId),
-            xp: increment(xpGained),
-            lastTestTaken: serverTimestamp(),
-            testStreak: newStreak,
+          const finalAnswers = {};
+          for (const qId in selectedOptions) {
+            finalAnswers[qId] = {
+              answer: selectedOptions[qId],
+              timeTaken: finalTimePerQuestion[qId] || 0,
+            };
+          }
+          for (const q of questions) {
+            if (!finalAnswers[q.id]) {
+              finalAnswers[q.id] = {
+                answer: null,
+                timeTaken: finalTimePerQuestion[q.id] || 0,
+              };
+            }
+          }
+
+          let score = 0;
+          const correctAnswersMap = new Map(
+            questions.map((q) => [q.id, q.correctAnswer])
+          );
+          for (const qId in selectedOptions) {
+            if (selectedOptions[qId] === correctAnswersMap.get(qId)) {
+              score++;
+            }
+          }
+          const totalQuestions = questions.length;
+          const incorrectAnswers = totalQuestions - score;
+          const totalTimeTaken = Object.values(finalTimePerQuestion).reduce(
+            (acc, time) => acc + time,
+            0
+          );
+
+          const estimatedTimeInSeconds = instanceData.estimatedTime * 60;
+          const suspiciousTimeThreshold = estimatedTimeInSeconds * 0.15;
+          const resultData = {
+            userId: user.uid,
+            testId: instanceData.originalTestId,
+            instanceId: instanceId,
+            answers: finalAnswers,
+            score,
+            totalQuestions,
+            incorrectAnswers,
+            submissionReason: reason,
+            isDynamic: true,
+            completedAt: new Date(),
+            reviewFlag:
+              totalTimeTaken < suspiciousTimeThreshold
+                ? "low_completion_time"
+                : null,
+            totalTimeTaken: totalTimeTaken,
+          };
+
+          if (isLibraryUser && userProfile?.libraryId) {
+            resultData.libraryId = userProfile.libraryId;
+            resultData.ownerId = userProfile.ownerId;
+          }
+
+          // --- START: GAMIFICATION LOGIC (Identical to static test) ---
+          const userRef = doc(db, "users", user.uid);
+          const userSnap = await transaction.get(userRef);
+          if (!userSnap.exists()) {
+            throw "User document not found!";
+          }
+          const userData = userSnap.data();
+          const updates = {};
+          const newBadges = [];
+
+          const lastStreakDate = userData.lastStreakDay;
+          const today = new Date();
+
+          if (!isSameDay(lastStreakDate?.toDate(), today)) {
+            if (areConsecutiveTestDays(lastStreakDate, today)) {
+              updates.currentStreak = (userData.currentStreak || 0) + 1;
+            } else {
+              updates.currentStreak = 1;
+            }
+            updates.lastStreakDay = today;
+
+            const newStreak = updates.currentStreak || userData.currentStreak;
+            if (
+              newStreak === 7 &&
+              !userData.earnedBadges?.includes("iron_will")
+            )
+              newBadges.push("iron_will");
+            if (
+              newStreak === 15 &&
+              !userData.earnedBadges?.includes("silver_resolve")
+            )
+              newBadges.push("silver_resolve");
+            if (
+              newStreak === 30 &&
+              !userData.earnedBadges?.includes("master_learner")
+            ) {
+              newBadges.push("master_learner");
+              updates.premiumCredits = increment(1);
+            }
+          }
+
+          if (
+            score === totalQuestions &&
+            !userData.earnedBadges?.includes("perfectionist")
+          ) {
+            newBadges.push("perfectionist");
+          }
+          const timeUsedPercentage =
+            totalTimeTaken / (instanceData.estimatedTime * 60);
+          if (
+            timeUsedPercentage < 0.5 &&
+            !userData.earnedBadges?.includes("speed_demon")
+          ) {
+            newBadges.push("speed_demon");
+          }
+
+          if (newBadges.length > 0) {
+            updates.earnedBadges = arrayUnion(...newBadges);
+          }
+
+          xpGained = 50; // Base XP
+          xpGained += score * 2; // XP for correct answers
+
+          if (score / totalQuestions >= 0.8) {
+            xpGained += 25; // Bonus XP
+          }
+
+          const newXp = (userData.xp || 0) + xpGained;
+          let newLevel = userData.level || 1;
+          let xpForNextLevel = newLevel * 100;
+
+          if (newXp >= xpForNextLevel) {
+            newLevel++;
+          }
+
+          transaction.update(userRef, {
+            xp: newXp,
+            level: newLevel,
+            ...updates,
           });
-          transaction.update(testDocRef, { takenCount: increment(1) });
-          transaction.update(instanceDocRef, { status: "completed" });
+          // --- END: GAMIFICATION LOGIC ---
+
+          transaction.set(resultDocRef, resultData);
+
+          const analyticsRef = doc(
+            db,
+            "testAnalytics",
+            instanceData.originalTestId
+          );
+          transaction.update(analyticsRef, {
+            takenCount: increment(1),
+            uniqueTakers: arrayUnion(user.uid),
+          });
+          const mockTestRef = doc(db, "mockTests", instanceData.originalTestId);
+          transaction.update(mockTestRef, {
+            takenCount: increment(1),
+          });
+
+          if (isLibraryUser && userProfile?.libraryId) {
+            const libraryRef = doc(db, "libraries", userProfile?.libraryId);
+            transaction.update(libraryRef, {
+              testCompletions: arrayUnion({
+                takerId: user.uid,
+                testId: instanceData.originalTestId,
+                completedAt: new Date(),
+              }),
+            });
+
+            const monthlyCountRef = doc(
+              db,
+              `users/${user.uid}/monthlyTestCounts/${yearMonth}`
+            );
+            transaction.set(
+              monthlyCountRef,
+              { count: increment(1) },
+              { merge: true }
+            );
+          }
         });
+
         toast.success("Test submitted successfully!");
         router.push(
-          `/mock-tests/results/${resultDocRef.id}?xpGained=${xpGained}`
+          `/mock-tests/results/results-dynamic/${resultDocRef.id}?xpGained=${xpGained}`
         );
       } catch (error) {
-        console.error("Full Test Submission Transaction Error:", error);
-        toast.error("Failed to submit your test. Please try again.");
-        setSubmitting(false);
+        console.error("Error writing test results:", error);
+        toast.error("Failed to submit test.");
+        setTestState("in-progress");
       }
     },
     [
+      instanceData,
       selectedOptions,
       timePerQuestion,
       questions,
@@ -164,296 +301,311 @@ export default function TakeDynamicTestPage() {
       questionStartTime,
       router,
       user,
-      instance,
       instanceId,
-      submitting,
+      testState,
       isLibraryUser,
       userProfile,
-      timeLeft,
     ]
   );
 
   const handleFinalSubmit = () => {
-    const unanswered = questions.filter(
-      (q) => selectedOptions[q.id] == null
-    ).length;
-    if (unanswered > 0) {
-      setWarningInfo({ type: "unanswered", count: unanswered });
+    const unanswered = questions.filter((q) => !selectedOptions[q.id]);
+    const marked = [...markedForReview];
+    if (unanswered.length > 0) {
+      setWarningInfo({ type: "unanswered", count: unanswered.length });
+      setIsWarningModalOpen(true);
+    } else if (marked.length > 0) {
+      setWarningInfo({ type: "review", count: marked.length });
       setIsWarningModalOpen(true);
     } else {
-      forceSubmit();
+      forceSubmit("user_submitted"); // Pass the string literal
     }
   };
 
-  const handleNavigation = (newIndex) => {
-    if (newIndex < 0 || newIndex >= questions.length) return;
-    const elapsedTime = Date.now() - questionStartTime;
-    const qId = questions[currentQuestionIndex].id;
-    setTimePerQuestion((prev) => ({
-      ...prev,
-      [qId]: (prev[qId] || 0) + elapsedTime,
-    }));
-    setCurrentQuestionIndex(newIndex);
-    setQuestionStartTime(Date.now());
+  const goToFirstRelevantQuestion = () => {
+    let firstIndex = -1;
+    if (warningInfo.type === "unanswered") {
+      firstIndex = questions.findIndex((q) => !selectedOptions[q.id]);
+    } else if (warningInfo.type === "review") {
+      const firstMarkedId = [...markedForReview][0];
+      firstIndex = questions.findIndex((q) => q.id === firstMarkedId);
+    }
+    if (firstIndex !== -1) navigateToQuestion(firstIndex);
+    setIsWarningModalOpen(false);
   };
 
   useEffect(() => {
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      setIsOffline(true);
-      setLoading(false);
-      return;
-    }
-
     if (authLoading) return;
     if (!user) {
       toast.error("You must be logged in to start a test.");
-      router.push(`/mock-tests`);
+      router.push(`/mock-tests/${testId}`);
       return;
     }
 
     const loadInstanceAndCheckPermissions = async () => {
+      setTestState("loading");
       try {
-        const testInstance = await getTestInstance(instanceId, user.uid);
-        if (testInstance.status !== "active") {
-          throw new Error("This test session has already been completed.");
+        const data = await getTestInstance(instanceId, user.uid);
+        if (!data || !data.questions || data.questions.length === 0) {
+          toast.error(
+            "This test instance could not be loaded or has no questions."
+          );
+          setTestState("access_denied");
+          return;
         }
-        setInstance(testInstance);
-        setQuestions(testInstance.questions);
-        setTimeLeft(testInstance.estimatedTime * 60);
+
+        const originalTestRef = doc(db, "mockTests", data.originalTestId);
+        const originalTestSnap = await getDoc(originalTestRef);
+        if (!originalTestSnap.exists()) {
+          throw new Error("Could not find the original test template.");
+        }
+        const isTestPremium = originalTestSnap.data().isPremium;
+
+        if (isTestPremium && !isPremium) {
+          toast.error("This is a premium test. Please upgrade to access.");
+          setTestState("access_denied");
+          return;
+        }
+
+        setInstanceData(data);
+        setQuestions(data.questions);
+        setTimeLeft(data.estimatedTime * 60);
+        setTestState("in-progress");
+        setQuestionStartTime(Date.now());
       } catch (error) {
+        setTestState("error");
         toast.error(error.message);
         router.push("/mock-tests");
-      } finally {
-        setLoading(false);
       }
     };
 
     loadInstanceAndCheckPermissions();
-  }, [instanceId, user, authLoading, router]);
+  }, [instanceId, user, authLoading, router, isPremium]);
 
   useEffect(() => {
-    if (loading || submitting || isOffline) return;
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          forceSubmit("time_up");
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [loading, submitting, forceSubmit, isOffline]);
+    if (testState !== "in-progress" || timeLeft <= 0) {
+      if (timeLeft <= 0 && testState === "in-progress") {
+        forceSubmit("time_up"); // Pass the string literal
+      }
+      return;
+    }
+    const timerId = setInterval(
+      () => setTimeLeft((prev) => Math.max(0, prev - 1)),
+      1000
+    );
+    return () => clearInterval(timerId);
+  }, [timeLeft, testState, forceSubmit]);
 
-  const currentQuestion = questions[currentQuestionIndex];
-  const formatTime = (seconds) => {
-    const h = Math.floor(seconds / 3600)
-      .toString()
-      .padStart(2, "0");
-    const m = Math.floor((seconds % 3600) / 60)
-      .toString()
-      .padStart(2, "0");
-    const s = (seconds % 60).toString().padStart(2, "0");
-    return `${h}:${m}:${s}`;
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && testState === "in-progress") {
+        toast.error(
+          "You switched tabs. The test will be submitted automatically.",
+          { duration: 5000 }
+        );
+        forceSubmit("tab_switched"); // Pass the string literal
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [testState, forceSubmit]);
+
+  const navigateToQuestion = (newIndex) => {
+    if (newIndex < 0 || newIndex >= questions.length) return;
+    const timeSpent = (Date.now() - questionStartTime) / 1000;
+    const currentQuestionId = questions[currentQuestionIndex].id;
+    setTimePerQuestion((prev) => ({
+      ...prev,
+      [currentQuestionId]: (prev[currentQuestionId] || 0) + timeSpent,
+    }));
+    if (newIndex === questions.length - 1 && !lastQuestionWarningShown) {
+      toast.success(
+        "This is the last question. Review your answers before submitting."
+      );
+      setLastQuestionWarningShown(true);
+    }
+    setCurrentQuestionIndex(newIndex);
+    setQuestionStartTime(Date.now());
   };
 
-  const handleOptionSelect = (qId, optionIndex) => {
-    setSelectedOptions((prev) => ({ ...prev, [qId]: optionIndex }));
+  const handleAnswerSelect = (questionId, option) => {
+    setSelectedOptions((prev) => {
+      const newSelected = { ...prev };
+      if (newSelected[questionId] === option) {
+        delete newSelected[questionId];
+      } else {
+        newSelected[questionId] = option;
+      }
+      return newSelected;
+    });
   };
 
   const handleMarkForReview = () => {
-    const qId = currentQuestion.id;
-    setMarkedForReview((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(qId)) newSet.delete(qId);
-      else newSet.add(qId);
-      return newSet;
-    });
+    const currentQuestionId = questions[currentQuestionIndex]?.id;
+    if (!currentQuestionId) return;
+    const newMarkedSet = new Set(markedForReview);
+    if (newMarkedSet.has(currentQuestionId)) {
+      newMarkedSet.delete(currentQuestionId);
+    } else {
+      newMarkedSet.add(currentQuestionId);
+    }
+    setMarkedForReview(newMarkedSet);
   };
 
-  const clearSelection = () => {
-    const qId = currentQuestion.id;
-    setSelectedOptions((prev) => {
-      const newOptions = { ...prev };
-      delete newOptions[qId];
-      return newOptions;
-    });
-  };
-
-  if (loading || authLoading) {
+  if (testState === "loading" || authLoading) {
     return (
       <div className='flex justify-center items-center h-screen bg-slate-100'>
         <p className='text-lg font-medium text-slate-800'>
-          Preparing Your Dynamic Test...
+          Preparing Your Test...
         </p>
       </div>
     );
   }
 
-  if (isOffline) {
+  if (testState === "access_denied") {
     return (
       <div className='flex flex-col justify-center items-center h-screen bg-slate-100 text-center p-4'>
-        <WifiOff className='h-16 w-16 text-red-500 mb-4' />
-        <h1 className='text-2xl font-bold'>Offline Mode</h1>
+        <div className='mx-auto w-16 h-16 flex items-center justify-center bg-amber-100 rounded-full'>
+          <Lock className='h-8 w-8 text-amber-600' />
+        </div>
+        <h1 className='mt-6 text-2xl font-bold text-slate-900'>
+          Premium Test Locked
+        </h1>
         <p className='mt-2 text-slate-700'>
-          Dynamic tests require an internet connection and cannot be taken
-          offline.
+          You need a premium subscription to access this test.
         </p>
-        <div className='mt-6'>
-          <Link
-            href='/dashboard'
-            className='px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700'
-          >
-            Back to Dashboard
-          </Link>
+        <Link
+          href='/dashboard'
+          className='mt-6 inline-block px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700'
+        >
+          Upgrade to Premium
+        </Link>
+      </div>
+    );
+  }
+
+  if (testState === "error") {
+    return (
+      <div className='flex justify-center items-center h-screen bg-slate-100 text-center p-4'>
+        <div>
+          <p className='text-xl font-bold text-red-600'>
+            An Error Occurred While Loading the Test
+          </p>
         </div>
       </div>
     );
   }
 
-  if (!instance || !currentQuestion) {
-    return (
-      <div className='text-center py-20'>
-        An error occurred. Please go back and try again.
-      </div>
-    );
-  }
+  const currentQuestion = questions[currentQuestionIndex];
+  const minutes = Math.floor(timeLeft / 60);
+  const seconds = timeLeft % 60;
+  const isCurrentMarked = markedForReview.has(currentQuestion?.id);
 
   return (
     <>
       <FinalWarningModal
         isOpen={isWarningModalOpen}
         onClose={() => setIsWarningModalOpen(false)}
-        onConfirm={() => {
-          setIsWarningModalOpen(false);
-          forceSubmit();
-        }}
-        warningInfo={warningInfo}
+        onConfirmSubmit={() => forceSubmit("user_submitted")}
+        onGoToQuestion={goToFirstRelevantQuestion}
+        warningType={warningInfo.type}
+        count={warningInfo.count}
       />
-      <div className='flex flex-col lg:flex-row h-screen bg-slate-100 font-sans'>
-        <div className='flex-1 p-4 lg:p-8 flex flex-col'>
-          <header className='mb-4'>
-            <h1 className='text-xl lg:text-2xl font-bold text-slate-800'>
-              {instance.testTitle}
-            </h1>
-            <div className='flex items-center justify-between text-sm text-slate-600 mt-2'>
-              <p>
-                Question {currentQuestionIndex + 1} of {questions.length}
-              </p>
-              <div
-                className={`flex items-center gap-2 font-bold ${
-                  timeLeft < 300 ? "text-red-500" : "text-slate-800"
-                }`}
-              >
-                <Timer size={20} />
-                <span>{formatTime(timeLeft)}</span>
+      <div className='bg-slate-100 min-h-screen p-4'>
+        <div className='container mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8'>
+          <div className='lg:col-span-8'>
+            <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-xl'>
+              {currentQuestion && (
+                <div>
+                  <div className='flex justify-between items-start mb-4'>
+                    <h2 className='text-lg font-semibold text-slate-900'>
+                      Question {currentQuestionIndex + 1} of {questions.length}
+                    </h2>
+                    <div
+                      className={`text-xl font-bold px-4 py-1 rounded-full ${
+                        timeLeft < 60
+                          ? "text-red-600 bg-red-100"
+                          : "text-slate-800"
+                      }`}
+                    >
+                      {`${minutes}:${seconds < 10 ? "0" : ""}${seconds}`}
+                    </div>
+                  </div>
+                  <SvgDisplayer
+                    svgCode={currentQuestion.questionSvgCode}
+                    className='w-full h-auto min-h-[12rem] border-2 border-slate-200 rounded-lg p-4 bg-slate-50 mb-6 flex items-center'
+                  />
+                  <div className='space-y-4'>
+                    {currentQuestion.options.map((option, index) => (
+                      <button
+                        key={index}
+                        onClick={() =>
+                          handleAnswerSelect(currentQuestion.id, option)
+                        }
+                        className={`block w-full text-left p-4 border-2 rounded-lg transition-all duration-200 text-base md:text-lg font-medium ${
+                          selectedOptions[currentQuestion.id] === option
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-md"
+                            : "bg-white text-slate-900 border-slate-300 hover:border-indigo-500 hover:bg-indigo-50"
+                        }`}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className='flex flex-col sm:flex-row justify-between items-center mt-10 pt-6 border-t border-slate-200 gap-4'>
+                <button
+                  onClick={() => navigateToQuestion(currentQuestionIndex - 1)}
+                  disabled={currentQuestionIndex === 0}
+                  className='w-full sm:w-auto px-8 py-3 bg-slate-200 text-slate-800 font-semibold rounded-lg disabled:opacity-50 hover:bg-slate-300'
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={handleMarkForReview}
+                  className={`w-full sm:w-auto px-8 py-3 font-semibold rounded-lg transition-colors ${
+                    isCurrentMarked
+                      ? "bg-purple-600 text-white hover:bg-purple-700"
+                      : "bg-slate-200 text-slate-800 hover:bg-slate-300"
+                  }`}
+                >
+                  {isCurrentMarked ? "Unmark Review" : "Mark for Review"}
+                </button>
+                {currentQuestionIndex === questions.length - 1 ? (
+                  <button
+                    onClick={handleFinalSubmit}
+                    disabled={testState === "submitting"}
+                    className='w-full sm:w-auto px-8 py-3 bg-green-600 text-white font-semibold rounded-lg'
+                  >
+                    {testState === "submitting"
+                      ? "Submitting..."
+                      : "Submit Test"}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => navigateToQuestion(currentQuestionIndex + 1)}
+                    disabled={currentQuestionIndex === questions.length - 1}
+                    className='w-full sm:w-auto px-8 py-3 bg-indigo-600 text-white font-semibold rounded-lg disabled:opacity-50 hover:bg-indigo-700'
+                  >
+                    Next
+                  </button>
+                )}
               </div>
             </div>
-          </header>
-          <div className='bg-white p-6 rounded-lg shadow-md flex-1 overflow-y-auto'>
-            <h2 className='text-lg font-semibold mb-4 text-slate-900'>
-              {currentQuestion.text}
-            </h2>
-            {currentQuestion.imageUrl && (
-              <img
-                src={currentQuestion.imageUrl}
-                alt='Question visual'
-                className='my-4 rounded-lg max-w-full'
-              />
-            )}
-            {currentQuestion.svg && (
-              <SvgDisplayer svgXML={currentQuestion.svg} />
-            )}
-            <div className='space-y-3'>
-              {currentQuestion.options.map((option, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleOptionSelect(currentQuestion.id, index)}
-                  className={`flex items-center w-full text-left p-4 rounded-lg border-2 transition-all duration-200
-                                        ${
-                                          selectedOptions[
-                                            currentQuestion.id
-                                          ] === index
-                                            ? "bg-indigo-100 border-indigo-500 ring-2 ring-indigo-300"
-                                            : "bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-slate-300"
-                                        }`}
-                >
-                  <span
-                    className={`font-bold mr-4 ${
-                      selectedOptions[currentQuestion.id] === index
-                        ? "text-indigo-600"
-                        : "text-slate-500"
-                    }`}
-                  >
-                    {String.fromCharCode(65 + index)}
-                  </span>
-                  <span
-                    className={`${
-                      selectedOptions[currentQuestion.id] === index
-                        ? "text-slate-900"
-                        : "text-slate-800"
-                    }`}
-                  >
-                    {option}
-                  </span>
-                </button>
-              ))}
-            </div>
           </div>
-          <footer className='mt-4 flex flex-wrap gap-2 justify-between'>
-            <button
-              onClick={() => handleNavigation(currentQuestionIndex - 1)}
-              disabled={currentQuestionIndex === 0}
-              className='px-6 py-2 bg-slate-300 text-slate-800 font-semibold rounded-lg hover:bg-slate-400 disabled:opacity-50'
-            >
-              Previous
-            </button>
-            <div className='flex gap-2'>
-              <button
-                onClick={handleMarkForReview}
-                className={`px-4 py-2 font-semibold rounded-lg ${
-                  markedForReview.has(currentQuestion.id)
-                    ? "bg-yellow-400 text-yellow-900"
-                    : "bg-slate-300 text-slate-800"
-                }`}
-              >
-                {markedForReview.has(currentQuestion.id)
-                  ? "Unmark Review"
-                  : "Mark for Review"}
-              </button>
-              <button
-                onClick={clearSelection}
-                className='px-4 py-2 bg-slate-300 text-slate-800 font-semibold rounded-lg'
-              >
-                Clear
-              </button>
+          <div className='lg:col-span-4'>
+            <div className='sticky top-4'>
+              <QuestionPalette
+                questions={questions}
+                currentQuestionIndex={currentQuestionIndex}
+                selectedOptions={selectedOptions}
+                markedForReview={markedForReview}
+                onQuestionSelect={navigateToQuestion}
+              />
             </div>
-            <button
-              onClick={() => handleNavigation(currentQuestionIndex + 1)}
-              disabled={currentQuestionIndex === questions.length - 1}
-              className='px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-50'
-            >
-              Next
-            </button>
-          </footer>
-        </div>
-        <div className='w-full lg:w-80 bg-white p-4 lg:p-6 border-t lg:border-l border-slate-200 flex flex-col'>
-          <QuestionPalette
-            questions={questions}
-            currentQuestionIndex={currentQuestionIndex}
-            selectedOptions={selectedOptions}
-            markedForReview={markedForReview}
-            onQuestionSelect={handleNavigation}
-          />
-          <div className='mt-auto pt-4'>
-            <button
-              onClick={handleFinalSubmit}
-              disabled={submitting}
-              className='w-full px-6 py-3 bg-green-600 text-white font-bold text-lg rounded-lg hover:bg-green-700 disabled:bg-green-400'
-            >
-              {submitting ? "Submitting..." : "Submit Test"}
-            </button>
           </div>
         </div>
       </div>
