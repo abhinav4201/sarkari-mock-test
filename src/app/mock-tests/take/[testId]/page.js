@@ -1,3 +1,5 @@
+// src/app/mock-tests/take/[testId]/page.js
+
 "use client";
 
 import QuestionPalette from "@/components/mock-tests/QuestionPalette";
@@ -5,7 +7,6 @@ import FinalWarningModal from "@/components/ui/FinalWarningModal";
 import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import { getCachedTest, saveOfflineResult } from "@/lib/indexedDb";
 import {
   arrayUnion,
   collection,
@@ -25,65 +26,40 @@ import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
 async function getTestData(testId) {
-  try {
-    if (!navigator.onLine) {
-      throw new Error("Offline mode detected.");
-    }
-    const testRef = doc(db, "mockTests", testId);
-    const questionsQuery = query(
-      collection(db, "mockTestQuestions"),
-      where("testId", "==", testId)
-    );
-    const [testSnap, questionsSnap] = await Promise.all([
-      getDoc(testRef),
-      getDocs(questionsQuery),
-    ]);
-
-    if (!testSnap.exists()) {
-      throw new Error("Online test not found. Checking cache...");
-    }
-
-    const testDetails = {
-      id: testSnap.id,
-      ...testSnap.data(),
-      isOffline: false,
-    };
-    const questions = questionsSnap.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-    return { testDetails, questions };
-  } catch (onlineError) {
-    console.warn(onlineError.message);
-    toast.info("You are offline. Loading test from local storage.");
-    const cachedTest = await getCachedTest(testId);
-
-    if (cachedTest) {
-      return {
-        testDetails: { ...cachedTest, isOffline: true },
-        questions: cachedTest.questions,
-      };
-    }
-    return null;
-  }
+  const testRef = doc(db, "mockTests", testId);
+  const questionsQuery = query(
+    collection(db, "mockTestQuestions"),
+    where("testId", "==", testId)
+  );
+  const [testSnap, questionsSnap] = await Promise.all([
+    getDoc(testRef),
+    getDocs(questionsQuery),
+  ]);
+  if (!testSnap.exists()) return null;
+  const testDetails = { id: testSnap.id, ...testSnap.data() };
+  const questions = questionsSnap.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
+  return { testDetails, questions };
 }
 
+// Helper function to check if two dates are on the same calendar day
 const isSameDay = (date1, date2) => {
-  if (!date1 || !date2) return false;
-  return (
-    date1.getFullYear() === date2.getFullYear() &&
-    date1.getMonth() === date2.getMonth() &&
-    date1.getDate() === date2.getDate()
-  );
+    if (!date1 || !date2) return false;
+    return date1.getFullYear() === date2.getFullYear() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getDate() === date2.getDate();
 };
 
+// Helper function to check if two dates are on consecutive calendar days
 const areConsecutiveTestDays = (date1, date2) => {
-  if (!date1 || !date2) return false;
-  const d1 = new Date(date1.toDate().setHours(0, 0, 0, 0));
-  const d2 = new Date(date2.setHours(0, 0, 0, 0));
-  const diffTime = d2 - d1;
-  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays === 1;
+    if (!date1 || !date2) return false;
+    const d1 = new Date(date1.toDate().setHours(0, 0, 0, 0));
+    const d2 = new Date(date2.setHours(0, 0, 0, 0));
+    const diffTime = d2 - d1;
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays === 1;
 };
 
 export default function TestTakingPage() {
@@ -116,89 +92,101 @@ export default function TestTakingPage() {
     async (reason = "user_submitted") => {
       if (testState === "submitting" || !user) return;
       setTestState("submitting");
-
-      const lastQuestionId = questions[currentQuestionIndex]?.id;
-      let finalTimePerQuestion = { ...timePerQuestion };
-      if (lastQuestionId) {
-        const timeSpent = (Date.now() - questionStartTime) / 1000;
-        finalTimePerQuestion[lastQuestionId] =
-          (finalTimePerQuestion[lastQuestionId] || 0) + timeSpent;
-      }
-      const finalAnswers = {};
-      questions.forEach((q) => {
-        finalAnswers[q.id] = {
-          answer: selectedOptions[q.id] || null,
-          timeTaken: finalTimePerQuestion[q.id] || 0,
-        };
-      });
-      let score = 0;
-      const correctAnswersMap = new Map(
-        questions.map((q) => [q.id, q.correctAnswer])
-      );
-      for (const qId in selectedOptions) {
-        if (selectedOptions[qId] === correctAnswersMap.get(qId)) {
-          score++;
-        }
-      }
-      const totalQuestions = questions.length;
-      const totalTimeTaken = Object.values(finalTimePerQuestion).reduce(
-        (acc, time) => acc + time,
-        0
-      );
-
-      const resultData = {
-        userId: user.uid,
-        testId,
-        answers: finalAnswers,
-        score,
-        totalQuestions,
-        incorrectAnswers: totalQuestions - score,
-        submissionReason: reason,
-        isDynamic: false,
-        totalTimeTaken: totalTimeTaken,
-        ...(isLibraryUser &&
-          userProfile?.libraryId && {
-            libraryId: userProfile.libraryId,
-            ownerId: userProfile.ownerId,
-          }),
-      };
-
-      if (testDetails.isOffline) {
-        try {
-          await saveOfflineResult(resultData);
-          toast.success(
-            "You are offline. Result saved locally and will sync later.",
-            { duration: 5000 }
-          );
-          router.push("/dashboard");
-        } catch (offlineError) {
-          toast.error(
-            "Could not save result offline. Please take a screenshot of your score."
-          );
-          setTestState("in-progress");
-        }
-        return;
-      }
-
       const resultDocRef = doc(collection(db, "mockTestResults"));
+
       let xpGained = 0;
+
       try {
         await runTransaction(db, async (transaction) => {
+          const lastQuestionId = questions[currentQuestionIndex]?.id;
+          let finalTimePerQuestion = { ...timePerQuestion };
+          if (lastQuestionId) {
+            const timeSpent = (Date.now() - questionStartTime) / 1000;
+            finalTimePerQuestion[lastQuestionId] =
+              (finalTimePerQuestion[lastQuestionId] || 0) + timeSpent;
+          }
+
+          const finalAnswers = {};
+          for (const qId in selectedOptions) {
+            finalAnswers[qId] = {
+              answer: selectedOptions[qId],
+              timeTaken: finalTimePerQuestion[qId] || 0,
+            };
+          }
+          for (const q of questions) {
+            if (!finalAnswers[q.id]) {
+              finalAnswers[q.id] = {
+                answer: null,
+                timeTaken: finalTimePerQuestion[q.id] || 0,
+              };
+            }
+          }
+
+          let score = 0;
+          const correctAnswersMap = new Map(
+            questions.map((q) => [q.id, q.correctAnswer])
+          );
+          for (const qId in selectedOptions) {
+            if (selectedOptions[qId] === correctAnswersMap.get(qId)) {
+              score++;
+            }
+          }
+          const totalQuestions = questions.length;
+          const incorrectAnswers = totalQuestions - score;
+
+          const totalTimeTaken = Object.values(finalTimePerQuestion).reduce(
+            (acc, time) => acc + time,
+            0
+          );
+
+          const estimatedTimeInSeconds = testDetails.estimatedTime * 60;
+          const suspiciousTimeThreshold = estimatedTimeInSeconds * 0.15;
+
+          const resultData = {
+            userId: user.uid,
+            testId,
+            answers: finalAnswers,
+            score,
+            totalQuestions,
+            incorrectAnswers,
+            submissionReason: reason,
+            isDynamic: false,
+            completedAt: serverTimestamp(),
+            reviewFlag:
+              totalTimeTaken < suspiciousTimeThreshold
+                ? "low_completion_time"
+                : null,
+            totalTimeTaken: totalTimeTaken,
+          };
+
+          if (isLibraryUser && userProfile?.libraryId) {
+            resultData.libraryId = userProfile.libraryId;
+            resultData.ownerId = userProfile.ownerId;
+          }
+
+          // --- START: GAMIFICATION LOGIC ---
           const userRef = doc(db, "users", user.uid);
           const userSnap = await transaction.get(userRef);
-          if (!userSnap.exists()) throw "User not found";
+          if (!userSnap.exists()) {
+            throw "User document not found!";
+          }
           const userData = userSnap.data();
+
           const updates = {};
           const newBadges = [];
+
           const lastStreakDate = userData.lastStreakDay;
           const today = new Date();
+
           if (!isSameDay(lastStreakDate?.toDate(), today)) {
             if (areConsecutiveTestDays(lastStreakDate, today)) {
               updates.currentStreak = (userData.currentStreak || 0) + 1;
             } else {
-              updates.currentStreak = 1;
+              updates.currentStreak = 1; // Reset streak
             }
             updates.lastStreakDay = today;
+
+            // 2. Check for Streak Milestone Badges
             const newStreak = updates.currentStreak || userData.currentStreak;
             if (
               newStreak === 7 &&
@@ -215,92 +203,157 @@ export default function TestTakingPage() {
               !userData.earnedBadges?.includes("master_learner")
             ) {
               newBadges.push("master_learner");
-              updates.premiumCredits = increment(1);
+              updates.premiumCredits = increment(1); // Award premium credit
             }
           }
+
+          // 3. Check for Performance Badges
           if (
             score === totalQuestions &&
             !userData.earnedBadges?.includes("perfectionist")
-          )
+          ) {
             newBadges.push("perfectionist");
+          }
           const timeUsedPercentage =
             totalTimeTaken / (testDetails.estimatedTime * 60);
           if (
             timeUsedPercentage < 0.5 &&
             !userData.earnedBadges?.includes("speed_demon")
-          )
+          ) {
             newBadges.push("speed_demon");
-          if (newBadges.length > 0)
+          }
+
+          if (newBadges.length > 0) {
             updates.earnedBadges = arrayUnion(...newBadges);
-          xpGained = 50 + score * 2 + (score / totalQuestions >= 0.8 ? 25 : 0);
+          }
+
+          xpGained = 50; // Base XP for completing a test
+          xpGained += score * 2; // XP for correct answers
+
+          // Bonus for high score
+          if (score / totalQuestions >= 0.8) {
+            xpGained += 25;
+          }
+
           const newXp = (userData.xp || 0) + xpGained;
           let newLevel = userData.level || 1;
-          if (newXp >= newLevel * 100) newLevel++;
+          let xpForNextLevel = newLevel * 100;
+
+          // Check for level up
+          if (newXp >= xpForNextLevel) {
+            newLevel++;
+          }
+
           transaction.update(userRef, {
             xp: newXp,
             level: newLevel,
             ...updates,
           });
-          transaction.set(resultDocRef, {
-            ...resultData,
-            completedAt: serverTimestamp(),
-          });
+          // --- END: GAMIFICATION LOGIC ---
+
+          // --- LOGGING START ---
+          try {
+            transaction.set(resultDocRef, resultData);
+          } catch (e) {
+            console.error(
+              "Error in transaction step 1 (mockTestResults.set):",
+              e
+            );
+            throw e;
+          }
+
+          // Transaction Step 2: Create or update the analytics document
           const analyticsRef = doc(db, "testAnalytics", testId);
           transaction.set(
             analyticsRef,
             {
               takenCount: increment(1),
               uniqueTakers: arrayUnion(user.uid),
+              // Ensure essential data is present if the doc is new
               testId: testId,
               createdBy: testDetails.createdBy,
             },
-            { merge: true }
+            { merge: true } // This creates the doc if it doesn't exist
           );
+
           const mockTestRef = doc(db, "mockTests", testId);
-          transaction.update(mockTestRef, { takenCount: increment(1) });
+          const mockTestUpdateData = {
+            takenCount: increment(1),
+          };
+          try {
+            transaction.update(mockTestRef, mockTestUpdateData);
+          } catch (e) {
+            console.error("Error in transaction step 3 (mockTests.update):", e);
+            throw e;
+          }
+
           if (isLibraryUser && userProfile?.libraryId) {
-            const libraryRef = doc(db, "libraries", userProfile.libraryId);
-            transaction.update(libraryRef, {
+            const libraryRef = doc(db, "libraries", userProfile?.libraryId);
+            const libraryUpdateData = {
               testCompletions: arrayUnion({
                 takerId: user.uid,
                 testId: testId,
                 completedAt: new Date(),
               }),
-            });
+            };
+            try {
+              transaction.update(libraryRef, libraryUpdateData);
+            } catch (e) {
+              console.error(
+                "Error in transaction step 4 (libraries.update):",
+                e
+              );
+              throw e;
+            }
+
             const yearMonth = `${new Date().getFullYear()}-${
               new Date().getMonth() + 1
             }`;
             const monthlyCountRef = doc(
               db,
-              `users/${user.uid}/monthlyTestCounts/${yearMonth}`
+              "users",
+              user.uid,
+              "monthlyTestCounts",
+              yearMonth
             );
-            transaction.set(
-              monthlyCountRef,
-              { count: increment(1) },
-              { merge: true }
-            );
+            const monthlyCountUpdateData = {
+              count: increment(1),
+            };
+            try {
+              transaction.set(monthlyCountRef, monthlyCountUpdateData, {
+                merge: true,
+              });
+            } catch (e) {
+              console.error(
+                "Error in transaction step 5 (monthlyTestCounts.set):",
+                e
+              );
+              throw e;
+            }
           }
+          // --- LOGGING END ---
         });
+
         toast.success("Test submitted successfully!");
         router.push(
           `/mock-tests/results/${resultDocRef.id}?xpGained=${xpGained}`
         );
-      } catch (error) {
-        console.error("Full Test Submission Transaction Error:", error);
+      }  catch (error) {
+        console.error("Full Test Submission Transaction Error:", error); // Log the overall transaction error
         toast.error("Failed to submit your test. Please try again.");
         setTestState("in-progress");
       }
     },
     [
-      testState,
-      user,
+      selectedOptions,
+      timePerQuestion,
       questions,
       currentQuestionIndex,
       questionStartTime,
-      selectedOptions,
-      timePerQuestion,
-      testId,
       router,
+      user,
+      testId,
+      testState,
       testDetails,
       isLibraryUser,
       userProfile,
@@ -310,6 +363,7 @@ export default function TestTakingPage() {
   const handleFinalSubmit = () => {
     const unanswered = questions.filter((q) => !selectedOptions[q.id]);
     const marked = [...markedForReview];
+
     if (unanswered.length > 0) {
       setWarningInfo({ type: "unanswered", count: unanswered.length });
       setIsWarningModalOpen(true);
@@ -329,7 +383,10 @@ export default function TestTakingPage() {
       const firstMarkedId = [...markedForReview][0];
       firstIndex = questions.findIndex((q) => q.id === firstMarkedId);
     }
-    if (firstIndex !== -1) navigateToQuestion(firstIndex);
+
+    if (firstIndex !== -1) {
+      navigateToQuestion(firstIndex);
+    }
     setIsWarningModalOpen(false);
   };
 
@@ -340,6 +397,7 @@ export default function TestTakingPage() {
       router.push(`/mock-tests/${testId}`);
       return;
     }
+
     const loadTestAndCheckPermissions = async () => {
       setTestState("loading");
       try {
@@ -349,11 +407,13 @@ export default function TestTakingPage() {
           setTestState("access_denied");
           return;
         }
+
         if (data.testDetails.isPremium && !isPremium) {
           toast.error("This is a premium test. Please upgrade to access.");
           setTestState("access_denied");
           return;
         }
+
         setTestDetails(data.testDetails);
         setQuestions(data.questions);
         setTimeLeft(data.testDetails.estimatedTime * 60);
@@ -365,7 +425,10 @@ export default function TestTakingPage() {
         router.push("/mock-tests");
       }
     };
-    if (testId && user) loadTestAndCheckPermissions();
+
+    if (testId && user) {
+      loadTestAndCheckPermissions();
+    }
   }, [testId, user, authLoading, router, isPremium]);
 
   useEffect(() => {
@@ -382,11 +445,7 @@ export default function TestTakingPage() {
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (
-        document.hidden &&
-        testState === "in-progress" &&
-        !testDetails?.isOffline
-      ) {
+      if (document.hidden && testState === "in-progress") {
         toast.error(
           "You switched tabs. The test will be submitted automatically.",
           { duration: 5000 }
@@ -394,12 +453,11 @@ export default function TestTakingPage() {
         forceSubmit("tab_switched");
       }
     };
-    if (!testDetails?.isOffline) {
-      document.addEventListener("visibilitychange", handleVisibilityChange);
-    }
-    return () =>
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [testState, forceSubmit, testDetails]);
+    };
+  }, [testState, forceSubmit]);
 
   const navigateToQuestion = (newIndex) => {
     const timeSpent = (Date.now() - questionStartTime) / 1000;
@@ -408,12 +466,14 @@ export default function TestTakingPage() {
       ...prev,
       [currentQuestionId]: (prev[currentQuestionId] || 0) + timeSpent,
     }));
+
     if (newIndex === questions.length - 1 && !lastQuestionWarningShown) {
       toast.success(
         "This is the last question. Review your answers before submitting."
       );
       setLastQuestionWarningShown(true);
     }
+
     setCurrentQuestionIndex(newIndex);
     setQuestionStartTime(Date.now());
   };
@@ -421,8 +481,11 @@ export default function TestTakingPage() {
   const handleAnswerSelect = (questionId, option) => {
     setSelectedOptions((prev) => {
       const newSelected = { ...prev };
-      if (newSelected[questionId] === option) delete newSelected[questionId];
-      else newSelected[questionId] = option;
+      if (newSelected[questionId] === option) {
+        delete newSelected[questionId];
+      } else {
+        newSelected[questionId] = option;
+      }
       return newSelected;
     });
   };
@@ -430,17 +493,22 @@ export default function TestTakingPage() {
   const handleMarkForReview = () => {
     const currentQuestionId = questions[currentQuestionIndex]?.id;
     if (!currentQuestionId) return;
+
     const newMarkedSet = new Set(markedForReview);
-    if (newMarkedSet.has(currentQuestionId))
+    if (newMarkedSet.has(currentQuestionId)) {
       newMarkedSet.delete(currentQuestionId);
-    else newMarkedSet.add(currentQuestionId);
+    } else {
+      newMarkedSet.add(currentQuestionId);
+    }
     setMarkedForReview(newMarkedSet);
   };
 
   if (testState === "loading" || authLoading) {
     return (
       <div className='flex justify-center items-center h-screen bg-slate-100'>
-        <p>Preparing Your Test...</p>
+        <p className='text-lg font-medium text-slate-800'>
+          Preparing Your Test...
+        </p>
       </div>
     );
   }
@@ -465,10 +533,16 @@ export default function TestTakingPage() {
       </div>
     );
   }
+
   if (testState === "error") {
     return (
-      <div className='flex justify-center items-center h-screen bg-slate-100'>
-        <p>Failed to Load Test</p>
+      <div className='flex justify-center items-center h-screen bg-slate-100 text-center p-4'>
+        <div>
+          <p className='text-xl font-bold text-red-600'>Failed to Load Test</p>
+          <p className='text-slate-700 mt-2'>
+            This test may not exist or has no questions.
+          </p>
+        </div>
       </div>
     );
   }
@@ -496,7 +570,10 @@ export default function TestTakingPage() {
                 <div>
                   <div className='flex justify-between items-start mb-4'>
                     <h2 className='text-lg font-semibold text-slate-900'>
-                      Question {currentQuestionIndex + 1} of {questions.length}
+                      Question {currentQuestionIndex + 1}{" "}
+                      <span className='font-medium text-slate-600'>
+                        of {questions.length}
+                      </span>
                     </h2>
                     <div
                       className={`text-xl font-bold px-4 py-1 rounded-full ${
@@ -531,7 +608,9 @@ export default function TestTakingPage() {
                   </div>
                 </div>
               ) : (
-                <p>Loading questions...</p>
+                <div className='text-center p-8'>
+                  <p className='text-slate-800'>Loading questions...</p>
+                </div>
               )}
               <div className='flex flex-col sm:flex-row justify-between items-center mt-10 pt-6 border-t border-slate-200 gap-4'>
                 <button

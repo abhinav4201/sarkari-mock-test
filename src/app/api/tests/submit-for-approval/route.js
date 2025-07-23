@@ -14,8 +14,15 @@ export async function POST(request) {
     const decodedToken = await adminAuth.verifyIdToken(userToken);
     const userId = decodedToken.uid;
 
-    const { title, topic, subject, examName, estimatedTime, isPremium } =
-      await request.json();
+    const {
+      title,
+      topic,
+      subject,
+      examName,
+      estimatedTime,
+      isPremium,
+      isHidden,
+    } = await request.json();
 
     if (
       !title ||
@@ -78,10 +85,11 @@ export async function POST(request) {
       status: "approved",
       monetizationStatus: "pending_review",
       likeCount: 0,
-      takenCount: 0, // NEW: Initialize takenCount here
+      takenCount: 0,
       questionCount: 0,
       isPremium: isPremium || false,
       isDynamic: false,
+      isHidden: isHidden || false, // Save the isHidden flag
       createdAt: FieldValue.serverTimestamp(),
       submitterInfo: { ip, userAgent: request.headers.get("user-agent") },
     };
@@ -93,12 +101,12 @@ export async function POST(request) {
       testId: newTestRef.id,
       createdBy: userId,
       impressionCount: 0,
-      takenCount: 0, // This is for the analytics document, kept for consistency
+      takenCount: 0,
       uniqueTakers: [],
     });
 
     return NextResponse.json(
-      { message: "Test submitted successfully!", newTestId: newTestRef.id },
+      { message: "Test submitted successfully!", testId: newTestRef.id },
       { status: 201 }
     );
   } catch (error) {

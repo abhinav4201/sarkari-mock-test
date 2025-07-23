@@ -1,3 +1,5 @@
+// src/app/mock-tests/take/take-dynamic/[instanceId]/page.js
+
 "use client";
 
 import QuestionPalette from "@/components/mock-tests/QuestionPalette";
@@ -5,7 +7,6 @@ import FinalWarningModal from "@/components/ui/FinalWarningModal";
 import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import { saveOfflineResult } from "@/lib/indexedDb";
 import {
   arrayUnion,
   collection,
@@ -13,7 +14,6 @@ import {
   getDoc,
   increment,
   runTransaction,
-  serverTimestamp,
 } from "firebase/firestore";
 import { Lock } from "lucide-react";
 import Link from "next/link";
@@ -23,29 +23,37 @@ import toast from "react-hot-toast";
 
 async function getTestInstance(instanceId, userId) {
   const instanceRef = doc(db, "dynamicTestInstances", instanceId);
-  const instanceSnap = await getDoc(instanceRef);
-  if (instanceSnap.exists() && instanceSnap.data().userId === userId) {
-    return { ...instanceSnap.data(), isOffline: !navigator.onLine };
+  const fetchDoc = async () => {
+    const instanceSnap = await getDoc(instanceRef);
+    if (instanceSnap.exists() && instanceSnap.data().userId === userId) {
+      return instanceSnap.data();
+    }
+    return null;
+  };
+  let data = await fetchDoc();
+  if (!data) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    data = await fetchDoc();
   }
-  return null;
+  return data;
 }
 
+// Helper function to check if two dates are on the same calendar day
 const isSameDay = (date1, date2) => {
-  if (!date1 || !date2) return false;
-  return (
-    date1.getFullYear() === date2.getFullYear() &&
-    date1.getMonth() === date2.getMonth() &&
-    date1.getDate() === date2.getDate()
-  );
+    if (!date1 || !date2) return false;
+    return date1.getFullYear() === date2.getFullYear() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getDate() === date2.getDate();
 };
 
+// Helper function to check if two dates are on consecutive calendar days
 const areConsecutiveTestDays = (date1, date2) => {
-  if (!date1 || !date2) return false;
-  const d1 = new Date(date1.toDate().setHours(0, 0, 0, 0));
-  const d2 = new Date(date2.setHours(0, 0, 0, 0));
-  const diffTime = d2 - d1;
-  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays === 1;
+    if (!date1 || !date2) return false;
+    const d1 = new Date(date1.toDate().setHours(0, 0, 0, 0));
+    const d2 = new Date(date2.setHours(0, 0, 0, 0));
+    const diffTime = d2 - d1;
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays === 1;
 };
 
 export default function TakeDynamicTestPage() {
@@ -57,13 +65,19 @@ export default function TakeDynamicTestPage() {
   const [testState, setTestState] = useState("loading");
   const [timePerQuestion, setTimePerQuestion] = useState({});
   const [questionStartTime, setQuestionStartTime] = useState(0);
-  const [markedForReview, setMarkedForReview] = useState(new Set());
+  const [markedForReview, setMarkedForReview] = useState(new Set()); // FIX: Corrected useState initialization
   const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
   const [warningInfo, setWarningInfo] = useState({ type: null, count: 0 });
   const [lastQuestionWarningShown, setLastQuestionWarningShown] =
     useState(false);
 
-  const { user, loading: authLoading, isLibraryUser, userProfile } = useAuth();
+  const {
+    user,
+    loading: authLoading,
+    isPremium,
+    isLibraryUser,
+    userProfile,
+  } = useAuth();
   const router = useRouter();
   const params = useParams();
   const { instanceId } = params;
@@ -73,80 +87,94 @@ export default function TakeDynamicTestPage() {
       if (testState === "submitting" || !user || !instanceData) return;
       setTestState("submitting");
 
-      const lastQuestionId = questions[currentQuestionIndex]?.id;
-      let finalTimePerQuestion = { ...timePerQuestion };
-      if (lastQuestionId) {
-        const timeSpent = (Date.now() - questionStartTime) / 1000;
-        finalTimePerQuestion[lastQuestionId] =
-          (finalTimePerQuestion[lastQuestionId] || 0) + timeSpent;
-      }
-      const finalAnswers = {};
-      questions.forEach((q) => {
-        finalAnswers[q.id] = {
-          answer: selectedOptions[q.id] || null,
-          timeTaken: finalTimePerQuestion[q.id] || 0,
-        };
-      });
-      let score = 0;
-      const correctAnswersMap = new Map(
-        questions.map((q) => [q.id, q.correctAnswer])
-      );
-      for (const qId in selectedOptions) {
-        if (selectedOptions[qId] === correctAnswersMap.get(qId)) score++;
-      }
-      const totalQuestions = questions.length;
-      const totalTimeTaken = Object.values(finalTimePerQuestion).reduce(
-        (acc, time) => acc + time,
-        0
-      );
-
-      const resultData = {
-        userId: user.uid,
-        testId: instanceData.originalTestId,
-        instanceId: instanceId,
-        answers: finalAnswers,
-        score,
-        totalQuestions,
-        incorrectAnswers: totalQuestions - score,
-        submissionReason: reason,
-        isDynamic: true,
-        totalTimeTaken: totalTimeTaken,
-        ...(isLibraryUser &&
-          userProfile?.libraryId && {
-            libraryId: userProfile.libraryId,
-            ownerId: userProfile.ownerId,
-          }),
-      };
-
-      if (instanceData.isOffline) {
-        try {
-          await saveOfflineResult(resultData);
-          toast.success(
-            "You are offline. Result saved locally and will sync later.",
-            { duration: 5000 }
-          );
-          router.push("/dashboard");
-        } catch (offlineError) {
-          toast.error(
-            "Could not save result offline. Please take a screenshot of your score."
-          );
-          setTestState("in-progress");
-        }
-        return;
-      }
-
       const resultDocRef = doc(collection(db, "mockTestResults"));
+
       let xpGained = 0;
+
+      const yearMonth = `${new Date().getFullYear()}-${
+        new Date().getMonth() + 1
+      }`;
+
       try {
         await runTransaction(db, async (transaction) => {
+          const lastQuestionId = questions[currentQuestionIndex]?.id;
+          let finalTimePerQuestion = { ...timePerQuestion };
+          if (lastQuestionId) {
+            const timeSpent = (Date.now() - questionStartTime) / 1000;
+            finalTimePerQuestion[lastQuestionId] =
+              (finalTimePerQuestion[lastQuestionId] || 0) + timeSpent;
+          }
+
+          const finalAnswers = {};
+          for (const qId in selectedOptions) {
+            finalAnswers[qId] = {
+              answer: selectedOptions[qId],
+              timeTaken: finalTimePerQuestion[qId] || 0,
+            };
+          }
+          for (const q of questions) {
+            if (!finalAnswers[q.id]) {
+              finalAnswers[q.id] = {
+                answer: null,
+                timeTaken: finalTimePerQuestion[q.id] || 0,
+              };
+            }
+          }
+
+          let score = 0;
+          const correctAnswersMap = new Map(
+            questions.map((q) => [q.id, q.correctAnswer])
+          );
+          for (const qId in selectedOptions) {
+            if (selectedOptions[qId] === correctAnswersMap.get(qId)) {
+              score++;
+            }
+          }
+          const totalQuestions = questions.length;
+          const incorrectAnswers = totalQuestions - score;
+          const totalTimeTaken = Object.values(finalTimePerQuestion).reduce(
+            (acc, time) => acc + time,
+            0
+          );
+
+          const estimatedTimeInSeconds = instanceData.estimatedTime * 60;
+          const suspiciousTimeThreshold = estimatedTimeInSeconds * 0.15;
+          const resultData = {
+            userId: user.uid,
+            testId: instanceData.originalTestId,
+            instanceId: instanceId,
+            answers: finalAnswers,
+            score,
+            totalQuestions,
+            incorrectAnswers,
+            submissionReason: reason,
+            isDynamic: true,
+            completedAt: new Date(),
+            reviewFlag:
+              totalTimeTaken < suspiciousTimeThreshold
+                ? "low_completion_time"
+                : null,
+            totalTimeTaken: totalTimeTaken,
+          };
+
+          if (isLibraryUser && userProfile?.libraryId) {
+            resultData.libraryId = userProfile.libraryId;
+            resultData.ownerId = userProfile.ownerId;
+          }
+
+          // --- START: GAMIFICATION LOGIC (Identical to static test) ---
           const userRef = doc(db, "users", user.uid);
           const userSnap = await transaction.get(userRef);
-          if (!userSnap.exists()) throw "User not found";
+          if (!userSnap.exists()) {
+            throw "User document not found!";
+          }
           const userData = userSnap.data();
           const updates = {};
           const newBadges = [];
+
           const lastStreakDate = userData.lastStreakDay;
           const today = new Date();
+
           if (!isSameDay(lastStreakDate?.toDate(), today)) {
             if (areConsecutiveTestDays(lastStreakDate, today)) {
               updates.currentStreak = (userData.currentStreak || 0) + 1;
@@ -154,6 +182,7 @@ export default function TakeDynamicTestPage() {
               updates.currentStreak = 1;
             }
             updates.lastStreakDay = today;
+
             const newStreak = updates.currentStreak || userData.currentStreak;
             if (
               newStreak === 7 &&
@@ -173,52 +202,66 @@ export default function TakeDynamicTestPage() {
               updates.premiumCredits = increment(1);
             }
           }
+
           if (
             score === totalQuestions &&
             !userData.earnedBadges?.includes("perfectionist")
-          )
+          ) {
             newBadges.push("perfectionist");
+          }
           const timeUsedPercentage =
             totalTimeTaken / (instanceData.estimatedTime * 60);
           if (
             timeUsedPercentage < 0.5 &&
             !userData.earnedBadges?.includes("speed_demon")
-          )
+          ) {
             newBadges.push("speed_demon");
-          if (newBadges.length > 0)
+          }
+
+          if (newBadges.length > 0) {
             updates.earnedBadges = arrayUnion(...newBadges);
-          xpGained = 50 + score * 2 + (score / totalQuestions >= 0.8 ? 25 : 0);
+          }
+
+          xpGained = 50; // Base XP
+          xpGained += score * 2; // XP for correct answers
+
+          if (score / totalQuestions >= 0.8) {
+            xpGained += 25; // Bonus XP
+          }
+
           const newXp = (userData.xp || 0) + xpGained;
           let newLevel = userData.level || 1;
-          if (newXp >= newLevel * 100) newLevel++;
+          let xpForNextLevel = newLevel * 100;
+
+          if (newXp >= xpForNextLevel) {
+            newLevel++;
+          }
+
           transaction.update(userRef, {
             xp: newXp,
             level: newLevel,
             ...updates,
           });
-          transaction.set(resultDocRef, {
-            ...resultData,
-            completedAt: serverTimestamp(),
-          });
+          // --- END: GAMIFICATION LOGIC ---
+
+          transaction.set(resultDocRef, resultData);
+
           const analyticsRef = doc(
             db,
             "testAnalytics",
             instanceData.originalTestId
           );
-          transaction.set(
-            analyticsRef,
-            {
-              takenCount: increment(1),
-              uniqueTakers: arrayUnion(user.uid),
-              testId: instanceData.originalTestId,
-              createdBy: instanceData.createdBy,
-            },
-            { merge: true }
-          );
+          transaction.update(analyticsRef, {
+            takenCount: increment(1),
+            uniqueTakers: arrayUnion(user.uid),
+          });
           const mockTestRef = doc(db, "mockTests", instanceData.originalTestId);
-          transaction.update(mockTestRef, { takenCount: increment(1) });
+          transaction.update(mockTestRef, {
+            takenCount: increment(1),
+          });
+
           if (isLibraryUser && userProfile?.libraryId) {
-            const libraryRef = doc(db, "libraries", userProfile.libraryId);
+            const libraryRef = doc(db, "libraries", userProfile?.libraryId);
             transaction.update(libraryRef, {
               testCompletions: arrayUnion({
                 takerId: user.uid,
@@ -226,9 +269,7 @@ export default function TakeDynamicTestPage() {
                 completedAt: new Date(),
               }),
             });
-            const yearMonth = `${new Date().getFullYear()}-${
-              new Date().getMonth() + 1
-            }`;
+
             const monthlyCountRef = doc(
               db,
               `users/${user.uid}/monthlyTestCounts/${yearMonth}`
@@ -240,13 +281,14 @@ export default function TakeDynamicTestPage() {
             );
           }
         });
+
         toast.success("Test submitted successfully!");
         router.push(
           `/mock-tests/results/results-dynamic/${resultDocRef.id}?xpGained=${xpGained}`
         );
       } catch (error) {
-        console.error("Full Test Submission Transaction Error:", error);
-        toast.error("Failed to submit your test. Please try again.");
+        console.error("Error writing test results:", error);
+        toast.error("Failed to submit test.");
         setTestState("in-progress");
       }
     },
@@ -276,7 +318,7 @@ export default function TakeDynamicTestPage() {
       setWarningInfo({ type: "review", count: marked.length });
       setIsWarningModalOpen(true);
     } else {
-      forceSubmit("user_submitted");
+      forceSubmit("user_submitted"); // Pass the string literal
     }
   };
 
@@ -293,16 +335,38 @@ export default function TakeDynamicTestPage() {
   };
 
   useEffect(() => {
-    if (authLoading || !user) return;
-    const loadInstance = async () => {
+    if (authLoading) return;
+    if (!user) {
+      toast.error("You must be logged in to start a test.");
+      router.push(`/mock-tests/${testId}`);
+      return;
+    }
+
+    const loadInstanceAndCheckPermissions = async () => {
       setTestState("loading");
       try {
         const data = await getTestInstance(instanceId, user.uid);
-        if (!data) {
-          toast.error("This test instance is invalid or has expired.");
+        if (!data || !data.questions || data.questions.length === 0) {
+          toast.error(
+            "This test instance could not be loaded or has no questions."
+          );
           setTestState("access_denied");
           return;
         }
+
+        const originalTestRef = doc(db, "mockTests", data.originalTestId);
+        const originalTestSnap = await getDoc(originalTestRef);
+        if (!originalTestSnap.exists()) {
+          throw new Error("Could not find the original test template.");
+        }
+        const isTestPremium = originalTestSnap.data().isPremium;
+
+        if (isTestPremium && !isPremium) {
+          toast.error("This is a premium test. Please upgrade to access.");
+          setTestState("access_denied");
+          return;
+        }
+
         setInstanceData(data);
         setQuestions(data.questions);
         setTimeLeft(data.estimatedTime * 60);
@@ -314,12 +378,15 @@ export default function TakeDynamicTestPage() {
         router.push("/mock-tests");
       }
     };
-    loadInstance();
-  }, [instanceId, user, authLoading, router]);
+
+    loadInstanceAndCheckPermissions();
+  }, [instanceId, user, authLoading, router, isPremium]);
 
   useEffect(() => {
     if (testState !== "in-progress" || timeLeft <= 0) {
-      if (timeLeft <= 0 && testState === "in-progress") forceSubmit("time_up");
+      if (timeLeft <= 0 && testState === "in-progress") {
+        forceSubmit("time_up"); // Pass the string literal
+      }
       return;
     }
     const timerId = setInterval(
@@ -331,26 +398,22 @@ export default function TakeDynamicTestPage() {
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (
-        document.hidden &&
-        testState === "in-progress" &&
-        !instanceData?.isOffline
-      ) {
+      if (document.hidden && testState === "in-progress") {
         toast.error(
           "You switched tabs. The test will be submitted automatically.",
           { duration: 5000 }
         );
-        forceSubmit("tab_switched");
+        forceSubmit("tab_switched"); // Pass the string literal
       }
     };
-    if (!instanceData?.isOffline) {
-      document.addEventListener("visibilitychange", handleVisibilityChange);
-    }
-    return () =>
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [testState, forceSubmit, instanceData]);
+    };
+  }, [testState, forceSubmit]);
 
   const navigateToQuestion = (newIndex) => {
+    if (newIndex < 0 || newIndex >= questions.length) return;
     const timeSpent = (Date.now() - questionStartTime) / 1000;
     const currentQuestionId = questions[currentQuestionIndex].id;
     setTimePerQuestion((prev) => ({
@@ -370,8 +433,11 @@ export default function TakeDynamicTestPage() {
   const handleAnswerSelect = (questionId, option) => {
     setSelectedOptions((prev) => {
       const newSelected = { ...prev };
-      if (newSelected[questionId] === option) delete newSelected[questionId];
-      else newSelected[questionId] = option;
+      if (newSelected[questionId] === option) {
+        delete newSelected[questionId];
+      } else {
+        newSelected[questionId] = option;
+      }
       return newSelected;
     });
   };
@@ -380,23 +446,54 @@ export default function TakeDynamicTestPage() {
     const currentQuestionId = questions[currentQuestionIndex]?.id;
     if (!currentQuestionId) return;
     const newMarkedSet = new Set(markedForReview);
-    if (newMarkedSet.has(currentQuestionId))
+    if (newMarkedSet.has(currentQuestionId)) {
       newMarkedSet.delete(currentQuestionId);
-    else newMarkedSet.add(currentQuestionId);
+    } else {
+      newMarkedSet.add(currentQuestionId);
+    }
     setMarkedForReview(newMarkedSet);
   };
 
   if (testState === "loading" || authLoading) {
     return (
       <div className='flex justify-center items-center h-screen bg-slate-100'>
-        <p>Loading Your Dynamic Test...</p>
+        <p className='text-lg font-medium text-slate-800'>
+          Preparing Your Test...
+        </p>
       </div>
     );
   }
-  if (testState === "access_denied" || testState === "error") {
+
+  if (testState === "access_denied") {
     return (
-      <div className='flex justify-center items-center h-screen bg-slate-100'>
-        <p>Could not load this test instance.</p>
+      <div className='flex flex-col justify-center items-center h-screen bg-slate-100 text-center p-4'>
+        <div className='mx-auto w-16 h-16 flex items-center justify-center bg-amber-100 rounded-full'>
+          <Lock className='h-8 w-8 text-amber-600' />
+        </div>
+        <h1 className='mt-6 text-2xl font-bold text-slate-900'>
+          Premium Test Locked
+        </h1>
+        <p className='mt-2 text-slate-700'>
+          You need a premium subscription to access this test.
+        </p>
+        <Link
+          href='/dashboard'
+          className='mt-6 inline-block px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700'
+        >
+          Upgrade to Premium
+        </Link>
+      </div>
+    );
+  }
+
+  if (testState === "error") {
+    return (
+      <div className='flex justify-center items-center h-screen bg-slate-100 text-center p-4'>
+        <div>
+          <p className='text-xl font-bold text-red-600'>
+            An Error Occurred While Loading the Test
+          </p>
+        </div>
       </div>
     );
   }
@@ -420,7 +517,7 @@ export default function TakeDynamicTestPage() {
         <div className='container mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8'>
           <div className='lg:col-span-8'>
             <div className='bg-white p-6 sm:p-8 rounded-2xl shadow-xl'>
-              {currentQuestion ? (
+              {currentQuestion && (
                 <div>
                   <div className='flex justify-between items-start mb-4'>
                     <h2 className='text-lg font-semibold text-slate-900'>
@@ -458,8 +555,6 @@ export default function TakeDynamicTestPage() {
                     ))}
                   </div>
                 </div>
-              ) : (
-                <p>Loading questions...</p>
               )}
               <div className='flex flex-col sm:flex-row justify-between items-center mt-10 pt-6 border-t border-slate-200 gap-4'>
                 <button

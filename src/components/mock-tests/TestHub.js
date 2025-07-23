@@ -137,7 +137,7 @@ export default function TestHub({ initialTests }) {
       setHasMore(true);
       fetchTests(activeTab, false);
     }
-  }, [activeTab, user, fetchTests]);
+  }, [activeTab, user]);
 
   const handleLoadMore = () => {
     fetchTests(activeTab, true);

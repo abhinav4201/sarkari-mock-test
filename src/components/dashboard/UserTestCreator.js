@@ -1,41 +1,46 @@
 "use client";
 
 import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { PlusCircle, Info } from "lucide-react";
 import ConfirmationModal from "../ui/ConfirmationModal";
-import { useRouter } from "next/navigation";
 
-const TEST_CREATION_FEE = 10;
-
-export default function UserTestCreator() {
-  const { user, userProfile } = useAuth();
+export default function UserTestCreator({ onTestCreated }) {
   const router = useRouter();
+  const { user, userProfile } = useAuth();
   const [title, setTitle] = useState("");
-  const [examName, setExamName] = useState("");
   const [topic, setTopic] = useState("");
   const [subject, setSubject] = useState("");
-  const [estimatedTime, setEstimatedTime] = useState(15);
-  const [isHidden, setIsHidden] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [examName, setExamName] = useState("");
+  const [estimatedTime, setEstimatedTime] = useState(10); // Default to a sensible value
+  const [isPremiumTest, setIsPremiumTest] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState({});
 
-  const canAfford = userProfile && userProfile.bonusCoins >= TEST_CREATION_FEE;
+  const validate = () => {
+    const newErrors = {};
+    if (title.trim().length < 10)
+      newErrors.title = "Title must be at least 10 characters long.";
+    if (topic.trim().length < 3)
+      newErrors.topic = "Topic must be at least 3 characters long.";
+    if (subject.trim().length < 3)
+      newErrors.subject = "Subject must be at least 3 characters long.";
+    if (Number(estimatedTime) <= 0)
+      newErrors.estimatedTime = "Estimated time must be greater than 0.";
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!canAfford) {
-      toast.error("You don't have enough bonus coins to create a test.");
-      return;
-    }
-    setIsModalOpen(true);
-  };
+    if (!user) return toast.error("You must be logged in.");
+    if (!validate()) return toast.error("Please fix the errors in the form.");
 
-  const handleConfirmSubmit = async () => {
-    setIsModalOpen(false);
-    setIsSubmitting(true);
-    const loadingToast = toast.loading("Submitting your test for approval...");
+    setIsLoading(true);
+    const loadingToast = toast.loading("Creating your test shell...");
 
     try {
       const idToken = await user.getIdToken();
@@ -47,176 +52,160 @@ export default function UserTestCreator() {
         },
         body: JSON.stringify({
           title,
-          examName,
           topic,
           subject,
+          examName,
           estimatedTime: Number(estimatedTime),
-          isHidden,
+          isPremium: isPremiumTest,
         }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
+      if (!res.ok) throw new Error(data.message || "Something went wrong");
 
-      toast.success("Test submitted! Redirecting to add questions...", {
+      const { newTestId } = data;
+      if (!newTestId) throw new Error("Could not retrieve the new test ID.");
+
+      toast.success("Test details saved! Now add questions.", {
         id: loadingToast,
       });
 
-      // Reset form
-      setTitle("");
-      setExamName("");
-      setTopic("");
-      setSubject("");
-      setEstimatedTime(15);
-      setIsHidden(false);
-
-      // Redirect to the question uploader page for the new test
-      router.push(`/admin/mock-tests/${data.testId}`);
+      // Redirect to the new page
+      router.push(`/dashboard/monetization/${newTestId}`);
     } catch (error) {
-      toast.error(`Submission failed: ${error.message}`, { id: loadingToast });
+      toast.error(`Error: ${error.message}`, { id: loadingToast });
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
 
-  if (!userProfile?.canCreateTests) return null;
+  const errorClass = "border-red-500 focus:ring-red-500 focus:border-red-500";
+  const baseClass =
+    "w-full p-3 border border-slate-300 rounded-lg text-slate-900 focus:ring-indigo-500 focus:border-indigo-500";
 
   return (
-    <>
-      <ConfirmationModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onConfirm={handleConfirmSubmit}
-        title='Confirm Test Creation'
-        message={`This will deduct ${TEST_CREATION_FEE} bonus coins from your account. Are you sure you want to proceed?`}
-      />
-      <div className='bg-white p-6 rounded-2xl shadow-lg border border-slate-200'>
-        <div className='flex items-center gap-3'>
-          <div className='bg-indigo-100 p-3 rounded-full'>
-            <PlusCircle className='h-6 w-6 text-indigo-600' />
-          </div>
-          <div>
-            <h2 className='text-2xl font-bold text-slate-900'>
-              Create a New Mock Test
-            </h2>
-            <p className='text-slate-600'>
-              Contribute to the community and get it approved by our team.
-            </p>
+    <form onSubmit={handleSubmit} className='space-y-6'>
+      <div>
+        <label
+          htmlFor='user-test-title'
+          className='block text-sm font-medium text-slate-900 mb-1'
+        >
+          Test Title
+        </label>
+        <input
+          id='user-test-title'
+          type='text'
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className={`${baseClass} ${errors.title ? errorClass : ""}`}
+          required
+        />
+        {errors.title && (
+          <p className='mt-1 text-sm text-red-600'>{errors.title}</p>
+        )}
+      </div>
+      <div>
+        <label
+          htmlFor='user-test-topic'
+          className='block text-sm font-medium text-slate-900 mb-1'
+        >
+          Topic
+        </label>
+        <input
+          id='user-test-topic'
+          type='text'
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          placeholder='e.g., Indian History'
+          className={`${baseClass} ${errors.topic ? errorClass : ""}`}
+          required
+        />
+        {errors.topic && (
+          <p className='mt-1 text-sm text-red-600'>{errors.topic}</p>
+        )}
+      </div>
+      <div>
+        <label
+          htmlFor='user-test-subject'
+          className='block text-sm font-medium text-slate-900 mb-1'
+        >
+          Subject
+        </label>
+        <input
+          id='user-test-subject'
+          type='text'
+          value={subject}
+          onChange={(e) => setSubject(e.target.value)}
+          placeholder='e.g., General Studies'
+          className={`${baseClass} ${errors.subject ? errorClass : ""}`}
+          required
+        />
+        {errors.subject && (
+          <p className='mt-1 text-sm text-red-600'>{errors.subject}</p>
+        )}
+      </div>
+      <div>
+        <label
+          htmlFor='user-test-exam'
+          className='block text-sm font-medium text-slate-900 mb-1'
+        >
+          Exam Name (Optional)
+        </label>
+        <input
+          id='user-test-exam'
+          type='text'
+          value={examName}
+          onChange={(e) => setExamName(e.target.value)}
+          placeholder='e.g., SSC CGL'
+          className={baseClass}
+        />
+      </div>
+      <div>
+        <label
+          htmlFor='user-test-time'
+          className='block text-sm font-medium text-slate-900 mb-1'
+        >
+          Estimated Time (in minutes)
+        </label>
+        <input
+          id='user-test-time'
+          type='number'
+          value={estimatedTime}
+          onChange={(e) => setEstimatedTime(e.target.value)}
+          className={`${baseClass} ${errors.estimatedTime ? errorClass : ""}`}
+          required
+          min='1'
+        />
+        {errors.estimatedTime && (
+          <p className='mt-1 text-sm text-red-600'>{errors.estimatedTime}</p>
+        )}
+      </div>
+      {userProfile?.monetizationStatus === "approved" && (
+        <div className='pt-2'>
+          <div className='flex items-center'>
+            <input
+              type='checkbox'
+              id='isPremiumTest'
+              checked={isPremiumTest}
+              onChange={(e) => setIsPremiumTest(e.target.checked)}
+              className='h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500'
+            />
+            <label
+              htmlFor='isPremiumTest'
+              className='ml-3 block text-sm font-medium text-slate-900'
+            >
+              Mark this as a Premium Test? (Exclusive for subscribers)
+            </label>
           </div>
         </div>
-
-        <form onSubmit={handleSubmit} className='mt-6 space-y-4'>
-          <div>
-            <label className='block text-sm font-medium text-slate-700'>
-              Test Title
-            </label>
-            <input
-              type='text'
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className='mt-1 w-full p-2 border text-slate-900 border-slate-300 rounded-md'
-              required
-            />
-          </div>
-          <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
-            <div>
-              <label className='block text-sm font-medium text-slate-700'>
-                Exam Name (e.g., SSC CGL)
-              </label>
-              <input
-                type='text'
-                value={examName}
-                onChange={(e) => setExamName(e.target.value)}
-                className='mt-1 w-full p-2 border text-slate-900 border-slate-300 rounded-md'
-                required
-              />
-            </div>
-            <div>
-              <label className='block text-sm font-medium text-slate-700'>
-                Subject
-              </label>
-              <input
-                type='text'
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                className='mt-1 w-full p-2 border text-slate-900 border-slate-300 rounded-md'
-                required
-              />
-            </div>
-          </div>
-          <div>
-            <label className='block text-sm font-medium text-slate-700'>
-              Topic
-            </label>
-            <input
-              type='text'
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              className='mt-1 w-full p-2 border text-slate-900 border-slate-300 rounded-md'
-              required
-            />
-          </div>
-          <div>
-            <label className='block text-sm font-medium text-slate-700'>
-              Estimated Time (minutes)
-            </label>
-            <input
-              type='number'
-              value={estimatedTime}
-              onChange={(e) => setEstimatedTime(e.target.value)}
-              className='mt-1 w-full p-2 border text-slate-900 border-slate-300 rounded-md'
-              required
-            />
-          </div>
-
-          <div className='pt-2'>
-            <div className='relative flex items-start'>
-              <div className='flex h-6 items-center'>
-                <input
-                  id='isHidden'
-                  name='isHidden'
-                  type='checkbox'
-                  checked={isHidden}
-                  onChange={(e) => setIsHidden(e.target.checked)}
-                  className='h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600'
-                />
-              </div>
-              <div className='ml-3 text-sm leading-6'>
-                <label
-                  htmlFor='isHidden'
-                  className='font-medium text-slate-900'
-                >
-                  Hide from public Test Hub?
-                </label>
-                <p className='text-slate-500 text-xs flex items-start gap-1 mt-1'>
-                  <Info size={14} className='flex-shrink-0 mt-0.5' />
-                  <span>
-                    Enable this if creating a test for a specific Exam
-                    Adventure. Hidden tests won't appear in the main test list.
-                  </span>
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className='pt-2'>
-            <button
-              type='submit'
-              disabled={isSubmitting || !canAfford}
-              className='w-full px-4 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400'
-            >
-              {isSubmitting
-                ? "Submitting..."
-                : `Submit for Approval (${TEST_CREATION_FEE} Coins)`}
-            </button>
-            {!canAfford && (
-              <p className='text-center text-sm text-red-600 mt-2'>
-                Not enough bonus coins.
-              </p>
-            )}
-          </div>
-        </form>
-      </div>
-    </>
+      )}
+      <button
+        type='submit'
+        className='w-full px-4 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-green-400'
+        disabled={isLoading}
+      >
+        {isLoading ? "Submitting..." : "Submit Test for Approval"}
+      </button>
+    </form>
   );
 }
