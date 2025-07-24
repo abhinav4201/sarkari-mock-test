@@ -92,7 +92,8 @@ const HeroSection = () => {
         <div className='-mx-4 flex flex-wrap'>
           <div className='w-full px-4'>
             <div className='mx-auto max-w-[800px] text-center'>
-              <h1 className='mb-5 text-4xl leading-tight font-extrabold text-slate-900 sm:text-5xl sm:leading-tight md:text-6xl md:leading-tight dark:text-white h-40 md:h-32'>
+              {/* UPDATED: Added px-4 for horizontal padding */}
+              <h1 className='mb-5 px-4 text-4xl leading-tight font-extrabold text-slate-900 sm:text-5xl sm:leading-tight md:text-6xl md:leading-tight dark:text-white min-h-[160px] sm:min-h-[140px] md:min-h-[128px]'>
                 <Typewriter
                   multiText={[
                     "Master Your Competitive Exams",
@@ -107,7 +108,7 @@ const HeroSection = () => {
                   delaySpeed={2000}
                 />
               </h1>
-              <p className='mb-12 text-base leading-relaxed text-white sm:text-lg md:text-xl'>
+              <p className='mb-12 text-base leading-relaxed text-slate-600 dark:text-slate-300 sm:text-lg md:text-xl'>
                 The ultimate platform with high-quality mock tests, daily
                 current affairs, and expert analysis to help you achieve your
                 goals.

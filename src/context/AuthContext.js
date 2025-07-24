@@ -1,4 +1,5 @@
 import { auth, db } from "@/lib/firebase";
+import { clearOfflineResults, getOfflineResults } from "@/lib/indexedDb";
 import { getFingerprint } from "@guardhivefraudshield/device-fingerprint";
 import {
   GoogleAuthProvider,
@@ -31,7 +32,6 @@ import {
   useState,
 } from "react";
 import toast from "react-hot-toast";
-import { getOfflineResults, clearOfflineResults } from "@/lib/indexedDb";
 
 const AuthContext = createContext();
 
@@ -230,9 +230,9 @@ export const AuthContextProvider = ({ children }) => {
           router.push(redirectUrl);
         }
       } catch (error) {
-        console.error("Sign-in Error:", error);
         if (error.code !== "auth/popup-closed-by-user")
           toast.error("Sign-in failed. Please try again.");
+        window.location.href = "/";
       }
     },
     [router, adminEmail]

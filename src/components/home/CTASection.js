@@ -1,9 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import SignUpButton from "./SignUpButton";
-import Confetti from "../ui/Confetti";
-import { PartyPopper } from "lucide-react";
 
 // Simplified SVG visuals inspired by your images
 const TrophyIcon = () => (
@@ -85,47 +83,32 @@ const SuccessIcon = () => (
 );
 
 export default function CTASection() {
-  const [showConfetti, setShowConfetti] = useState(false);
-
+  // Removed state and handler for the animation
   return (
-    <>
-      <Confetti
-        active={showConfetti}
-        onComplete={() => setShowConfetti(false)}
-      />
-      <section className='py-20'>
-        <div className='container mx-auto px-6'>
-          <div className='relative bg-gradient-to-br from-indigo-600 to-purple-700 text-white rounded-3xl shadow-xl p-10 md:p-16 text-center overflow-hidden'>
-            <div className='absolute -top-4 -left-4 text-indigo-400/30'>
-              <TrophyIcon />
-            </div>
-            <div className='absolute -bottom-4 -right-4 text-purple-400/30'>
-              <SuccessIcon />
-            </div>
+    <section className='py-20'>
+      <div className='container mx-auto px-6'>
+        <div className='relative bg-gradient-to-br from-indigo-600 to-purple-700 text-white rounded-3xl shadow-xl p-10 md:p-16 text-center overflow-hidden'>
+          <div className='absolute -top-4 -left-4 text-indigo-400/30'>
+            <TrophyIcon />
+          </div>
+          <div className='absolute -bottom-4 -right-4 text-purple-400/30'>
+            <SuccessIcon />
+          </div>
 
-            <div className='relative z-10'>
-              <h2 className='text-3xl font-bold'>
-                Ready to Achieve Your Goals?
-              </h2>
-              <p className='mt-4 max-w-xl mx-auto'>
-                Join thousands of successful students. From NEET and IIT-JEE to
-                UPSC, SSC CGL, and Banking exams, we provide advanced mock tests
-                for every ambition. Prepare smarter, achieve more.
-              </p>
-              <div className='mt-8 flex flex-col sm:flex-row items-center justify-center gap-4'>
-                <SignUpButton />
-                <button
-                  onClick={() => setShowConfetti(true)}
-                  className='flex items-center gap-2 px-6 py-3 bg-white/20 text-white font-semibold rounded-lg hover:bg-white/30 transition-all'
-                >
-                  <PartyPopper size={20} />
-                  Celebrate
-                </button>
-              </div>
+          <div className='relative z-10'>
+            <h2 className='text-3xl font-bold'>Ready to Achieve Your Goals?</h2>
+            <p className='mt-4 max-w-xl mx-auto'>
+              Join thousands of successful students. From NEET and IIT-JEE to
+              UPSC, SSC CGL, and Banking exams, we provide advanced mock tests
+              for every ambition. Prepare smarter, achieve more.
+            </p>
+            <div className='mt-8 flex flex-col sm:flex-row items-center justify-center gap-4'>
+              <SignUpButton />
+              {/* The "Celebrate" button has been removed */}
             </div>
           </div>
         </div>
-      </section>
-    </>
+      </div>
+    </section>
   );
 }
