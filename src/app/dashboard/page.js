@@ -28,7 +28,7 @@ import LazyTestHistory from "@/components/dashboard/LazyTestHistory";
 import Achievements from "@/components/dashboard/Achievements";
 import DailyChallenges from "@/components/dashboard/DailyChallenges";
 import LazyUserStats from "@/components/dashboard/LazyUserStats";
-import TravelingModeCard from "@/components/dashboard/TravelingModeCard";
+// import TravelingModeCard from "@/components/dashboard/TravelingModeCard";
 import StudyPlanner from "@/components/dashboard/StudyPlanner";
 import LazyLiveTestEarnings from "@/components/dashboard/LazyLiveTestEarnings"; // <-- NEW IMPORT
 
@@ -185,7 +185,7 @@ export default function DashboardPage() {
                 <SubscriptionStatusCard
                   onUpgradeClick={() => setIsPaymentModalOpen(true)}
                 />
-                <TravelingModeCard />
+                {/* <TravelingModeCard /> */}
                 <Link
                   href='/dashboard/trending'
                   className='w-full bg-white p-6 rounded-2xl shadow-lg border border-slate-200 hover:border-indigo-400 hover:shadow-xl transition-all flex justify-between items-center group'

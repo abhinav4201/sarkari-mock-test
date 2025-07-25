@@ -7,7 +7,6 @@ import FinalWarningModal from "@/components/ui/FinalWarningModal";
 import SvgDisplayer from "@/components/ui/SvgDisplayer";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import { getCachedTest, saveOfflineResult } from "@/lib/indexedDb";
 import {
   arrayUnion,
   collection,
@@ -96,16 +95,6 @@ export default function TestTakingPage() {
   const params = useParams();
   const { testId } = params;
 
-  useEffect(() => {
-    const handleOnlineStatus = () => setIsOffline(!navigator.onLine);
-    window.addEventListener("online", handleOnlineStatus);
-    window.addEventListener("offline", handleOnlineStatus);
-    setIsOffline(!navigator.onLine);
-    return () => {
-      window.removeEventListener("online", handleOnlineStatus);
-      window.removeEventListener("offline", handleOnlineStatus);
-    };
-  }, []);
 
   const forceSubmit = useCallback(
     async (reason = "user_submitted") => {
@@ -173,21 +162,6 @@ export default function TestTakingPage() {
         totalTimeTaken: totalTimeTaken,
       };
 
-      if (isOffline) {
-        try {
-          await saveOfflineResult(resultData);
-          toast.success(
-            "Test submitted! Results will sync when you're back online."
-          );
-          router.push("/dashboard");
-        } catch (error) {
-          toast.error(
-            "Could not save your results offline. Please check your storage permissions."
-          );
-          setTestState("in-progress");
-        }
-        return;
-      }
 
       let xpGained = 0;
       const resultDocRef = doc(collection(db, "mockTestResults"));
@@ -341,7 +315,7 @@ export default function TestTakingPage() {
           `/mock-tests/results/${resultDocRef.id}?xpGained=${xpGained}`
         );
       } catch (error) {
-        console.error("Full Test Submission Transaction Error:", error);
+        // console.error("Full Test Submission Transaction Error:", error);
         toast.error("Failed to submit your test. Please try again.");
         setTestState("in-progress");
       }
